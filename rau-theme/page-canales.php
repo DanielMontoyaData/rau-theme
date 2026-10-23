@@ -151,7 +151,7 @@ get_header();
 				<h3 class="mt-2 font-display text-xl font-bold sm:text-2xl">Escucha HF en vivo — Receptor KiwiSDR de RAU</h3>
 				<p class="mt-2 max-w-xl text-sm text-muted-foreground">¿Aún no tienes radio de HF? Sintoniza las bandas en tiempo real desde el receptor web de la asociación, sin instalar nada. Se abre en una pestaña aparte porque el receptor es un equipo físico, no una página de este sitio.</p>
 			</div>
-			<a href="http://hk4rau.proxy.kiwisdr.com:8073/" target="_blank" rel="noreferrer" class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90">
+			<a href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>" class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90">
 				Escuchar ahora
 				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
 			</a>

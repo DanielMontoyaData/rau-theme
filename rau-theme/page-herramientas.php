@@ -771,7 +771,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<polyline points="0,60 0,52 20,48 40,42 60,50 80,45 100,30 120,35 140,48 160,50 180,40 200,28 220,25 240,32 260,45 280,50 300,42 320,35 340,48 360,50 380,52 400,52 400,60"
 							fill="hsl(var(--primary)/.1)"/>
 					</svg>
-					<a href="http://hk4rau.proxy.kiwisdr.com:8073/" target="_blank" rel="noopener" class="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 font-mono text-xs font-bold text-primary-foreground hover:bg-primary/90">Escuchar en vivo →</a>
+					<a href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>" class="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 font-mono text-xs font-bold text-primary-foreground hover:bg-primary/90">Escuchar en vivo →</a>
 				</div>
 
 				<!-- CONDICIONES POR BANDA -->

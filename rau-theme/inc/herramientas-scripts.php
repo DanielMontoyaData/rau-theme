@@ -5095,7 +5095,7 @@ rauOn('az-calc','click',function(){
 			.then(function(r){ return r.json(); })
 			.then(function(json){
 				if(json.success){
-					badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="font-mono text-[10px] text-emerald-400">En línea'+(json.data.users_audio!==undefined?' · '+json.data.users_audio:'')+'</span>';
+					badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="font-mono text-[10px] text-emerald-400">'+(json.data.libres===0?'Lleno':'En línea'+(json.data.libres!=null?' · '+json.data.libres+' libres':''))+'</span>';
 				} else {
 					badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span><span class="font-mono text-[10px] text-rose-400">Sin conexión</span>';
 				}

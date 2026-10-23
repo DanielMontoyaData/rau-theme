@@ -97,7 +97,7 @@ $repetidores = rau_get_repeaters_data();
 				var texto=document.getElementById('estado-sdr-texto');
 				if(json.success){
 					badge.innerHTML='<span class="h-2 w-2 rounded-full bg-emerald-400"></span>';
-					texto.textContent='En línea'+(json.data.users_audio!==undefined?' · '+json.data.users_audio+' usuarios':'');
+					texto.textContent=json.data.libres===0 ? 'En línea · canales llenos' : 'En línea'+(json.data.libres!=null?' · '+json.data.libres+' de '+json.data.max+' canales libres':'');
 				} else {
 					badge.innerHTML='<span class="h-2 w-2 rounded-full bg-rose-400"></span>';
 					texto.textContent='Sin conexión';

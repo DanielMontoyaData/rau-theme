@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.42.0' );
+define( 'RAU_THEME_VERSION', '19.43.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -3406,46 +3406,132 @@ function rau_racha_top_endpoint() {
 	wp_send_json_success( $out );
 }
 
-/* ── Estado del KiwiSDR HK4RAU (caché 2 min) ── */
+/* ── KiwiSDR HK4RAU: estado, historial de ocupación y receptor integrado ─────────────────
+ *
+ * El receptor solo habla HTTP (el proxy de kiwisdr.com no acepta TLS; el propio KiwiSDR no
+ * trae HTTPS: CHANGE_LOG v1.2xx habla de "Kiwis behind https/ssl proxies"). Desde una página
+ * HTTPS el navegador bloquea su iframe y su WebSocket por contenido mixto. Por eso:
+ *   - el servidor del sitio, que sí puede hablarle por HTTP, lee su /status;
+ *   - el receptor dentro de la página necesita un relevo HTTPS/WSS (un Cloudflare Worker, ver
+ *     cloudflare-worker/ en el repositorio), cuya dirección se guarda en rau_kiwi_relay.
+ */
+define( 'RAU_KIWI_HTTP', 'http://hk4rau.proxy.kiwisdr.com:8073' );
+
+add_action( 'init', function() {
+	register_setting( 'general', 'rau_kiwi_relay', array(
+		'type' => 'string', 'default' => '', 'show_in_rest' => true,
+		'description' => 'Dirección HTTPS del relevo del KiwiSDR (Cloudflare Worker). Vacía = sin receptor integrado.',
+		'sanitize_callback' => function( $v ) {
+			$v = esc_url_raw( trim( (string) $v ), array( 'https' ) );
+			return $v ? untrailingslashit( $v ) : '';
+		},
+	) );
+} );
+
+/**
+ * Lee /status del KiwiSDR (formato "clave=valor" por línea, rx/rx_server_ajax.cpp). Devuelve null
+ * si no responde. "preempt" cuenta los canales ocupados por decodificadores automáticos que se
+ * apartan cuando entra una persona: con users=7 de 7 pero preempt=3, todavía hay 3 para escuchar.
+ */
+function rau_sdr_leer_estado( $forzar = false ) {
+	if ( ! $forzar ) {
+		$cached = get_transient( 'rau_sdr_status' );
+		if ( false !== $cached ) return $cached ?: null;
+	}
+	$response = rau_remote_get( RAU_KIWI_HTTP . '/status', array( 'timeout' => 5, 'user-agent' => 'Mozilla/5.0 (compatible; HK4RAU/1.0)' ) );
+	if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+		set_transient( 'rau_sdr_status', 0, MINUTE_IN_SECONDS );
+		return null;
+	}
+	$d = array();
+	foreach ( explode( "\n", wp_remote_retrieve_body( $response ) ) as $line ) {
+		$parts = explode( '=', trim( $line ), 2 );
+		if ( 2 === count( $parts ) ) $d[ trim( $parts[0] ) ] = trim( $parts[1] );
+	}
+	$num = function( $claves, $def = null ) use ( $d ) {
+		foreach ( (array) $claves as $k ) if ( isset( $d[ $k ] ) && is_numeric( $d[ $k ] ) ) return (int) $d[ $k ];
+		return $def;
+	};
+	$users   = $num( array( 'users', 'users_audio', 'num_users' ) );
+	$max     = $num( array( 'users_max', 'max_users' ), 4 );
+	$preempt = $num( 'preempt', 0 );
+	$snr     = isset( $d['snr'] ) ? array_map( 'intval', explode( ',', $d['snr'] ) ) : array();
+	$estado  = array(
+		'online'   => 'yes' !== ( $d['offline'] ?? 'no' ),
+		'users'    => $users,
+		'max'      => $max,
+		'preempt'  => $preempt,
+		'libres'   => null === $users ? null : max( 0, $max - $users ) + $preempt,
+		'version'  => preg_replace( '/[^0-9.]/', '', $d['sw_version'] ?? '' ),
+		'antenna'  => sanitize_text_field( urldecode( $d['antenna'] ?? '' ) ),
+		'snr_hf'   => $snr[1] ?? null,
+		'uptime'   => $num( 'uptime' ),
+		'location' => sanitize_text_field( urldecode( $d['loc'] ?? '' ) ) ?: 'Medellín, Colombia',
+	);
+	set_transient( 'rau_sdr_status', $estado, 2 * MINUTE_IN_SECONDS );
+	return $estado;
+}
+
 add_action( 'wp_ajax_rau_sdr_status',        'rau_sdr_status_proxy' );
 add_action( 'wp_ajax_nopriv_rau_sdr_status', 'rau_sdr_status_proxy' );
 function rau_sdr_status_proxy() {
-	$cached = get_transient( 'rau_sdr_status' );
-	if ( $cached !== false ) { wp_send_json_success( $cached ); return; }
-
-	$response = rau_remote_get( 'http://hk4rau.proxy.kiwisdr.com:8073/status', array(
-		'timeout'    => 5,
-		'user-agent' => 'Mozilla/5.0 (compatible; HK4RAU/1.0)',
-	) );
-
-	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
-		wp_send_json_error( 'offline' ); return;
-	}
-
-	$body = wp_remote_retrieve_body( $response );
-	// El endpoint /status de KiwiSDR devuelve líneas "clave=valor"
-	$data = array();
-	foreach ( explode( "\n", $body ) as $line ) {
-		$parts = explode( '=', trim( $line ), 2 );
-		if ( count( $parts ) === 2 ) $data[ trim($parts[0]) ] = trim($parts[1]);
-	}
-	// KiwiSDR /status usa distintos nombres según versión del firmware
-	$users = null;
-	foreach ( array( 'users_audio', 'users', 'num_users', 'rx_users', 'nr_users' ) as $key ) {
-		if ( isset( $data[$key] ) && is_numeric( $data[$key] ) ) { $users = (int) $data[$key]; break; }
-	}
-	$max = null;
-	foreach ( array( 'users_max', 'max_users', 'rx_users_max' ) as $key ) {
-		if ( isset( $data[$key] ) && is_numeric( $data[$key] ) ) { $max = (int) $data[$key]; break; }
-	}
-	$result = array(
-		'users'    => $users,
-		'max'      => $max ?? 4,
-		'location' => $data['rx_location'] ?? $data['location'] ?? 'Medellín, Colombia',
-	);
-	set_transient( 'rau_sdr_status', $result, 2 * MINUTE_IN_SECONDS );
-	wp_send_json_success( $result );
+	$e = rau_sdr_leer_estado();
+	if ( ! $e || ! $e['online'] ) { wp_send_json_error( 'offline' ); return; }
+	wp_send_json_success( $e );
 }
+
+/*
+ * Historial de ocupación: una muestra cada 10 minutos (WP-Cron), 14 días. Sirve para decirle a la
+ * gente a qué hora suele haber canal libre: el 23-oct-2026 el receptor estaba 7 de 7 ocupado.
+ */
+add_filter( 'cron_schedules', function( $s ) {
+	$s['rau_10min'] = array( 'interval' => 10 * MINUTE_IN_SECONDS, 'display' => 'Cada 10 minutos (RAU)' );
+	return $s;
+} );
+add_action( 'init', function() {
+	if ( ! wp_next_scheduled( 'rau_sdr_muestra' ) ) wp_schedule_event( time() + 60, 'rau_10min', 'rau_sdr_muestra' );
+} );
+add_action( 'rau_sdr_muestra', function() {
+	$e   = rau_sdr_leer_estado( true );
+	$log = get_option( 'rau_sdr_historial', array() );
+	// [hora unix, usuarios, máximo, apartables]; usuarios -1 = fuera de línea
+	$log[] = ( $e && $e['online'] && null !== $e['users'] ) ? array( time(), $e['users'], $e['max'], $e['preempt'] ) : array( time(), -1, 0, 0 );
+	if ( count( $log ) > 14 * 144 ) $log = array_slice( $log, -14 * 144 );
+	update_option( 'rau_sdr_historial', $log, false );
+	delete_transient( 'rau_sdr_por_hora' );
+} );
+
+/** Ocupación por hora del día (hora de Colombia): canales libres en promedio y % del tiempo con al menos uno. */
+function rau_sdr_por_hora() {
+	$cache = get_transient( 'rau_sdr_por_hora' );
+	if ( false !== $cache ) return $cache;
+	$log  = get_option( 'rau_sdr_historial', array() );
+	$tz   = wp_timezone();
+	$h    = array_fill( 0, 24, array( 'n' => 0, 'libres' => 0, 'con_canal' => 0, 'en_linea' => 0 ) );
+	foreach ( $log as $m ) {
+		$hora = (int) ( new DateTime( '@' . $m[0] ) )->setTimezone( $tz )->format( 'G' );
+		$h[ $hora ]['n']++;
+		if ( $m[1] < 0 ) continue;
+		$libres = max( 0, $m[2] - $m[1] ) + $m[3];
+		$h[ $hora ]['en_linea']++;
+		$h[ $hora ]['libres'] += $libres;
+		if ( $libres > 0 ) $h[ $hora ]['con_canal']++;
+	}
+	$out = array( 'muestras' => count( $log ), 'desde' => $log ? $log[0][0] : null, 'horas' => array() );
+	foreach ( $h as $hora => $v ) {
+		$out['horas'][] = array(
+			'hora'      => $hora,
+			'muestras'  => $v['n'],
+			'libres'    => $v['en_linea'] ? round( $v['libres'] / $v['en_linea'], 1 ) : null,
+			'con_canal' => $v['en_linea'] ? (int) round( 100 * $v['con_canal'] / $v['en_linea'] ) : null,
+		);
+	}
+	set_transient( 'rau_sdr_por_hora', $out, 10 * MINUTE_IN_SECONDS );
+	return $out;
+}
+add_action( 'wp_ajax_rau_sdr_historial',        'rau_sdr_historial_endpoint' );
+add_action( 'wp_ajax_nopriv_rau_sdr_historial', 'rau_sdr_historial_endpoint' );
+function rau_sdr_historial_endpoint() { wp_send_json_success( rau_sdr_por_hora() ); }
 
 /* ── Proxy DX Spots — múltiples fuentes con fallback — caché 3 min ── */
 add_action( 'wp_ajax_rau_dx_spots',        'rau_dx_spots_proxy' );

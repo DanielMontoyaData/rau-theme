@@ -220,7 +220,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 					<div>
 						<div class="mb-2 flex items-center gap-2">
 							<svg class="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2M4 12a8 8 0 0 1 8-8M12 4V2M20 12h2M12 20v2M4.93 4.93l1.41 1.41M17.66 6.34l1.41-1.41M6.34 17.66l-1.41 1.41M17.66 17.66l1.41 1.41M12 12a4 4 0 0 1 0-8M8 12a4 4 0 0 0 8 0"/><circle cx="12" cy="12" r="2"/></svg>
-							<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Receptor SDR · En línea</p>
+							<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Receptor SDR · Medellín</p>
 						</div>
 						<h2 class="font-display text-2xl font-bold">KiwiSDR HK4RAU</h2>
 						<p class="mt-1 text-sm text-muted-foreground">Medellín, Colombia · 0–30 MHz</p>
@@ -232,38 +232,11 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 					</div>
 				</div>
 
-				<!-- Visualización de espectro simulada (estética) -->
-				<div class="mb-5 overflow-hidden rounded-xl border border-border/60 bg-background">
-					<div class="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
-						<span class="font-mono text-[10px] text-muted-foreground">ESPECTRO HF — 0 a 30 MHz</span>
-						<span class="font-mono text-[10px] text-primary">HK4RAU</span>
-					</div>
-					<svg viewBox="0 0 400 80" xmlns="http://www.w3.org/2000/svg" class="w-full" preserveAspectRatio="none">
-						<!-- Fondo de cuadrícula -->
-						<line x1="0" y1="20" x2="400" y2="20" stroke="hsl(var(--border)/.3)" stroke-width="0.5"/>
-						<line x1="0" y1="40" x2="400" y2="40" stroke="hsl(var(--border)/.3)" stroke-width="0.5"/>
-						<line x1="0" y1="60" x2="400" y2="60" stroke="hsl(var(--border)/.3)" stroke-width="0.5"/>
-						<line x1="80"  y1="0" x2="80"  y2="80" stroke="hsl(var(--border)/.2)" stroke-width="0.5"/>
-						<line x1="160" y1="0" x2="160" y2="80" stroke="hsl(var(--border)/.2)" stroke-width="0.5"/>
-						<line x1="240" y1="0" x2="240" y2="80" stroke="hsl(var(--border)/.2)" stroke-width="0.5"/>
-						<line x1="320" y1="0" x2="320" y2="80" stroke="hsl(var(--border)/.2)" stroke-width="0.5"/>
-						<!-- Espectro decorativo representativo de HF -->
-						<polyline points="0,72 10,70 20,68 30,65 35,60 40,55 44,58 48,62 55,70 60,68 65,55 70,45 75,50 80,65 90,70 100,68 110,55 115,40 120,45 125,52 130,65 140,70 150,68 155,60 160,48 165,55 170,62 175,58 180,65 190,70 200,68 210,58 215,42 220,38 225,42 230,55 235,62 240,68 250,70 260,65 265,50 270,42 275,48 280,55 290,68 300,70 310,65 315,52 320,45 325,50 330,60 340,68 350,70 355,62 360,55 365,58 370,65 380,70 390,72 400,72"
-							fill="none" stroke="hsl(var(--primary)/.6)" stroke-width="1.5" stroke-linejoin="round"/>
-						<!-- Relleno bajo la curva -->
-						<polyline points="0,80 0,72 10,70 20,68 30,65 35,60 40,55 44,58 48,62 55,70 60,68 65,55 70,45 75,50 80,65 90,70 100,68 110,55 115,40 120,45 125,52 130,65 140,70 150,68 155,60 160,48 165,55 170,62 175,58 180,65 190,70 200,68 210,58 215,42 220,38 225,42 230,55 235,62 240,68 250,70 260,65 265,50 270,42 275,48 280,55 290,68 300,70 310,65 315,52 320,45 325,50 330,60 340,68 350,70 355,62 360,55 365,58 370,65 380,70 390,72 400,72 400,80"
-							fill="hsl(var(--primary)/.08)"/>
-						<!-- Marcas de frecuencia decorativas -->
-						<line x1="80"  y1="45" x2="80"  y2="80" stroke="hsl(var(--primary)/.3)" stroke-width="1" stroke-dasharray="2,2"/>
-						<line x1="160" y1="48" x2="160" y2="80" stroke="hsl(var(--primary)/.3)" stroke-width="1" stroke-dasharray="2,2"/>
-						<line x1="220" y1="38" x2="220" y2="80" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="2,2" opacity=".5"/>
-						<line x1="320" y1="45" x2="320" y2="80" stroke="hsl(var(--primary)/.3)" stroke-width="1" stroke-dasharray="2,2"/>
-						<!-- Labels de frecuencia -->
-						<text x="80"  y="78" font-size="7" fill="hsl(var(--muted-foreground)/.5)" font-family="monospace" text-anchor="middle">7 MHz</text>
-						<text x="160" y="78" font-size="7" fill="hsl(var(--muted-foreground)/.5)" font-family="monospace" text-anchor="middle">14 MHz</text>
-						<text x="220" y="78" font-size="7" fill="#fbbf2499" font-family="monospace" text-anchor="middle">20m</text>
-						<text x="320" y="78" font-size="7" fill="hsl(var(--muted-foreground)/.5)" font-family="monospace" text-anchor="middle">27 MHz</text>
-					</svg>
+				<!-- Ocupación real por hora (antes había aquí un espectro dibujado a mano, "estético") -->
+				<div class="mb-5 rounded-xl border border-border/60 bg-background p-3">
+					<div class="mb-2 flex items-center justify-between font-mono text-[10px] text-muted-foreground"><span>CANALES LIBRES POR HORA</span><span>hora de Colombia</span></div>
+					<div id="sdr-horas" class="flex h-16 items-end gap-0.5" aria-label="Canales libres por hora"></div>
+					<p id="sdr-horas-nota" class="mt-2 font-mono text-[10px] text-muted-foreground">Recolectando datos…</p>
 				</div>
 
 				<!-- Info del receptor -->
@@ -277,7 +250,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 						<p class="mt-0.5 font-mono text-sm font-bold text-foreground">AM SSB CW</p>
 					</div>
 					<div class="rounded-lg border border-border/50 bg-background/50 py-2">
-						<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Usuarios</p>
+						<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Libres</p>
 						<p id="sdr-users" class="mt-0.5 font-mono text-sm font-bold text-foreground">—</p>
 					</div>
 				</div>
@@ -289,36 +262,34 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 					<span class="rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-primary">WSPR</span>
 				</p>
 
-				<!-- Aviso HTTP + botón -->
-				<div class="mb-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-400/80">
-					⚠ El receptor opera en HTTP. Se abre en pestaña nueva para evitar bloqueo de contenido mixto.
-				</div>
-
-				<a href="http://hk4rau.proxy.kiwisdr.com:8073/" target="_blank" rel="noopener"
-					class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background">
-					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2M4 12a8 8 0 0 1 8-8M12 4V2M20 12h2M12 20v2"/><circle cx="12" cy="12" r="3"/></svg>
-					Escuchar en vivo — KiwiSDR HK4RAU
+				<a href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>"
+					class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+					Abrir el receptor
 				</a>
 
 				<script>
 				(function(){
-					/* Intenta obtener el número de usuarios del KiwiSDR via proxy PHP */
-					var badge = document.getElementById('sdr-status-badge');
-					var users = document.getElementById('sdr-users');
-					fetch('<?php echo esc_js( admin_url('admin-ajax.php') ); ?>?action=rau_sdr_status', {cache:'no-store'})
-					.then(function(r){return r.json();})
-					.then(function(json){
-						if(json.success && json.data){
-							var n = json.data.users;
-							var m = json.data.max || 4;
-							if(users) users.textContent = (n !== null && n !== undefined) ? n+'/'+m : '—';
-							badge.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;"></span><span style="font-family:monospace;font-size:0.75rem;color:#22c55e;">En línea</span>';
-						} else { throw new Error(); }
-					})
-					.catch(function(e){ rauErr(e);
-						badge.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span><span style="font-family:monospace;font-size:0.75rem;color:hsl(var(--muted-foreground));">Sin confirmar</span>';
-						if(users) users.textContent = '—';
-					});
+					var AJAX='<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>';
+					var badge=document.getElementById('sdr-status-badge'), users=document.getElementById('sdr-users');
+					function pinta(color, texto){ badge.innerHTML='<span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block;"></span><span style="font-family:monospace;font-size:0.75rem;color:'+color+';">'+texto+'</span>'; }
+					fetch(AJAX+'?action=rau_sdr_status', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+						if(!j.success){ pinta('#f43f5e','Fuera de línea'); users.textContent='—'; return; }
+						var d=j.data;
+						users.textContent=d.libres==null?'—':(d.libres+' de '+d.max);
+						d.libres===0 ? pinta('#f59e0b','Lleno') : pinta('#22c55e','Canal libre');
+					}).catch(function(e){ rauErr(e); pinta('#f59e0b','Sin datos'); users.textContent='—'; });
+					fetch(AJAX+'?action=rau_sdr_historial', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+						if(!j.success) return;
+						var hs=j.data.horas, max=Math.max(1, Math.max.apply(null, hs.map(function(h){ return h.libres||0; })));
+						var ahora=new Date().toLocaleString('en-US',{timeZone:'America/Bogota',hour:'numeric',hour12:false})|0;
+						document.getElementById('sdr-horas').innerHTML=hs.map(function(h){
+							return '<div title="'+h.hora+' h" class="flex-1 rounded-t '+(h.hora===ahora?'bg-accent':'bg-primary/60')+'" style="height:'+(h.libres==null?0:Math.max(6,Math.round(100*h.libres/max)))+'%"></div>';
+						}).join('');
+						var nota=document.getElementById('sdr-horas-nota');
+						if(j.data.muestras<36){ nota.textContent='Recolectando datos ('+j.data.muestras+' mediciones).'; return; }
+						var mejor=hs.filter(function(h){ return h.libres!=null; }).sort(function(a,b){ return b.libres-a.libres; })[0];
+						nota.textContent=mejor ? 'Más fácil conseguir canal hacia las '+mejor.hora+' h.' : '';
+					}).catch(function(e){ rauErr(e); });
 				})();
 				</script>
 			</div>

@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.42.0
+Version: 19.43.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -413,6 +413,18 @@ html {
 .pl-5 { padding-left: 1.25rem; }
 @media (min-width: 768px) { .md\:hidden { display: none; } }
 @media (min-width: 1024px) { .lg\:items-start { align-items: flex-start; } }
+
+/* ── Receptor KiwiSDR (page-receptor.php): utilidades que el CSS compilado no trae ── */
+.bg-primary\/60 { background-color: hsl(var(--primary) / .6); }
+.cursor-crosshair { cursor: crosshair; }
+.gap-0\.5 { gap: .125rem; }
+.h-\[220px\] { height: 220px; }
+.rx-paso, .rx-banda, .rx-modo { white-space: nowrap; }
+@media (min-width: 640px) { .sm\:max-w-xs { max-width: 20rem; } }
+@media (min-width: 1024px) {
+	.lg\:grid-cols-\[1fr_auto\] { grid-template-columns: 1fr auto; }
+	.lg\:grid-cols-\[2fr_1fr\] { grid-template-columns: 2fr 1fr; }
+}
 
 /* ── Celular: botón del chat y zonas táctiles ─────────────────────────────
    El botón flotante (56 px) tapaba el final de las líneas: se achica a 48 px y se aparta al

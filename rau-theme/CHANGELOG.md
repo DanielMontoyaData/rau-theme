@@ -264,6 +264,41 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.43.0 — el KiwiSDR dentro del sitio
+
+**Por qué no se podía.** El KiwiSDR solo habla HTTP: el proxy de kiwisdr.com cierra la conexión
+si se le habla TLS (probado en los puertos 443 y 8073) y el propio KiwiSDR no trae HTTPS (su
+CHANGE_LOG menciona "Kiwis behind https/ssl proxies"). Desde hk4rau.com, que es HTTPS, el navegador
+bloquea su iframe y su WebSocket por contenido mixto; por eso el botón abría otra pestaña.
+
+**Relevo HTTPS gratuito** (`cloudflare-worker/` en el repositorio, fuera del tema): un Cloudflare
+Worker en *.workers.dev que pasa páginas y WebSocket al receptor, sigue las redirecciones del proxy
+de kiwisdr.com en HTTP y solo acepta WebSocket desde hk4rau.com o desde sí mismo. No requiere mover
+el DNS ni equipo en el sitio del receptor. Probado con `wrangler dev`: status, redirección, audio,
+cascada y 403 para otros orígenes. Su dirección se guarda en la opción `rau_kiwi_relay`.
+
+**Página /receptor/** (plantilla "Receptor KiwiSDR"): receptor con el diseño del sitio, sobre el
+protocolo del KiwiSDR tomado de su código fuente (openwebrx.js, audio.js, kiwiclient): audio
+IMA-ADPCM decodificado y remuestreado a la tasa del navegador (Safari antiguo no acepta buffers de
+12 kHz), cascada en la paleta del sitio con piso de ruido automático, sintonía por bandas, pasos o
+toque en la cascada, modos AM/LSB/USB/CW/FM, zoom, volumen y S-metro. Avisa si los canales están
+llenos, si el receptor cierra por inactividad o está en mantenimiento, y libera el canal al cerrar
+la página. Sin relevo configurado muestra el estado y enlaza la interfaz original. Probado de punta
+a punta (navegador → Worker local → KiwiSDR simulado) en escritorio y celular.
+
+**Estado real y ocupación.** /status ahora da canales libres contando los que ceden los
+decodificadores automáticos (`preempt`), antena, versión y tiempo encendido. Una muestra cada 10
+minutos (WP-Cron, 14 días) alimenta "Canales libres por hora". El 23-oct-2026 el receptor estaba 7
+de 7 ocupado: sin decodificadores que cedan el canal, nadie puede escuchar.
+
+**Portada.** La tarjeta del KiwiSDR dibujaba un espectro a mano ("estético", decía el código) y
+decía "En línea" aunque estuviera lleno. Ahora muestra la ocupación por hora real, "Canal libre",
+"Lleno" o "Fuera de línea", y lleva a /receptor/. El estado del Dashboard y de Estado RAU leía un
+campo inexistente (`users_audio`) y nunca mostraba usuarios; ahora muestra canales libres. Los
+enlaces http:// al KiwiSDR del chat, Canales y Herramientas van a /receptor/.
+
+---
+
 ## 19.42.0 — portada con fecha, repetidoras para programar, sin Programa Elmer
 
 **El Programa Elmer no existe.** El chat lo ofrecía, la guía de la licencia lo enlazaba y había una
