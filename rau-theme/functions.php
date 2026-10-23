@@ -133,6 +133,7 @@ function rau_ics_maybe_output() {
 			echo "UID:evento-{$id}@" . parse_url( home_url(), PHP_URL_HOST ) . "\r\n";
 			echo "DTSTAMP:" . gmdate( 'Ymd\THis\Z' ) . "\r\n";
 			echo "DTSTART;VALUE=DATE:{$dt}\r\n";
+			if ( 'semanal' === get_post_meta( $id, 'recurrencia', true ) ) echo "RRULE:FREQ=WEEKLY\r\n";
 			echo "SUMMARY:" . rau_ics_escape( get_the_title() ) . "\r\n";
 			if ( $desc ) echo "DESCRIPTION:" . rau_ics_escape( implode( '\n', $desc ) ) . "\r\n";
 			if ( $loc ) echo "LOCATION:" . rau_ics_escape( $loc ) . "\r\n";
@@ -146,6 +147,34 @@ function rau_ics_maybe_output() {
 	exit;
 }
 add_action( 'template_redirect', 'rau_ics_maybe_output' );
+
+/**
+ * Eventos semanales (malla de los martes, charlas de los miércoles): la portada y el calendario
+ * solo muestran eventos con 'start' de hoy en adelante, así que un evento fijo de cada semana
+ * desaparecía a los siete días. Con recurrencia = 'semanal', una fecha que ya pasó se corre a la
+ * próxima ocurrencia del mismo día de la semana. Corre como mucho una vez por hora.
+ */
+function rau_avanzar_eventos_semanales() {
+	if ( get_transient( 'rau_eventos_semanales' ) ) return;
+	set_transient( 'rau_eventos_semanales', 1, HOUR_IN_SECONDS );
+
+	$hoy = current_time( 'Y-m-d' );
+	$ids = get_posts( array(
+		'post_type' => 'evento', 'post_status' => 'publish', 'numberposts' => -1, 'fields' => 'ids',
+		'meta_query' => array(
+			array( 'key' => 'recurrencia', 'value' => 'semanal' ),
+			array( 'key' => 'start', 'value' => $hoy, 'compare' => '<', 'type' => 'DATE' ),
+		),
+	) );
+	foreach ( $ids as $id ) {
+		$start = DateTime::createFromFormat( 'Y-m-d', get_post_meta( $id, 'start', true ) );
+		if ( ! $start ) continue;
+		$dias = (int) $start->diff( new DateTime( $hoy ) )->days;
+		$start->modify( '+' . ( (int) ceil( $dias / 7 ) * 7 ) . ' days' );
+		update_post_meta( $id, 'start', $start->format( 'Y-m-d' ) );
+	}
+}
+add_action( 'init', 'rau_avanzar_eventos_semanales', 20 );
 
 function rau_ics_escape( $text ) {
 	$text = str_replace( array( '\\', ';', ',' ), array( '\\\\', '\\;', '\\,' ), $text );
@@ -354,6 +383,13 @@ function rau_register_cpts() {
 	foreach ( array( 'evento', 'alerta' ) as $cpt_con_mapa ) {
 		register_post_meta( $cpt_con_mapa, 'lat', array( 'type' => 'number', 'single' => true, 'show_in_rest' => true, 'sanitize_callback' => 'rau_sanitize_float' ) );
 		register_post_meta( $cpt_con_mapa, 'lng', array( 'type' => 'number', 'single' => true, 'show_in_rest' => true, 'sanitize_callback' => 'rau_sanitize_float' ) );
+	}
+
+	// Campos del evento declarados para poder cargarlos también por la API REST. Antes eran custom
+	// fields genéricos: existían, pero la API los ignoraba en silencio. Mismos nombres de siempre.
+	// recurrencia: '' (una sola vez) o 'semanal' — ver rau_avanzar_eventos_semanales().
+	foreach ( array( 'start', 'type', 'frequency', 'location', 'recurrencia' ) as $campo ) {
+		register_post_meta( 'evento', $campo, array( 'type' => 'string', 'single' => true, 'show_in_rest' => true, 'sanitize_callback' => 'sanitize_text_field' ) );
 	}
 
 	// Eventos (colección "events"): start, type, frequency, location

@@ -278,6 +278,15 @@ Libro QSL, Documentos, Junta Directiva y Turnos.
 
 **"1 repetidores".** El contador de la portada concuerda en número.
 
+**Eventos semanales que caducaban.** La portada y el calendario solo muestran eventos de hoy en
+adelante, y un evento tiene una sola fecha: la malla de los martes desaparecía a los siete días.
+Campo nuevo `recurrencia` (`semanal`): cuando la fecha pasa, se corre sola al mismo día de la
+semana siguiente. En el calendario .ics sale con `RRULE:FREQ=WEEKLY`.
+
+**Campos del evento en la API.** `start`, `type`, `frequency`, `location` y `recurrencia` quedan
+declarados con `register_post_meta`. Antes la API REST los ignoraba sin avisar, así que un evento
+creado por esa vía no tenía fecha y no aparecía en ningún lado.
+
 **Iconos sociales sin nombre.** WhatsApp, Instagram, Facebook y YouTube del pie eran enlaces con
 solo un SVG: un lector de pantalla los anunciaba como "enlace". Llevan `aria-label` y el SVG se
 oculta a la accesibilidad.
