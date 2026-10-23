@@ -264,6 +264,37 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.41.0 — el chat explica la licencia paso a paso
+
+Sacar la licencia es la duda más común de quien llega, y el chat solo respondía "practica con el
+simulador". La "Guía para la Licencia" del sitio era una línea con un enlace.
+
+**Nueva página /como-sacar-la-licencia/** (contenido de WordPress, no del tema): el trámite completo
+ante el MinTIC en seis pasos, con dónde y cómo hacer cada uno, los valores de 2026, los datos de
+pago, el indicativo por zona, renovación, ascenso a Primera y preguntas frecuentes. Verificada el
+23 de octubre de 2026 contra las páginas RABCA del MinTIC (Novicio, actualizada el 27-jun-2025;
+Primera, 2-feb-2026), la Circular 009 de 2026 de costos, el temario oficial y el Decreto 1078 de
+2015 (arts. 2.2.5.2.3, 2.2.5.2.4, 2.2.5.6.5 y 2.2.5.7.1).
+
+**El chat recorre el trámite.** Nueve respuestas sobre la licencia (cómo sacarla, examen, costo,
+pago, documentos, demora, indicativo, renovación y ascenso) en lugar de una. Después de cada
+respuesta ofrece las preguntas que suelen venir a continuación, y los botones iniciales empiezan
+por la licencia. Las específicas van antes que la general en la lista, porque a igual puntaje gana
+la primera: "¿cuánto cuesta la licencia?" responde el costo. Probado con 11 preguntas escritas como
+las haría alguien; "se me venció la licencia" caía en el resumen general y se corrigió.
+
+**Respuestas que no eran ciertas.** "Asociarse" pedía registrarse en el sitio, que no tiene
+registro; "herramientas" decía "más de 35" (son 60, ahora contadas del registro); "Elmer" mandaba
+a un menú y ahora enlaza la página.
+
+**Viñetas en las páginas.** El preflight de Tailwind quitaba viñetas y números de las listas del
+editor: los pasos de una guía se leían como párrafos sueltos.
+
+**Enlaces a la guía** en el pie del sitio y en el simulador de examen, que avisa además de que el
+examen real incluye cultura general.
+
+---
+
 ## 19.40.0 — los errores avisan; el celular estorba menos
 
 **Aviso por correo de errores de JavaScript.** "Ahora mismo" estuvo rota desde su publicación sin

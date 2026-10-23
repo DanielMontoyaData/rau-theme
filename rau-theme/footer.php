@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 			<a href="<?php echo esc_url( home_url( '/rau-field/' ) ); ?>" class="hover:text-primary">RAU Field</a>
 			<a href="<?php echo esc_url( home_url( '/modo-emergencia/' ) ); ?>" class="hover:text-accent">🚨 Modo Emergencia</a>
 			<a href="<?php echo esc_url( home_url( '/herramientas/' ) ); ?>" class="hover:text-primary">Herramientas</a>
+			<a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="hover:text-primary">Sacar la licencia</a>
 			<a href="<?php echo esc_url( home_url( '/novedades/' ) ); ?>" class="hover:text-primary">Novedades</a>
 			<a href="<?php echo esc_url( home_url( '/contacto/' ) ); ?>" class="hover:text-primary">Contacto</a>
 		</div>
@@ -171,10 +172,51 @@ if('serviceWorker' in navigator){
 		ultimoY=y;
 	}, { passive:true });
 
+	// Licencia: es la duda más común. Las preguntas específicas van antes que la general porque, a
+	// igual puntaje, gana la primera ("¿cuánto cuesta la licencia?" debe responder el costo, no el
+	// resumen). Cada una ofrece después las preguntas que suelen venir a continuación.
+	// Datos verificados el 23 de octubre de 2026 en las páginas RABCA del MinTIC; la fuente completa
+	// está en la página /como-sacar-la-licencia/. Los valores cambian cada año (Circular de costos).
 	var FAQ=[
+		{ id:'lic-examen', pregunta:'¿Cómo es el examen?',
+			palabras:['examen','prueba','preguntas del','aprobar','estudiar','temario','morse','simulador'],
+			respuesta:'Es en línea: el enlace te llega al correo después de crear tu usuario en RABCA. Sale del <a href="https://www.mintic.gov.co/portal/715/articles-3946_temario_2.pdf" target="_blank" rel="noreferrer" class="text-primary underline">banco de preguntas oficial</a> e <strong>incluye cultura general</strong> (geografía, historia, Estado), además de normas, electricidad, antenas y reglamentos. Para Novicio no hay Morse. Se aprueba con 65&nbsp;%, tienes 2 intentos más si no pasas, y el examen aprobado vale 4 meses. Practica en el <a href="<?php echo esc_url( home_url( '/herramientas/examen/' ) ); ?>" class="text-primary underline">simulador de RAU</a>.',
+			siguientes:['lic-costo','licencia'] },
+		{ id:'lic-costo', pregunta:'¿Cuánto cuesta la licencia?',
+			palabras:['cuesta','costo','valor','precio','vale la licencia','tarifa','cobran'],
+			respuesta:'En 2026 son <strong>$45.897 por cada año</strong> de licencia, y puedes pedir de 1 a 5 años: 1 año $45.897 · 2 años $91.794 · 3 años $137.691 · 4 años $183.588 · 5 años $229.485. El MinTIC no cobra nada más por el trámite.',
+			siguientes:['lic-pago','lic-documentos'] },
+		{ id:'lic-pago', pregunta:'¿Dónde y cómo pago?',
+			palabras:['pagar','pago','consign','davivienda','banco','referencia','nit','comprobante'],
+			respuesta:'En persona, en una oficina de <strong>Davivienda</strong>, con el formato de <strong>convenios empresariales</strong>: a favor del Fondo de Tecnologías de la Información y las Comunicaciones, NIT 800131648-6, cuenta de ahorros 00018-500003-3, referencia 1 tu cédula, referencia 2 el número 14. Guarda el comprobante: lo adjuntas al radicar.',
+			siguientes:['lic-documentos','lic-demora'] },
+		{ id:'lic-documentos', pregunta:'¿Qué documentos necesito?',
+			palabras:['documento','requisito','foto','cedula','papeles','radicar','adjuntar'],
+			respuesta:'Al radicar en RABCA adjuntas: copia de tu documento de identidad, el comprobante de pago y una <strong>foto 3x4 con fondo azul mate</strong>. También llenas tus datos y los de tus equipos (radio y antena). Luego pulsas «Guardar y radicar» y anotas el número de radicado.',
+			siguientes:['lic-demora','licencia'] },
+		{ id:'lic-demora', pregunta:'¿Cuánto se demora?',
+			palabras:['demora','tarda','cuanto tiempo','dias','cuando llega','estado del tramite','radicado','seguimiento'],
+			respuesta:'Unos <strong>30 días hábiles</strong> después de radicar. Llega a tu correo. Puedes seguirlo en <a href="https://quantic.mintic.gov.co/BPM_Mensajes_Crear.aspx?HVP5hrl0Vgd5nGTT1ma+Iw==" target="_blank" rel="noreferrer" class="text-primary underline">RABCA</a> con tu número de radicado, o en las líneas 601 344 3460 y 01 8000 914014.',
+			siguientes:['lic-indicativo'] },
+		{ id:'lic-indicativo', pregunta:'¿Qué indicativo me dan?',
+			palabras:['indicativo','distintivo','prefijo','hj','hk4','zona'],
+			respuesta:'Como Novicio, <strong>HJ</strong> + el dígito de tu zona + 1 a 3 letras; al subir de categoría pasa a HK. Zonas: 1 Atlántico, Bolívar, Córdoba, Sucre · 2 La Guajira, Magdalena, Cesar, Norte de Santander · 3 Cundinamarca, Meta, Vichada · 4 Antioquia, Chocó · 5 Valle, Cauca · 6 Caldas, Tolima, Risaralda, Quindío, Huila · 7 Santander, Boyacá, Arauca, Casanare · 8 Nariño, Putumayo, Caquetá · 9 Amazonas, Vaupés, Guainía, Guaviare · 0 territorio insular.',
+			siguientes:['lic-renovar','lic-ascenso'] },
+		{ id:'lic-renovar', pregunta:'¿Cómo renuevo mi licencia?',
+			palabras:['renovar','renovacion','vence','venci','prorroga','reingreso','expir'],
+			respuesta:'<strong>Si sigue vigente:</strong> pide la renovación en RABCA antes de que venza, con tus documentos y el pago por los años que quieras. <strong>Si ya se venció:</strong> pierdes el indicativo y debes pedir reingreso, con los mismos documentos más copia de tu última licencia; el MinTIC puede devolverte tu indicativo anterior. Para que no te pase, usa el <a href="<?php echo esc_url( home_url( '/herramientas/licencia/' ) ); ?>" class="text-primary underline">recordatorio de licencia</a>.',
+			siguientes:['lic-costo','lic-ascenso'] },
+		{ id:'lic-ascenso', pregunta:'¿Cómo paso a Primera Categoría?',
+			palabras:['ascenso','ascender','primera categoria','subir de categoria','experto','avanzada'],
+			respuesta:'Necesitas tu licencia de Novicio vigente, el libro de guardia, aprobar el examen de Primera (incluye Morse) y una de tres: 4 años como Novicio; 2 años y 50 contactos confirmados con QSL, 25 de otros países; o 2 años y una actividad destacada acreditada por una asociación registrada, como RAU. Más en la <a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary underline">guía completa</a>.',
+			siguientes:['lic-examen'] },
+		{ id:'licencia', pregunta:'¿Cómo saco la licencia?',
+			palabras:['licencia','rabca','sacar','tramite','certificado de aptitud','ser radioaficionado','empezar'],
+			respuesta:'Se tramita ante el MinTIC, todo en línea menos el pago:<br>1. <a href="https://quantic.mintic.gov.co/Visitor.aspx?ML503Nlou7I7x/QmuSnoqXVaPzX9kybPvj8Tm0eFFzAt20uRnhb76Q==" target="_blank" rel="noreferrer" class="text-primary underline">Crea tu usuario en RABCA</a>.<br>2. Presenta el examen en línea con el enlace que te llega al correo.<br>3. Paga en Davivienda ($45.897 por año en 2026).<br>4. Radica en RABCA tu cédula, el comprobante y una foto 3x4 fondo azul.<br>5. Recibe la licencia por correo en unos 30 días hábiles.<br>Todo explicado en la <a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary underline">guía paso a paso</a>.',
+			siguientes:['lic-examen','lic-costo','lic-pago','lic-documentos','lic-demora'] },
 		{ id:'asociarse', pregunta:'¿Cómo me asocio a RAU?',
-			palabras:['asociar','asociarme','inscrib','ingresar','membres','socio','unirme','afiliar'],
-			respuesta:'Para asociarte: regístrate en el sitio con tu indicativo, completa el formulario de afiliación y realiza el aporte anual. Escríbenos por WhatsApp y te guiamos — <a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" class="text-primary underline">abrir chat</a>.' },
+			palabras:['asociar','asociarme','inscrib','membres','socio','unirme','afiliar'],
+			respuesta:'Escríbenos por <a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" class="text-primary underline">WhatsApp</a> o a <a href="mailto:info@hk4rau.com" class="text-primary underline">info@hk4rau.com</a> y te contamos cómo afiliarte. No necesitas tener licencia para acercarte: te ayudamos a sacarla.' },
 		{ id:'que-es', pregunta:'¿Qué es RAU?',
 			palabras:['que es rau','quienes son','quien es rau','sobre rau','asociacion'],
 			respuesta:'RAU (Radioaficionados Unidos) es una asociación colombiana de radioaficionados con sede en Medellín, indicativo HK4RAU. Somos una comunidad que mantiene vivas las ondas — repetidores, malla de emergencia, eventos y más.' },
@@ -189,10 +231,7 @@ if('serviceWorker' in navigator){
 			respuesta:'Nuestro KiwiSDR está en línea 24/7. <a href="http://hk4rau.proxy.kiwisdr.com:8073/" target="_blank" rel="noreferrer" class="text-primary underline">Escuchar en vivo</a> (nota: el receptor opera en HTTP, se abre en pestaña nueva).' },
 		{ id:'herramientas', pregunta:'¿Qué herramientas tienen?',
 			palabras:['herramienta','calculadora','utilidad','conversor'],
-			respuesta:'Tenemos más de 35 herramientas gratuitas: calculadoras de antenas, propagación solar, predicción de pasadas de satélites, generador de QSL y muchas más. Todo en <a href="'+'<?php echo esc_url( home_url( "/herramientas/" ) ); ?>'+'" class="text-primary underline">Herramientas de Radio</a>.' },
-		{ id:'licencia', pregunta:'¿Cómo saco mi licencia RABCA?',
-			palabras:['licencia','rabca','examen','certificado operador'],
-			respuesta:'Puedes practicar con nuestro <a href="'+'<?php echo esc_url( home_url( "/herramientas/examen/" ) ); ?>'+'" class="text-primary underline">Simulador de Examen RABCA</a>. Una vez tengas tu licencia, usa el Recordatorio de Vencimiento en Herramientas para no olvidar renovarla.' },
+			respuesta:'Tenemos <?php echo (int) count( rau_get_herramientas_tabs() ); ?> herramientas gratuitas: calculadoras de antenas, propagación solar, predicción de pasadas de satélites, generador de QSL y muchas más. Todo en <a href="'+'<?php echo esc_url( home_url( "/herramientas/" ) ); ?>'+'" class="text-primary underline">Herramientas de Radio</a>.' },
 		{ id:'contacto', pregunta:'¿Cómo los contacto?',
 			palabras:['contacto','correo','email','escribir','telefono','whatsapp'],
 			respuesta:'Escríbenos a <a href="mailto:info@hk4rau.com" class="text-primary underline">info@hk4rau.com</a> o por <a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" class="text-primary underline">WhatsApp</a>.' },
@@ -207,7 +246,7 @@ if('serviceWorker' in navigator){
 			respuesta:'POTA (Parks on the Air) es el programa de activación de parques. Tenemos una pestaña dedicada de POTA Colombia en Herramientas con spots y referencias.' },
 		{ id:'elmer', pregunta:'¿Qué es el Programa Elmer?',
 			palabras:['elmer','mentor','guia nuevo','ayuda principiante'],
-			respuesta:'Elmer es nuestro programa de mentoría: radioaficionados experimentados que guían a quienes están empezando. Lo encuentras en el menú Comunidad → Programa Elmer.' },
+			respuesta:'Elmer es nuestro programa de mentoría: radioaficionados experimentados que guían a quienes están empezando. Pide tu mentor en <a href="'+'<?php echo esc_url( home_url( "/programa-elmer/" ) ); ?>'+'" class="text-primary underline">Programa Elmer</a>.' },
 		{ id:'diplomas', pregunta:'¿Cómo verifico un diploma?',
 			palabras:['diploma','certificado','verificar diploma'],
 			respuesta:'Puedes verificar la autenticidad de un diploma con el número que aparece impreso, en la pestaña Verificador de Diplomas dentro de Herramientas.' },
@@ -250,21 +289,35 @@ if('serviceWorker' in navigator){
 	function buscarRespuesta(pregunta){
 		var mejor=encontrarMejorFAQ(pregunta);
 		if(mejor) return mejor.respuesta;
-		return 'No tengo una respuesta exacta para eso todavía. Prueba con una de las preguntas rápidas de abajo, o escríbenos directo por <a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" class="text-primary underline">WhatsApp</a> — un humano de RAU te responde con gusto. 🙂';
+		return 'No tengo una respuesta exacta para eso todavía. Si es sobre la licencia, mira la <a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary underline">guía paso a paso</a>. Si no, prueba con una de las preguntas de abajo o escríbenos directo por <a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" class="text-primary underline">WhatsApp</a> — un humano de RAU te responde con gusto. 🙂';
 	}
 
-	function renderQuickButtons(){
-		quickEl.innerHTML=FAQ.slice(0,6).map(function(item){
-			return '<button type="button" data-id="'+item.id+'" class="rau-bot-quick-btn rounded-full border border-border/70 bg-background px-2.5 py-1 font-mono text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary">'+item.pregunta+'</button>';
+	// Botones de abajo: al abrir, las preguntas más comunes; después de cada respuesta, las que
+	// suelen venir a continuación (siguientes), para recorrer el trámite de la licencia paso a paso.
+	var INICIALES=['licencia','lic-examen','lic-costo','asociarse','malla','repetidores'];
+	function renderQuickButtons(ids){
+		ids=(ids && ids.length) ? ids : INICIALES;
+		quickEl.innerHTML=ids.map(function(id){
+			var item=FAQ.find(function(f){ return f.id===id; });
+			return item ? '<button type="button" data-id="'+item.id+'" class="rau-bot-quick-btn rounded-full border border-border/70 bg-background px-2.5 py-1 font-mono text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary">'+item.pregunta+'</button>' : '';
 		}).join('');
 		quickEl.querySelectorAll('.rau-bot-quick-btn').forEach(function(btn){
 			btn.addEventListener('click', function(){
 				var item=FAQ.find(function(f){ return f.id===btn.dataset.id; });
 				if(!item) return;
 				agregarMensaje(item.pregunta, false);
-				agregarMensaje(item.respuesta, true);
+				responder(item);
 			});
 		});
+	}
+	function responder(item){
+		if(!item){
+			agregarMensaje(buscarRespuesta(''), true);
+			renderQuickButtons();
+			return;
+		}
+		agregarMensaje(item.respuesta, true);
+		renderQuickButtons(item.siguientes);
 	}
 
 	var abierto=false;
@@ -274,7 +327,7 @@ if('serviceWorker' in navigator){
 		iconChat.classList.toggle('hidden', abierto);
 		iconClose.classList.toggle('hidden', !abierto);
 		if(abierto && !messagesEl.children.length){
-			agregarMensaje('¡Hola! 👋 Soy el asistente de RAU. Puedo responder preguntas frecuentes sobre la asociación — escribe tu pregunta o elige una de abajo.', true);
+			agregarMensaje('¡Hola! 👋 Soy el asistente de RAU. Puedo explicarte cómo sacar la licencia de radioaficionado paso a paso y responder preguntas sobre la asociación. Escribe tu pregunta o elige una de abajo.', true);
 			renderQuickButtons();
 		}
 	}
@@ -293,7 +346,7 @@ if('serviceWorker' in navigator){
 			body:'pregunta='+encodeURIComponent(texto)+'&encontrada='+(encontrada?'1':'')
 		}).catch(function(e){ rauErr(e);});
 		setTimeout(function(){
-			agregarMensaje(buscarRespuesta(texto), true);
+			responder(encontrarMejorFAQ(texto));
 		}, 300);
 	});
 })();

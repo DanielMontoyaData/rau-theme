@@ -3406,7 +3406,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Licencia MinTIC</p>
 		<h2 class="mb-2 font-display text-2xl font-bold">Simulador de Examen RABCA</h2>
-		<p class="mb-6 text-sm text-muted-foreground">Practica con preguntas tipo examen del Registro de Aficionados de Colombia. Selecciona una respuesta y avanza.</p>
+		<p class="mb-6 text-sm text-muted-foreground">Practica con preguntas tipo examen del Registro de Aficionados de Colombia. Selecciona una respuesta y avanza. ¿Vas a presentar el examen real? Mira el <a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary hover:underline">paso a paso de la licencia</a>: el examen del MinTIC incluye también preguntas de cultura general.</p>
 		<div id="exam-start">
 				<div class="grid gap-3 sm:grid-cols-3 mb-6">
 				<?php foreach([['Segunda Categoría','Novicio · 10 preguntas','A'],['Primera Categoría','Experto · 15 preguntas','B'],['Categoría Avanzada','Avanzado · 20 preguntas','C']] as $cat): ?>

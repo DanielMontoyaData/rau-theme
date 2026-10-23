@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.40.0' );
+define( 'RAU_THEME_VERSION', '19.41.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
