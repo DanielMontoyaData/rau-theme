@@ -29,12 +29,13 @@ nadie lo notara. No son buenas prácticas genéricas.
 | 8 | Integridad de la tabla de prefijos | 57 entradas, cero de África |
 | 9 | Tabla Morse contra ITU-R M.1677-1 | tres copias; dos sin la barra `/` |
 | 10 | Fórmulas y datos duplicados | grid squares con 124 km de error en 4 copias |
-| 11 | `parseInt(x)\|\|0` (aviso) | un índice K ausente se anunciaba como "excelente" |
+| 11 | `parseInt(x)\|\|0` sin marcar `/* 0 legítimo */` | un índice K ausente se anunciaba como "excelente"; un consumo borrado inflaba la autonomía de batería |
 | 12 | Endpoints públicos que escriben en la base | escrituras ilimitadas sin límite por IP |
 | 13 | Accesibilidad de campos y botones | 42 campos sin etiqueta, 5 botones sin nombre |
 | 14 | Canonical y sitemap de las herramientas | las 54 URLs colapsaban en `/herramientas/` |
 | 15 | Trampas de Maidenhead en los 36 archivos | 5ª copia con 124 km de error; `undefined` en 1 de cada 4 posiciones |
 | 16 | El JS se sirve en línea | servirlo aparte falló dos veces: 404 y HTTP 500 |
+| 17 | Sintaxis JavaScript con `node --check` | `php -l` no ve el JS que vive dentro de los `.php` |
 
 ## Los cuatro patrones de fondo
 
@@ -42,14 +43,14 @@ nadie lo notara. No son buenas prácticas genéricas.
    las copias ya habían divergido. Comprobaciones 8, 9 y 10.
 2. **Ausencia de dato tratada como dato.** `||0` y `typeof x === 'undefined'` convierten "no
    hay lectura" en un valor concreto, y el sitio afirma algo que la fuente nunca dijo.
-   Comprobación 11.
+   Comprobación 11: cada `||0` tiene que declarar en su línea que el cero es real.
 3. **Símbolos compartidos declarados a media altura.** Un `const` usado antes de su línea
    aborta todo el script. Comprobaciones 5 y 6.
 4. **Números escritos a mano.** Comprobación 4.
 
 ## Qué NO comprueba
 
-Nada que necesite un navegador: contraste real, orden de tabulación, trampas de foco,
+Nada que necesite un navegador (la 17 solo compila el JavaScript, no lo ejecuta): contraste real, orden de tabulación, trampas de foco,
 si los paneles que se refrescan solos se anuncian a un lector de pantalla. Tampoco valida
 que los datos externos (frecuencias, normativa) sigan vigentes: eso hay que contrastarlo
 contra la fuente a mano.

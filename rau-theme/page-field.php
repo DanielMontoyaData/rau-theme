@@ -166,9 +166,10 @@ $rau_field_rep = rau_get_repetidor_principal();
 
 	/* Batería rápida */
 	function calcBateria(){
-		var cap=parseFloat(document.getElementById('field-cap').value)||0;
-		var consumo=parseFloat(document.getElementById('field-consumo').value)||0;
-		if(consumo<=0){ document.getElementById('field-horas').textContent='—'; return; }
+		// Capacidad vacía no es batería descargada: con ||0 salía "0h 0m".
+		var cap=parseFloat(document.getElementById('field-cap').value);
+		var consumo=parseFloat(document.getElementById('field-consumo').value);
+		if(isNaN(cap) || isNaN(consumo) || consumo<=0){ document.getElementById('field-horas').textContent='—'; return; }
 		var horas=(cap/consumo)*0.85;
 		var h=Math.floor(horas), m=Math.round((horas-h)*60);
 		document.getElementById('field-horas').textContent=h+'h '+m+'m';

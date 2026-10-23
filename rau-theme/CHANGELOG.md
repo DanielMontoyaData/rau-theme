@@ -258,9 +258,46 @@ el navegador ejecuta el archivo es la cabecera `Content-Type`, y un archivo serv
 
 ## Verificación automática
 
-`php bin/verificar.php` — 16 comprobaciones, cada una nacida de un fallo que estuvo en producción.
+`php bin/verificar.php` — 16 comprobaciones en la 19.34.0 (18 desde la 19.36.0, contando la 3b), cada una nacida de un fallo que estuvo en producción.
 Devuelve 0 o 1, así que sirve en un gancho de git. Probado reintroduciendo ocho fallos históricos:
 los detecta todos. Ver `bin/README.md`.
+
+---
+
+## 19.36.0 — campos vacíos y JavaScript validado
+
+**No existe una 19.35.0 publicada.** En una sesión de trabajo apareció una copia marcada 19.35.0
+con una herramienta `cobreal` (Cobertura Real) cuyo origen nadie pudo explicar, y no se integró.
+Se salta el número para que no se confunda con aquella copia. Esta versión parte de la 19.34.0
+desplegada, que desde ahora vive en git.
+
+**Campos vacíos que daban un resultado.** La comprobación 11 contaba 13 usos de `parseFloat(x)||0`
+y en realidad había 31: su expresión regular no veía el paréntesis anidado de
+`getElementById('x').value`. Revisados uno a uno, cinco herramientas convertían un campo borrado
+en un número falso:
+
+- **Autonomía de batería** (y la versión corta del Centro de mando): un consumo en RX o TX borrado
+  contaba como 0 mA y la autonomía salía inflada. Es la cifra con la que se planea una emergencia.
+- **Carta de Smith** y su versión del banco rápido: R vacía daba ROE ∞:1, como una antena en corto.
+- **Field Day**: capacidad vacía daba "0h 0m".
+- **Split**: frecuencia vacía daba "0.0 kHz".
+- **Perfil de terreno**: una altura de antena vacía se calculaba como 0 m sin avisar. Ahora lo pide
+  antes de consultar las elevaciones.
+
+Ahora muestran "—" o piden el dato. En los 16 usos restantes el cero sí es un valor real (contadores
+DXCC/WAS vacíos, índices de `<select>`, datos que nunca se guardaron, X = 0 en una carga resistiva,
+split sin desplazamiento) y cada uno lo declara en la misma línea con `/* 0 legítimo: motivo */`.
+
+**Comprobación 11, de aviso a fallo.** Ya no se conforma con contar: un `||0` sin esa marca hace
+fallar el guion. Recorre todos los archivos, no solo el de Herramientas. Probada reintroduciendo
+el fallo de la batería (con paréntesis anidado) y el de Field Day: detecta los dos, y no salta con
+`||0.95` ni con los comentarios que citan el patrón.
+
+**Comprobación 17, nueva: sintaxis JavaScript.** `php -l` no mira el JavaScript que vive dentro de
+los `.php`. La comprobación sustituye cada bloque PHP por un `0`, conservando los saltos de línea, y
+pasa cada `<script>` por `node --check` por separado, como lo trata el navegador: 21 bloques. Probada
+con tres errores en tres archivos distintos; los detecta los tres y da la línea exacta. Sin `node`
+instalado, avisa en vez de fallar.
 
 ---
 

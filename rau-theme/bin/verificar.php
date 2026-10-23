@@ -236,14 +236,28 @@ if ( count( $reps ) > 8 ) {
 
 /* ─────────────────────────────────────────────────────────────────────── */
 titulo( '11. Ausencia de dato tratada como dato' );
-// parseInt(x)||0 convierte "la fuente no reportó nada" en cero. En el panel de propagación eso
-// hacía que un índice K ausente se anunciara como "condiciones excelentes para HF".
-$n = preg_match_all( '/parse(?:Int|Float)\([^)]*\)\s*\|\|\s*0\b/', $js, $mm );
-if ( $n ) {
-	aviso( "$n uso(s) de parseInt/parseFloat(...)||0 — comprueba que el cero sea un valor legítimo y no un dato ausente" );
-	foreach ( array_slice( $mm[0], 0, 4 ) as $x ) echo "          $x\n";
+// parseInt(x)||0 convierte "la fuente no reportó nada" o "el campo está vacío" en cero. En el panel
+// de propagación eso anunciaba un índice K ausente como "condiciones excelentes para HF"; en la
+// autonomía de batería, un consumo borrado contaba como 0 mA e inflaba las horas.
+// Cada uso tiene que declarar en la misma línea que el cero es legítimo: /* 0 legítimo: motivo */.
+// La primera versión de esta comprobación usaba \([^)]*\) y no veía getElementById('x').value
+// por el paréntesis anidado: contaba 13 de 31.
+$sin_justificar = array();
+$justificados = 0;
+foreach ( array_merge( $php_files, glob( "$raiz/assets/*.js" ) ) as $f ) {
+	foreach ( file( $f ) as $i => $linea ) {
+		$t = ltrim( $linea );
+		if ( strpos( $t, '//' ) === 0 || strpos( $t, '*' ) === 0 ) continue; // comentario
+		if ( ! preg_match( '/parse(?:Int|Float)\((?:[^()]|\([^()]*\))*\)\s*\|\|\s*0(?![.\d])/', $linea ) ) continue;
+		if ( strpos( $linea, '0 legítimo' ) !== false ) { $justificados++; continue; }
+		$sin_justificar[] = basename( $f ) . ':' . ( $i + 1 ) . '  ' . trim( substr( $t, 0, 90 ) );
+	}
+}
+if ( $sin_justificar ) {
+	mal( count( $sin_justificar ) . " uso(s) de parseInt/parseFloat(...)||0 sin justificar. Si el cero es un valor real, márcalo con /* 0 legítimo: motivo */; si no, trata el NaN y muestra '—'" );
+	foreach ( $sin_justificar as $x ) echo "          $x\n";
 } else {
-	ok( 'ninguno' );
+	ok( "ningún ||0 sin justificar ($justificados marcados como cero legítimo)" );
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -364,6 +378,63 @@ if ( strpos( $html, 'window.RAU_INIT' ) === false ) {
 	mal( 'falta window.RAU_INIT: la página no le dice al script qué herramienta abrir' );
 } else {
 	ok( 'window.RAU_INIT se publica antes del script' );
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
+titulo( '17. Sintaxis JavaScript (node --check)' );
+// php -l no mira el JavaScript que vive dentro de los .php: un paréntesis de más pasa el lint y el
+// navegador aborta el <script> entero. Cada bloque PHP se sustituye por un 0 (conservando los
+// saltos de línea para que los números de línea coincidan) y cada <script> se valida por
+// separado, igual que lo trata el navegador.
+$node = trim( (string) shell_exec( 'command -v node 2>/dev/null' ) );
+if ( $node === '' ) {
+	aviso( 'node no está instalado: no se puede validar la sintaxis JavaScript' );
+} else {
+	$neutro = function ( $s ) {
+		return preg_replace_callback( '/<\?php.*?\?>/s', function ( $m ) {
+			return '0' . str_repeat( "\n", substr_count( $m[0], "\n" ) );
+		}, $s );
+	};
+	$bloques = array(); // [ etiqueta, código ]
+	foreach ( array_merge( $php_files, glob( "$raiz/assets/*.js" ) ) as $f ) {
+		$s = file_get_contents( $f );
+		$b = basename( $f );
+		if ( $b === 'herramientas-scripts.php' || $b === 'service-worker-src.php' ) {
+			// Archivos que son JavaScript entero tras la cabecera PHP.
+			$bloques[] = array( $b, $neutro( preg_replace_callback( '/^<\?php.*?\?>/s', function ( $m ) {
+				return str_repeat( "\n", substr_count( $m[0], "\n" ) );
+			}, $s, 1 ) ) );
+		} elseif ( substr( $b, -3 ) === '.js' ) {
+			$bloques[] = array( $b, $s );
+		} else {
+			preg_match_all( '#<script(?![^>]*\bsrc=)(?![^>]*type="application/ld\+json")[^>]*>(.*?)</script>#s', $s, $mm, PREG_OFFSET_CAPTURE );
+			foreach ( $mm[1] as $m ) {
+				$linea = substr_count( substr( $s, 0, $m[1] ), "\n" ) + 1;
+				$bloques[] = array( "$b:$linea", $neutro( $m[0] ) );
+			}
+		}
+	}
+	$tmp = tempnam( sys_get_temp_dir(), 'raujs' ) . '.js';
+	$errores = array();
+	foreach ( $bloques as $bl ) {
+		file_put_contents( $tmp, $bl[1] );
+		exec( escapeshellarg( $node ) . ' --check ' . escapeshellarg( $tmp ) . ' 2>&1', $salida, $rc );
+		if ( $rc !== 0 ) {
+			$msg = '';
+			foreach ( $salida as $l ) { if ( preg_match( '/Error/', $l ) ) { $msg = trim( $l ); break; } }
+			$donde = '';
+			if ( preg_match( '/:(\d+)$/m', implode( "\n", $salida ), $ml ) ) $donde = ' (línea ' . $ml[1] . ' del bloque)';
+			$errores[] = $bl[0] . $donde . ': ' . $msg;
+		}
+		$salida = array();
+	}
+	@unlink( $tmp );
+	if ( $errores ) {
+		mal( count( $errores ) . ' bloque(s) de JavaScript no compilan' );
+		foreach ( $errores as $e ) echo "          $e\n";
+	} else {
+		ok( count( $bloques ) . ' bloques de JavaScript compilan' );
+	}
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */

@@ -1840,8 +1840,10 @@ function rauFaseLunar(frac){
 
 	// Batería — misma fórmula ya verificada en Autonomía de Batería (duty fijo 25%, factor 0.85 de eficiencia real)
 	function calcBateria(){
-		var cap=parseFloat(document.getElementById('campo-bat-cap').value)||0;
-		var tx=parseFloat(document.getElementById('campo-bat-tx').value)||0;
+		// Campo vacío = sin resultado. Con ||0 un TX borrado contaba como 0 mA e inflaba la autonomía.
+		var cap=parseFloat(document.getElementById('campo-bat-cap').value);
+		var tx=parseFloat(document.getElementById('campo-bat-tx').value);
+		if(isNaN(cap) || isNaN(tx)){ document.getElementById('campo-bat-horas').textContent='—'; return; }
 		var rx=300, duty=0.25;
 		var promedio=duty*tx+(1-duty)*rx;
 		var horas=promedio>0 ? (cap/promedio)*0.85 : 0;
@@ -1959,8 +1961,10 @@ function rauFaseLunar(frac){
 	}
 
 	function actualizarSmith(){
-		var R=parseFloat(document.getElementById('banco-r').value)||0;
-		var X=parseFloat(document.getElementById('banco-x').value)||0;
+		// R vacío no es un cortocircuito: con ||0 la ROE salía ∞:1. X vacío sí es 0 (carga resistiva).
+		var R=parseFloat(document.getElementById('banco-r').value);
+		var X=parseFloat(document.getElementById('banco-x').value)||0; /* 0 legítimo */
+		if(isNaN(R)){ document.getElementById('banco-vswr').textContent='—'; return; }
 		var Z0=50;
 		var zr=R/Z0, zi=X/Z0;
 		var numR=zr-1, numI=zi, denR=zr+1, denI=zi;
@@ -3006,9 +3010,11 @@ rauOn('gain-dbd','input',function(){
 	}
 
 	function actualizar(){
-		var R=parseFloat(rInput.value)||0;
-		var X=parseFloat(document.getElementById('smith-x').value)||0;
+		// R vacío no es un cortocircuito: con ||0 la ROE salía ∞:1. X vacío sí es 0 (carga resistiva).
+		var R=parseFloat(rInput.value);
+		var X=parseFloat(document.getElementById('smith-x').value)||0; /* 0 legítimo */
 		var Z0=parseFloat(document.getElementById('smith-z0').value)||50;
+		if(isNaN(R)){ svg.innerHTML=dibujarFondo(); document.getElementById('smith-resultado').innerHTML='<p class="text-muted-foreground">Indica la resistencia R.</p>'; return; }
 
 		// Impedancia normalizada z = (R+jX)/Z0, luego Γ = (z-1)/(z+1) (aritmética compleja)
 		var zr=R/Z0, zi=X/Z0;
@@ -3094,8 +3100,9 @@ rauOn('gain-dbd','input',function(){
 	var freqEl=document.getElementById('split-freq');
 	if(!freqEl) return;
 	function calc(){
-		var freq=parseFloat(freqEl.value)||0;
-		var offset=parseFloat(document.getElementById('split-offset').value)||0;
+		var freq=parseFloat(freqEl.value);
+		var offset=parseFloat(document.getElementById('split-offset').value)||0; /* 0 legítimo: sin split */
+		if(isNaN(freq)){ document.getElementById('split-rx').textContent='—'; document.getElementById('split-tx').textContent='—'; return; }
 		document.getElementById('split-rx').textContent=freq.toFixed(1)+' kHz';
 		document.getElementById('split-tx').textContent=(freq+offset).toFixed(1)+' kHz';
 	}
@@ -3169,16 +3176,16 @@ rauOn('gain-dbd','input',function(){
 		} catch(e){}
 	}
 	function actualizar(){
-		var dTrab=parseInt(document.getElementById('dxcc-trabajadas').value)||0;
-		var dConf=parseInt(document.getElementById('dxcc-confirmadas').value)||0;
+		var dTrab=parseInt(document.getElementById('dxcc-trabajadas').value)||0; /* 0 legítimo: ninguna */
+		var dConf=parseInt(document.getElementById('dxcc-confirmadas').value)||0; /* 0 legítimo: ninguna */
 		document.getElementById('dxcc-barra').style.width=Math.min(100,(dConf/340*100)).toFixed(0)+'%';
 		var faltanHonor=331-dConf;
 		document.getElementById('dxcc-texto').textContent = dConf>=331
 			? '¡Ya alcanzaste Honor Roll! ('+dConf+'/340)'
 			: dConf+'/340 confirmadas · faltan '+faltanHonor+' para Honor Roll (331)';
 
-		var wTrab=parseInt(document.getElementById('was-trabajados').value)||0;
-		var wConf=parseInt(document.getElementById('was-confirmados').value)||0;
+		var wTrab=parseInt(document.getElementById('was-trabajados').value)||0; /* 0 legítimo: ninguna */
+		var wConf=parseInt(document.getElementById('was-confirmados').value)||0; /* 0 legítimo: ninguna */
 		document.getElementById('was-barra').style.width=Math.min(100,(wConf/50*100)).toFixed(0)+'%';
 		document.getElementById('was-texto').textContent = wConf>=50 ? '¡WAS completo!' : wConf+'/50 estados confirmados';
 
@@ -3395,11 +3402,11 @@ rauOn('gain-dbd','input',function(){
 	});
 
 	function calcResistencia(){
-		var i1=parseInt(document.getElementById('col-d1').value)||0;
-		var i2=parseInt(document.getElementById('col-d2').value)||0;
-		var iMult=parseInt(document.getElementById('col-mult').value)||0;
-		var iTol=parseInt(document.getElementById('col-tol').value)||0;
-		var digitos = bandas===5 ? (COLORES[i1].v*100 + COLORES[i2].v*10 + COLORES[parseInt(document.getElementById('col-d3').value)||0].v) : (COLORES[i1].v*10 + COLORES[i2].v);
+		var i1=parseInt(document.getElementById('col-d1').value)||0; /* 0 legítimo: índice de <select> */
+		var i2=parseInt(document.getElementById('col-d2').value)||0; /* 0 legítimo: índice de <select> */
+		var iMult=parseInt(document.getElementById('col-mult').value)||0; /* 0 legítimo: índice de <select> */
+		var iTol=parseInt(document.getElementById('col-tol').value)||0; /* 0 legítimo: índice de <select> */
+		var digitos = bandas===5 ? (COLORES[i1].v*100 + COLORES[i2].v*10 + COLORES[parseInt(document.getElementById('col-d3').value)||0].v) : (COLORES[i1].v*10 + COLORES[i2].v); /* 0 legítimo: índice de <select> */
 		var valor = digitos * COLORES[iMult].mult;
 		var tol = COLORES[iTol] && COLORES[iTol].tol!==undefined ? COLORES[iTol].tol : 20;
 
@@ -3443,9 +3450,12 @@ rauOn('gain-dbd','input',function(){
 		horasEl=document.getElementById('bat-horas'), promEl=document.getElementById('bat-promedio');
 
 	function calc(){
-		var cap=parseFloat(capEl.value)||0, tx=parseFloat(txEl.value)||0, rx=parseFloat(rxEl.value)||0;
-		var duty=parseFloat(dutyEl.value)||0;
+		// Campo vacío = sin resultado. Con ||0 un consumo en RX borrado contaba como 0 mA y la
+		// autonomía salía inflada: justo la cifra con la que se planea una emergencia.
+		var cap=parseFloat(capEl.value), tx=parseFloat(txEl.value), rx=parseFloat(rxEl.value);
+		var duty=parseFloat(dutyEl.value);
 		dutyVal.textContent=duty+'%';
+		if(isNaN(cap) || isNaN(tx) || isNaN(rx) || isNaN(duty)){ promEl.textContent='—'; horasEl.textContent='—'; return; }
 		var promedio = (duty/100)*tx + (1-duty/100)*rx;
 		var horas = promedio>0 ? (cap/promedio)*0.85 : 0;
 		promEl.textContent=promedio.toFixed(0)+' mA';
@@ -4184,6 +4194,9 @@ rauOn('gain-dbd','input',function(){
 		var d=rauDistanciaRumbo(a.lat,a.lng,b.lat,b.lng).dist;
 		if(d<0.5){ aviso('Los dos puntos están casi encima uno del otro.','error'); resultado.classList.add('hidden'); return; }
 		if(d>400){ aviso('Más de 400 km: a esa distancia la línea de vista deja de ser el factor y manda la propagación ionosférica. Esta herramienta no aplica.','error'); resultado.classList.add('hidden'); return; }
+		// Altura vacía no es "antena en el suelo": con ||0 el perfil se calculaba a 0 m sin avisar.
+		var h1=parseFloat(document.getElementById('ter-h1').value), h2=parseFloat(document.getElementById('ter-h2').value);
+		if(isNaN(h1)||isNaN(h2)){ aviso('Indica la altura de las dos antenas sobre el suelo (0 si están a ras de suelo).','error'); resultado.classList.add('hidden'); return; }
 
 		aviso('Consultando elevaciones…');
 		resultado.classList.add('hidden');
@@ -4198,9 +4211,7 @@ rauOn('gain-dbd','input',function(){
 			.then(function(j){
 				clearTimeout(corte);
 				if(!j || !j.elevation || j.elevation.length<2) throw new Error('respuesta vacía');
-				dibujar(j.elevation, d,
-					parseFloat(document.getElementById('ter-h1').value)||0,
-					parseFloat(document.getElementById('ter-h2').value)||0,
+				dibujar(j.elevation, d, h1, h2,
 					parseFloat(document.getElementById('ter-freq').value)||146);
 			})
 			.catch(function(){
@@ -4779,7 +4790,7 @@ rauOn('az-calc','click',function(){
 			return;
 		}
 		var altura=parseFloat(document.getElementById('cov-altura').value)||10;
-		var rep=REPEATERS[parseInt(selectEl.value)||0];
+		var rep=REPEATERS[parseInt(selectEl.value)||0]; /* 0 legítimo: índice de <select> */
 
 		var dist=covDistanceKm(origen,{lat:rep.lat,lng:rep.lng});
 		var h1=radioHorizonKm(altura);
@@ -4907,7 +4918,7 @@ rauOn('az-calc','click',function(){
 			return;
 		}
 
-		var sat=TLES[parseInt(satSelect.value)||0];
+		var sat=TLES[parseInt(satSelect.value)||0]; /* 0 legítimo: índice de <select> */
 		var satrec=satellite.twoline2satrec(sat.line1, sat.line2);
 
 		var observerGd={
@@ -6521,8 +6532,8 @@ setTimeout(function(){
 	if(!el) return;
 	var datos={};
 	try { datos=JSON.parse(localStorage.getItem('rau_dxcc_was')||'{}'); } catch(e){}
-	var dTrab=parseInt(datos.dxccTrab)||0, dConf=parseInt(datos.dxccConf)||0;
-	var wTrab=parseInt(datos.wasTrab)||0, wConf=parseInt(datos.wasConf)||0;
+	var dTrab=parseInt(datos.dxccTrab)||0, dConf=parseInt(datos.dxccConf)||0; /* 0 legítimo: nada guardado */
+	var wTrab=parseInt(datos.wasTrab)||0, wConf=parseInt(datos.wasConf)||0; /* 0 legítimo: nada guardado */
 	var urlDxcc='<?php echo esc_url( home_url( "/herramientas/dxcc/" ) ); ?>';
 
 	if(dTrab===0 && dConf===0 && wTrab===0 && wConf===0){
