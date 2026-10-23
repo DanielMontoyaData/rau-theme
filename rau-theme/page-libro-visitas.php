@@ -115,7 +115,7 @@ $entradas = new WP_Query( array(
 						Firmar el libro
 					</button>
 
-					<p class="text-center text-xs text-muted-foreground/50">Tu mensaje queda publicado de inmediato y permanece para siempre.</p>
+					<p class="text-center text-xs text-muted-foreground">Tu mensaje queda publicado de inmediato y permanece para siempre.</p>
 				</form>
 			</div>
 		</div>

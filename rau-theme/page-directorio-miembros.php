@@ -5,7 +5,15 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 get_header();
 
-$miembros = new WP_Query( array( 'post_type' => 'miembro', 'posts_per_page' => -1, 'orderby' => 'title', 'order' => 'ASC', 'post_status' => 'publish' ) );
+// Solo quienes autorizaron (casilla "Directorio público" en el escritorio, campo visible = 1).
+$miembros = new WP_Query( array(
+	'post_type'      => 'miembro',
+	'posts_per_page' => -1,
+	'orderby'        => 'title',
+	'order'          => 'ASC',
+	'post_status'    => 'publish',
+	'meta_query'     => array( array( 'key' => 'visible', 'value' => '1' ) ),
+) );
 ?>
 <section class="mx-auto max-w-[96rem] px-4 sm:px-6 py-16">
 	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Comunidad RAU</p>
@@ -34,7 +42,7 @@ $miembros = new WP_Query( array( 'post_type' => 'miembro', 'posts_per_page' => -
 					<span class="text-4xl">👥</span>
 				</div>
 				<p class="mb-2 font-display text-xl font-bold">Aún no hay miembros publicados</p>
-				<p class="max-w-sm text-sm text-muted-foreground">Agrégalos en el escritorio → Directorio de Miembros → Agregar nuevo.</p>
+				<p class="max-w-sm text-sm text-muted-foreground">Agrégalos en el escritorio → Directorio de Miembros, y marca la casilla «Directorio público» de quienes lo autorizaron.</p>
 			</div>
 		<?php endif; ?>
 	</div>

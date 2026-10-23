@@ -805,12 +805,12 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<!-- DX SPOTS -->
 				<div class="rau-tile lg:col-span-12">
 					<p class="rau-tile-label">DX Spots en vivo</p>
-					<iframe src="https://dxheat.com/dxc/?spotted_filter=0&band_filter=ALL&limit=25&theme=dark&hide_header=1"
+					<iframe data-src="https://dxheat.com/dxc/?spotted_filter=0&band_filter=ALL&limit=25&theme=dark&hide_header=1"
 						class="w-full rounded-lg border border-border/50" style="height:260px;" loading="lazy" title="DX Spots en vivo"></iframe>
 				</div>
 
 			</div>
-			<p class="mt-4 text-center font-mono text-[10px] text-muted-foreground/50">Propagación cada 30 min · SDR cada 2 min · Datos reutilizados de las demás herramientas de esta página</p>
+			<p class="mt-4 text-center font-mono text-[10px] text-muted-foreground">Propagación cada 30 min · SDR cada 2 min · Datos reutilizados de las demás herramientas de esta página</p>
 		</div>
 
 		<!-- UTC -->
@@ -3367,7 +3367,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		<!-- Widget oficial DXheat (iframe HTTPS, sin restricciones CORS) -->
 		<div class="overflow-hidden rounded-xl border border-border/70" style="height:520px;">
 			<iframe
-				src="https://dxheat.com/dxc/?spotted_filter=0&band_filter=ALL&limit=50&theme=dark&hide_header=1"
+				data-src="https://dxheat.com/dxc/?spotted_filter=0&band_filter=ALL&limit=50&theme=dark&hide_header=1"
 				width="100%"
 				height="520"
 				frameborder="0"

@@ -19,6 +19,14 @@
  *   4. Números escritos a mano que se desfasan del dato real (el catálogo se quedó en 53).
  */
 
+// Solo desde la línea de comandos. Está dentro del tema, así que el servidor web también lo
+// ejecutaba: cualquiera que pidiera /wp-content/themes/rau-theme/bin/verificar.php lo ponía a
+// correr (35 procesos php -l y otros tantos node --check por petición), sin límite.
+if ( PHP_SAPI !== 'cli' ) {
+	http_response_code( 404 );
+	exit;
+}
+
 $raiz = dirname( __DIR__ );
 $fallos = 0;
 $avisos = 0;
@@ -435,6 +443,26 @@ if ( $node === '' ) {
 	} else {
 		ok( count( $bloques ) . ' bloques de JavaScript compilan' );
 	}
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
+titulo( '18. Cada URL de herramienta muestra su herramienta' );
+// El catálogo vive dentro del modo "Catálogo" de la consola. activateCategory() activaba el panel
+// sin pasar a ese modo y la herramienta quedaba en un contenedor oculto: en producción, 0 de las 60
+// URLs /herramientas/{id}/ mostraban su herramienta, y ninguna comprobación lo veía.
+if ( ! preg_match( '/function activateCategory\(.*?\n\t\}\n/s', $js, $m ) ) {
+	mal( 'no se encuentra activateCategory()' );
+} elseif ( strpos( $m[0], 'data-modo="catalogo"' ) === false ) {
+	mal( 'activateCategory() no pasa al modo Catálogo: el panel se abre dentro de un contenedor oculto' );
+} else {
+	ok( 'activateCategory() pasa al modo Catálogo antes de mostrar el panel' );
+}
+// Un iframe de terceros con src se descarga aunque su panel esté oculto (Chromium no aplaza los
+// iframes con display:none, ni con loading="lazy"). DXheat pesaba 1,8 MB en cada herramienta.
+if ( preg_match_all( '#<iframe\b[^>]*\ssrc="https?://#', $html, $mm ) ) {
+	mal( count( $mm[0] ) . ' iframe(s) de terceros con src en Herramientas: se cargan en las 60 URLs aunque nadie abra su panel. Usa data-src' );
+} else {
+	ok( 'los iframes de terceros esperan a que se abra su panel (data-src)' );
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */

@@ -16,7 +16,7 @@ $rau_field_rep = rau_get_repetidor_principal();
 	<div class="mb-5 flex items-center justify-between">
 		<div class="flex items-center gap-2">
 			<?php rau_logo_html( 'h-7 w-7' ); ?>
-			<p class="font-display text-base font-bold">RAU Field</p>
+			<h1 class="font-display text-base font-bold">RAU Field</h1>
 		</div>
 		<a href="<?php echo esc_url( home_url( '/herramientas/' ) ); ?>" class="font-mono text-xs text-muted-foreground hover:text-primary">Herramientas completas →</a>
 	</div>

@@ -1219,7 +1219,7 @@ function rauFaseLunar(frac){
 			var lat=satellite.degreesLat(geo.latitude), lng=satellite.degreesLong(geo.longitude);
 
 			if(!marcadorISS){
-				marcadorISS=L.marker([lat,lng], { icon:iconoISS() }).addTo(capaSateliteMapa).bindPopup('<strong>ISS</strong><br>Altura: '+geo.height.toFixed(0)+' km');
+				marcadorISS=L.marker([lat,lng], { icon:iconoISS(), title:'Posición actual de la ISS' }).addTo(capaSateliteMapa).bindPopup('<strong>ISS</strong><br>Altura: '+geo.height.toFixed(0)+' km');
 			} else {
 				marcadorISS.setLatLng([lat,lng]);
 			}
@@ -2039,12 +2039,29 @@ function rauFaseLunar(frac){
 		if(!opts.skipHash) history.replaceState(null,'',BASE_URL);
 	}
 
+	// Los iframes de terceros llevan data-src y se cargan la primera vez que su panel se muestra.
+	// loading="lazy" no basta: Chromium no aplaza un iframe oculto con display:none, así que el
+	// widget de DXheat (hasta 1,8 MB, con su propio contador de visitas) se descargaba en las 60
+	// URLs de herramientas aunque nadie abriera el panel de DX.
+	function marcarVisible(p){
+		if(p.dataset.rauVisto) return;
+		p.dataset.rauVisto='1';
+		p.querySelectorAll('iframe[data-src]').forEach(function(f){ f.src=f.dataset.src; f.removeAttribute('data-src'); });
+	}
+
 	function activateCategory(catName, opts){
 		opts = opts || {};
 		// Las agrupadas no generan su propia entrada ni su propio salto: aparecen dentro de la
 		// herramienta que las incluye.
 		var catTools = TOOLS.filter(function(t){ return t.cat===catName && !t.oculta; });
 		if(!catTools.length) return false;
+
+		// El catálogo vive dentro del modo "Catálogo" de la consola. Sin pasar a ese modo, el panel
+		// se activaba dentro de un contenedor oculto: /herramientas/qsl/ abría la página y mostraba
+		// el tablero "Radio Now", no la QSL. Pasaba con las 60 URLs de herramienta. Se reutiliza el
+		// clic real sobre el modo, igual que el botón "+ Más herramientas".
+		var btnCatalogo=document.querySelector('.consola-modo-btn[data-modo="catalogo"]');
+		if(btnCatalogo && btnCatalogo.getAttribute('aria-selected')!=='true') btnCatalogo.click();
 
 		gridEl.classList.add('hidden');
 		dashEl.classList.remove('hidden');
@@ -2060,6 +2077,7 @@ function rauFaseLunar(frac){
 			panel.classList.toggle('border-t', idx>0);
 			panel.classList.toggle('border-border/40', idx>0);
 			panelsEl.appendChild(panel);
+			marcarVisible(panel);
 
 			// Tras la herramienta van sus agrupadas, sin separador propio: se leen como partes de
 			// la misma respuesta y no como herramientas distintas.
@@ -2070,6 +2088,7 @@ function rauFaseLunar(frac){
 				sub.classList.remove('pt-8','border-t','border-border/40');
 				sub.classList.add('pt-6');
 				panelsEl.appendChild(sub);
+				marcarVisible(sub);
 			});
 
 			if(catTools.length>1){
@@ -2140,7 +2159,14 @@ function rauFaseLunar(frac){
 
 	/* Estado inicial: prioriza la URL real (/herramientas/{id}/) sobre el hash viejo (compatibilidad) */
 	(function(){
-		if(INITIAL_TOOL && TOOLS_BY_ID[INITIAL_TOOL]){ openTool(INITIAL_TOOL, {skipHash:true, skipScroll:true}); return; }
+		if(INITIAL_TOOL && TOOLS_BY_ID[INITIAL_TOOL]){
+			openTool(INITIAL_TOOL, {skipHash:true, skipScroll:true});
+			// Quien llega a /herramientas/{id}/ viene por esa herramienta: se lleva la vista al panel
+			// (sin animación, para que no parezca un salto después de cargar).
+			var pInicial=document.getElementById('panel-'+INITIAL_TOOL);
+			if(pInicial) pInicial.scrollIntoView({block:'start'});
+			return;
+		}
 		var startId = location.hash.replace('#','');
 		if(!startId) return; // se queda en el grid, es la pantalla de entrada
 		if(TOOLS_BY_ID[startId]){ openTool(startId, {skipScroll:true}); return; }
@@ -5920,10 +5946,12 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		ctx.closePath();
 	}
 
+	// La foto se pide la primera vez que se elige su fondo, no al cargar la página: las tres
+	// sumaban ~1 MB en cada URL de herramienta, y el fondo por defecto (Clásico) no usa ninguna.
 	function loadPhoto(url){
 		var img=new Image();
 		img.crossOrigin='anonymous';
-		img.src=url;
+		img.rauUrl=url;
 		img.onload=function(){ drawQSL(); };
 		img.onerror=function(){ img.failed=true; drawQSL(); };
 		return img;
@@ -5941,6 +5969,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 
 	// Dibuja una foto ajustada tipo "cover" (recorta sin deformar) + degradado oscuro encima para legibilidad
 	function drawPhotoBg(img,W,H){
+		if(!img.src) img.src=img.rauUrl; // al terminar de cargar, onload vuelve a dibujar
 		if(!(img.complete && img.naturalWidth) || img.failed){
 			fondoPlano(W,H);
 			return false;

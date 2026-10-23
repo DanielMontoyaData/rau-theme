@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.36.0' );
+define( 'RAU_THEME_VERSION', '19.37.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -392,6 +392,9 @@ function rau_register_cpts() {
 		'public' => true, 'has_archive' => false, 'show_in_rest' => true,
 		'menu_icon' => 'dashicons-groups',
 		'supports' => array( 'title', 'custom-fields' ),
+		// Sin ficha propia: se presentan en la página Junta Directiva. La ficha suelta solo
+		// mostraba el nombre.
+		'publicly_queryable' => false, 'exclude_from_search' => true, 'query_var' => false, 'rewrite' => false,
 	) );
 
 	// Secciones de contenido institucional (colección "content"): section(slug), summary, body=editor
@@ -481,7 +484,8 @@ function rau_register_cpts() {
 		'public' => true, 'has_archive' => false, 'show_in_rest' => true,
 		'menu_icon' => 'dashicons-book',
 		'supports' => array( 'title', 'custom-fields' ),
-		'rewrite' => array( 'slug' => 'qso-log' ),
+		// Sin ficha propia: single.php no tiene vista para este tipo y la página salía vacía.
+		'publicly_queryable' => false, 'exclude_from_search' => true, 'query_var' => false, 'rewrite' => false,
 	) );
 
 	// Directorio de Miembros: indicativo, ciudad, bandas, visible (si acepta aparecer publicamente)
@@ -494,7 +498,9 @@ function rau_register_cpts() {
 		'public' => true, 'has_archive' => false, 'show_in_rest' => true,
 		'menu_icon' => 'dashicons-id',
 		'supports' => array( 'title', 'custom-fields' ),
-		'rewrite' => array( 'slug' => 'miembro' ),
+		// Sin ficha propia: el directorio los lista y solo con autorización (campo "visible").
+		// Antes cada miembro tenía /miembro/{nombre}/, indexada y en el sitemap, autorizara o no.
+		'publicly_queryable' => false, 'exclude_from_search' => true, 'query_var' => false, 'rewrite' => false,
 	) );
 
 	// Biblioteca de Documentos: archivo_url, categoria
@@ -520,7 +526,8 @@ function rau_register_cpts() {
 		'public' => true, 'has_archive' => false, 'show_in_rest' => true,
 		'menu_icon' => 'dashicons-clock',
 		'supports' => array( 'title', 'custom-fields' ),
-		'rewrite' => array( 'slug' => 'turno' ),
+		// Sin ficha propia: single.php no tiene vista para este tipo y la página salía vacía.
+		'publicly_queryable' => false, 'exclude_from_search' => true, 'query_var' => false, 'rewrite' => false,
 	) );
 
 	// Fase 2: check-in de asistencia a mallas. No es público (no genera páginas
@@ -979,9 +986,21 @@ function rau_url_canonica() {
 			return home_url( '/herramientas/' . $id . '/' );
 		}
 	}
-	if ( is_singular() )            return get_permalink();
-	if ( is_post_type_archive() )   return get_post_type_archive_link( get_post_type() );
-	return home_url( '/' );
+	if ( is_singular() ) return wp_get_canonical_url();
+	// Antes todo lo que no era singular ni archivo de un tipo devolvía la portada: categorías,
+	// etiquetas, autores y las páginas 2, 3… de cualquier listado le decían a Google que eran
+	// copias de la portada. Búsquedas y 404 no llevan canonical.
+	if ( is_search() || is_404() ) return '';
+	$url = '';
+	if ( is_front_page() )            $url = home_url( '/' );
+	elseif ( is_home() )              $url = get_option( 'page_for_posts' ) ? get_permalink( get_option( 'page_for_posts' ) ) : home_url( '/' );
+	elseif ( is_post_type_archive() ) $url = get_post_type_archive_link( get_query_var( 'post_type' ) );
+	elseif ( is_category() || is_tag() || is_tax() ) $url = get_term_link( get_queried_object() );
+	elseif ( is_author() )            $url = get_author_posts_url( get_queried_object_id() );
+	if ( ! $url || is_wp_error( $url ) ) return '';
+	$pagina = (int) get_query_var( 'paged' );
+	if ( $pagina > 1 ) $url = trailingslashit( $url ) . 'page/' . $pagina . '/';
+	return $url;
 }
 
 // Se sustituye el canonical del core por el nuestro, que sí distingue cada herramienta.
@@ -990,6 +1009,56 @@ add_action( 'wp_head', function() {
 	$url = rau_url_canonica();
 	if ( $url ) echo '<link rel="canonical" href="' . esc_url( $url ) . '">' . "\n";
 }, 1 );
+
+/**
+ * Descripción para una página singular sin extracto ni contenido. Sale de los datos de la propia
+ * página (campos del repetidor o del evento, introducción de la plantilla), no de un texto genérico.
+ */
+function rau_descripcion_de_respaldo() {
+	$id   = get_the_ID();
+	$meta = function ( $k ) use ( $id ) { return trim( (string) get_post_meta( $id, $k, true ) ); };
+	switch ( get_post_type() ) {
+		case 'repetidor':
+			$partes = array_filter( array(
+				$meta( 'callsign' ),
+				$meta( 'frequency' ) ? $meta( 'frequency' ) . ' MHz' : '',
+				$meta( 'mode' ),
+				$meta( 'tone' ) ? 'tono ' . $meta( 'tone' ) : '',
+				$meta( 'location' ),
+			) );
+			return get_the_title() . ( $partes ? ': ' . implode( ' · ', $partes ) : '' ) . '. Datos del repetidor y simulador de cobertura.';
+		case 'evento':
+			$partes = array_filter( array( $meta( 'type' ), $meta( 'start' ), $meta( 'frequency' ), $meta( 'location' ) ) );
+			return get_the_title() . ( $partes ? ' — ' . implode( ' · ', $partes ) : '' ) . '. Actividad de Radioaficionados Unidos.';
+		case 'alerta':
+			return 'Aviso de la red de Radioaficionados Unidos: ' . get_the_title() . '.';
+	}
+	$por_plantilla = array(
+		'page-alertas.php'             => 'Comunicaciones de emergencia y avisos activos de la red HK4RAU.',
+		'page-canales.php'             => 'Además de las repetidoras, así es como la comunidad de RAU se mantiene en contacto todos los días.',
+		'page-checkin.php'             => 'Check-in de la malla semanal de Radioaficionados Unidos: reporta tu asistencia con tu indicativo.',
+		'page-contacto.php'            => '¿Consulta, propuesta de alianza, prensa, o simplemente quieres saludar? Escríbenos.',
+		'page-diplomas.php'            => 'Diplomas oficiales emitidos por HK4RAU para sus miembros y operadores participantes en actividades especiales.',
+		'page-directorio-miembros.php' => 'Directorio de miembros de Radioaficionados Unidos que autorizaron publicar sus datos.',
+		'page-documentos.php'          => 'Actas, estatutos y resoluciones de la asociación en un solo lugar.',
+		'page-elmer.php'               => 'Programa Elmer: conectamos a quienes recién obtuvieron su indicativo con miembros de RAU dispuestos a acompañarlos.',
+		'page-emergencia-modo.php'     => 'Modo Emergencia de RAU: frecuencias, hora UTC y datos esenciales en una página ligera, pensada para conectividad limitada.',
+		'page-estado.php'              => 'Estado de RAU: todo lo operativo de la asociación en un solo lugar.',
+		'page-field.php'               => 'RAU Field: vista simplificada para operación portátil y POTA, con botones grandes y pensada para usarse con una mano.',
+		'page-galeria.php'             => 'Registro fotográfico de mallas, eventos especiales, activaciones POTA y encuentros de la asociación.',
+		'page-herramientas.php'        => 'Calculadoras y recursos operativos para radioaficionados. Todo funciona directamente en el navegador, sin necesidad de instalar nada.',
+		'page-junta-directiva.php'     => 'Quienes coordinan Radioaficionados Unidos y sus áreas de trabajo.',
+		'page-libro-visitas.php'       => 'Libro de visitas de Radioaficionados Unidos: deja un mensaje corto y tu indicativo si tienes uno.',
+		'page-novedades.php'           => 'Qué se ha ido agregando a hk4rau.com, en orden.',
+		'page-pulguero.php'            => 'Pulguero de RAU: equipos, antenas y accesorios entre miembros de la asociación.',
+		'page-qsl.php'                 => 'Bitácora de contactos (QSO) de la asociación y su confirmación vía QSL.',
+		'page-turnos.php'              => 'Quién está de turno para monitorear la Red de Emergencia cada semana.',
+	);
+	$plantilla = get_page_template_slug();
+	if ( isset( $por_plantilla[ $plantilla ] ) ) return $por_plantilla[ $plantilla ];
+	$tipo = get_post_type_object( get_post_type() );
+	return get_the_title() . ( $tipo ? ' — ' . $tipo->labels->singular_name : '' ) . ' de Radioaficionados Unidos.';
+}
 
 function rau_seo_meta_tags() {
 	if ( is_front_page() ) {
@@ -1007,6 +1076,9 @@ function rau_seo_meta_tags() {
 	} elseif ( is_singular() ) {
 		$title = get_the_title() . ' — ' . get_bloginfo( 'name' );
 		$desc  = has_excerpt() ? get_the_excerpt() : wp_trim_words( get_the_content(), 30 );
+		// 41 páginas salían con content="": las que se construyen desde su plantilla o desde
+		// campos personalizados no tienen texto en el editor.
+		if ( '' === trim( wp_strip_all_tags( $desc ) ) ) $desc = rau_descripcion_de_respaldo();
 	} elseif ( is_post_type_archive() ) {
 		$title = wp_get_document_title();
 		$archive_desc = array(
@@ -1018,6 +1090,9 @@ function rau_seo_meta_tags() {
 			'directivo'      => 'Junta Directiva de Radioaficionados Unidos.',
 		);
 		$desc = $archive_desc[ get_post_type() ] ?? get_bloginfo( 'description' );
+	} elseif ( is_category() || is_tag() || is_tax() ) {
+		$title = wp_get_document_title();
+		$desc  = term_description() ?: 'Publicaciones de Radioaficionados Unidos en «' . single_term_title( '', false ) . '».';
 	} else {
 		$title = wp_get_document_title();
 		$desc  = get_bloginfo( 'description' );
@@ -1042,7 +1117,7 @@ function rau_seo_meta_tags() {
 	<meta property="og:locale" content="es_CO">
 	<meta property="og:title" content="<?php echo esc_attr( $title ); ?>">
 	<meta property="og:description" content="<?php echo esc_attr( $desc ); ?>">
-	<meta property="og:url" content="<?php echo esc_url( rau_url_canonica() ); ?>">
+	<?php if ( rau_url_canonica() ) : ?><meta property="og:url" content="<?php echo esc_url( rau_url_canonica() ); ?>"><?php endif; ?>
 	<meta property="og:site_name" content="<?php bloginfo( 'name' ); ?>">
 	<?php if ( is_singular() ) : ?>
 	<meta property="article:published_time" content="<?php echo esc_attr( get_the_date( 'c' ) ); ?>">
@@ -1252,8 +1327,67 @@ add_filter( 'xmlrpc_methods', function( $methods ) {
 remove_action( 'wp_head', 'rsd_link' );
 add_filter( 'wp_headers', function( $headers ) {
 	unset( $headers['X-Pingback'] );
+	// Cabeceras de seguridad que el alojamiento no envía. HSTS sin includeSubDomains ni preload:
+	// lo conservador, que no compromete a subdominios que quizá no tengan HTTPS.
+	// Sin Permissions-Policy a propósito: varias herramientas piden la ubicación (GPS).
+	$headers['Strict-Transport-Security'] = 'max-age=31536000';
+	$headers['X-Content-Type-Options']    = 'nosniff';
+	$headers['X-Frame-Options']           = 'SAMEORIGIN';
+	$headers['Referrer-Policy']           = 'strict-origin-when-cross-origin';
 	return $headers;
 } );
+/* Autorización para aparecer en el Directorio de Miembros (campo "visible"). La plantilla
+ * prometía "solo aparecen los miembros que autorizaron" pero listaba a todos; el campo existía
+ * solo en un comentario. Sin la casilla marcada, el miembro no se publica. */
+add_action( 'add_meta_boxes_miembro', function() {
+	add_meta_box( 'rau_miembro_visible', 'Directorio público', function( $post ) {
+		wp_nonce_field( 'rau_miembro_visible', 'rau_miembro_visible_nonce' );
+		$marcado = get_post_meta( $post->ID, 'visible', true ) === '1';
+		echo '<label><input type="checkbox" name="rau_visible" value="1"' . checked( $marcado, true, false ) . '> ';
+		echo 'Autorizó aparecer en el Directorio de Miembros</label>';
+		echo '<p class="description">Sin esta casilla el miembro no se muestra en la página pública.</p>';
+	}, 'miembro', 'side' );
+} );
+add_action( 'save_post_miembro', function( $post_id ) {
+	if ( ! isset( $_POST['rau_miembro_visible_nonce'] ) || ! wp_verify_nonce( sanitize_key( $_POST['rau_miembro_visible_nonce'] ), 'rau_miembro_visible' ) ) return;
+	if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || ! current_user_can( 'edit_post', $post_id ) ) return;
+	update_post_meta( $post_id, 'visible', empty( $_POST['rau_visible'] ) ? '0' : '1' );
+} );
+
+// El servidor anunciaba la versión exacta de PHP en cada respuesta.
+add_action( 'send_headers', function() { header_remove( 'X-Powered-By' ); } );
+
+/* Enumeración de usuarios: /wp-json/wp/v2/users, /?author=1 y el sitemap de usuarios publicaban
+ * el usuario administrador. Es la mitad de lo que hace falta para adivinar la contraseña. */
+add_filter( 'rest_endpoints', function( $endpoints ) {
+	if ( is_user_logged_in() ) return $endpoints; // el editor de bloques los necesita
+	foreach ( array_keys( $endpoints ) as $ruta ) {
+		// Usuarios, y los tipos sin ficha pública: la API listaba el nombre de todos los
+		// miembros, también de los que no autorizaron aparecer en el directorio.
+		if ( preg_match( '#^/wp/v2/(users|miembro|turno|qso)(/|$)#', $ruta ) ) unset( $endpoints[ $ruta ] );
+	}
+	return $endpoints;
+} );
+// Prioridad 1: antes que redirect_canonical, que respondía a /?author=1 con una redirección
+// cuya cabecera Location ya revelaba el usuario.
+add_action( 'template_redirect', function() {
+	if ( is_author() && ! is_user_logged_in() ) {
+		wp_safe_redirect( home_url( '/' ), 301 );
+		exit;
+	}
+}, 1 );
+add_filter( 'wp_sitemaps_add_provider', function( $provider, $name ) {
+	return 'users' === $name ? false : $provider;
+}, 10, 2 );
+
+// El script de emojis de WordPress (hasta 73 KB) se cargaba en todas las páginas; los navegadores
+// actuales dibujan los emojis por sí mismos.
+remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
+remove_action( 'wp_print_styles', 'print_emoji_styles' );
+remove_filter( 'the_content_feed', 'wp_staticize_emoji' );
+remove_filter( 'comment_text_rss', 'wp_staticize_emoji' );
+remove_filter( 'wp_mail', 'wp_staticize_emoji_for_email' );
+add_filter( 'emoji_svg_url', '__return_false' );
 
 /* =========================================================================
  * Fase 2 — Check-in de asistencia a mallas

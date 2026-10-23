@@ -68,7 +68,7 @@ $repetidores = rau_get_repeaters_data();
 		</div>
 	</div>
 
-	<p class="mt-6 text-center font-mono text-[10px] text-muted-foreground/50">Se actualiza solo · KiwiSDR cada 2 min</p>
+	<p class="mt-6 text-center font-mono text-[10px] text-muted-foreground">Se actualiza solo · KiwiSDR cada 2 min</p>
 </div>
 
 <script>

@@ -4,6 +4,8 @@
 php bin/verificar.php
 ```
 
+Solo se ejecuta desde la línea de comandos: pedido por la web responde 404.
+
 Devuelve `0` si todo pasa y `1` si algo falla, así que sirve tal cual en un gancho de git o
 en integración continua:
 
@@ -36,6 +38,7 @@ nadie lo notara. No son buenas prácticas genéricas.
 | 15 | Trampas de Maidenhead en los 36 archivos | 5ª copia con 124 km de error; `undefined` en 1 de cada 4 posiciones |
 | 16 | El JS se sirve en línea | servirlo aparte falló dos veces: 404 y HTTP 500 |
 | 17 | Sintaxis JavaScript con `node --check` | `php -l` no ve el JS que vive dentro de los `.php` |
+| 18 | Cada URL de herramienta muestra su herramienta; iframes de terceros con `data-src` | 0 de 60 URLs mostraban su herramienta; DXheat (1,8 MB) se cargaba en todas |
 
 ## Los cuatro patrones de fondo
 

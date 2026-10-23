@@ -16,6 +16,7 @@ $rau_em_rep = rau_get_repetidor_principal();
       // y esta es precisamente la página donde alguien puede estar leyendo con prisa, mala luz
       // o sin las gafas puestas. ?>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="<?php echo esc_attr( rau_descripcion_de_respaldo() ); ?>">
 <title>Modo Emergencia — RAU</title>
 <style>
 	* { box-sizing: border-box; margin: 0; padding: 0; }

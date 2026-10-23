@@ -264,6 +264,77 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.37.0 — análisis del sitio en producción
+
+Se recorrieron desde fuera las 134 URLs del sitemap de hk4rau.com con un navegador real
+(escritorio y móvil), 230 enlaces, axe-core en 12 páginas y el peso de cada página. Los cambios se
+probaron después en un WordPress 7.1.3 local con el tema, contenido de prueba y el mismo navegador.
+
+**Ninguna URL de herramienta mostraba su herramienta.** `/herramientas/qsl/` abría la página y
+enseñaba el tablero "Radio Now": el panel de la QSL se activaba, pero dentro del catálogo, que vive
+en el modo "Catálogo" de la consola y estaba oculto. Medido en producción: 0 de 60. Con la
+corrección: 60 de 60, en pantalla y sin errores. `activateCategory()` pasa ahora a ese modo con el
+mismo clic que usa el botón "+ Más herramientas", y quien llega por la URL de una herramienta ve su
+panel. Ninguna comprobación lo detectaba: todas miraban el código, ninguna lo que se ve. La 18 lo
+vigila.
+
+**Seguridad.**
+- `bin/verificar.php` se ejecutaba desde la web: pedir su URL lo ponía a correr en el servidor, sin
+  límite. Ahora solo funciona desde la línea de comandos y responde 404 al resto.
+- El usuario administrador se publicaba en `/wp-json/wp/v2/users`, en `/?author=1` (la cabecera
+  `Location` de la redirección ya lo revelaba) y en el sitemap de usuarios. Las tres vías cerradas
+  para visitantes anónimos; el escritorio y las contraseñas de aplicación siguen viéndolo.
+- Cabeceras que el alojamiento no enviaba: HSTS (un año, sin subdominios), `nosniff`,
+  `X-Frame-Options: SAMEORIGIN` y `Referrer-Policy`. Sin `Permissions-Policy`: varias herramientas
+  piden la ubicación. `X-Powered-By` ya no anuncia la versión de PHP.
+
+**Privacidad del directorio.** La página decía "solo aparecen los miembros que autorizaron
+publicar sus datos" y listaba a todos: el campo `visible` solo existía en un comentario. Ahora hay
+una casilla "Directorio público" en la ficha de cada miembro y sin ella no aparece. Además, la API
+REST publicaba el nombre de todos los miembros y cada uno tenía su página `/miembro/{nombre}/`
+indexada. **Después de desplegar, el directorio queda vacío hasta marcar la casilla de quienes
+autorizaron.**
+
+**Fichas vacías.** Miembros, turnos, QSO y directivos tenían página propia que solo mostraba el
+título (`single.php` no tiene vista para esos tipos): unas 15 páginas indexadas sin contenido. Ya no
+son consultables por URL; siguen en el escritorio y en las páginas que los listan.
+
+**SEO.**
+- Canonical: categorías, etiquetas, autores y las páginas 2, 3… de cualquier listado declaraban la
+  portada como su URL canónica. Ahora cada una la suya; búsquedas y 404 no llevan.
+- 41 páginas salían con `<meta name="description" content="">`. Ahora la descripción sale de los
+  datos de la página: los campos del repetidor o del evento, o la introducción de su plantilla.
+- RAU Field no tenía `<h1>`.
+
+**Rendimiento.** Las páginas de herramientas pesaban 2–4,2 MB contra 700 KB de la portada:
+- El widget de DXheat (hasta 1,8 MB, con su propio contador Piwik) se cargaba en las 60 URLs aunque
+  nadie abriera el panel: `loading="lazy"` no aplaza un iframe oculto. Ahora usa `data-src` y se
+  carga al abrir su panel. De ahí salían los avisos de cookies `_pk_` en la consola.
+- El generador de QSL descargaba sus tres fotos de fondo (~1 MB) en cada herramienta, y el fondo
+  por defecto no usa ninguna. Ahora cada foto se pide al elegir su fondo.
+- Fuera el script de emojis de WordPress (hasta 73 KB por página).
+
+**Accesibilidad y móvil.**
+- Textos con opacidad 50 % daban contraste 2,8:1 (calculado y coincidente con axe: 2,81). Pasan a
+  opacidad completa: 7,1:1 en oscuro, 5,6:1 en claro. Los iconos de 30–40 % son decorativos.
+- Los enlaces `text-primary hover:underline` dentro de un párrafo solo se distinguían por el color
+  (1,32:1 con el texto). Ahora van subrayados.
+- El marcador de la ISS en el mapa no tenía nombre para lectores de pantalla.
+- Los archivos de categoría y autor mostraban el título con las etiquetas escapadas
+  ("Categoría: &lt;span&gt;…") y esa cadena, sin espacios, desbordaba en móvil. Una URL larga en
+  la guía de licencia también.
+
+**Comprobación 18, nueva**: que `activateCategory()` pase al modo Catálogo y que ningún iframe de
+terceros en Herramientas lleve `src`. Probada reintroduciendo cada fallo por separado.
+
+**Queda fuera del tema** (panel de WordPress / Hostinger): despublicar el contenido de ejemplo
+(alerta "Malla de Emergencia activada", QSO HK3ZZZ y HK4WWW, miembros y turnos de prueba,
+"historia-1" a "historia-3", "Hello world!"), cambiar el nombre público del administrador, que hoy
+es su correo, y borrar `readme.html` y `license.txt`. Tras desplegar, purgar la caché de LiteSpeed:
+guarda también las cabeceras.
+
+---
+
 ## 19.36.0 — campos vacíos y JavaScript validado
 
 **No existe una 19.35.0 publicada.** En una sesión de trabajo apareció una copia marcada 19.35.0

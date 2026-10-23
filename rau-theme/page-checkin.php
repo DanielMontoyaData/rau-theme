@@ -180,7 +180,7 @@ $total_hoy = (int) $checkins_hoy->found_posts;
 						Hacer check-in
 					</button>
 
-					<p class="text-center text-xs text-muted-foreground/50">Al reportarte confirmas tu asistencia a la malla de hoy</p>
+					<p class="text-center text-xs text-muted-foreground">Al reportarte confirmas tu asistencia a la malla de hoy</p>
 				</form>
 			</div>
 		</div>
@@ -228,7 +228,7 @@ $total_hoy = (int) $checkins_hoy->found_posts;
 				?>
 				<div class="group flex flex-col border-b border-border/40 px-6 py-4 last:border-0 transition-colors hover:bg-muted/10 sm:grid sm:grid-cols-12 sm:items-center sm:gap-3">
 					<!-- # -->
-					<div class="hidden sm:block col-span-1 font-mono text-xs text-muted-foreground/40"><?php echo esc_html( $num ); ?></div>
+					<div class="hidden sm:block col-span-1 font-mono text-xs text-muted-foreground"><?php echo esc_html( $num ); ?></div>
 					<!-- Hora -->
 					<div class="col-span-2 font-mono text-xs text-muted-foreground"><?php echo esc_html( $hora ); ?></div>
 					<!-- Indicativo con avatar -->

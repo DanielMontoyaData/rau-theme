@@ -199,12 +199,12 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 						<div class="flex flex-col items-center rounded-xl border border-border/60 bg-background/40 py-3">
 							<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Flujo Solar SFI</p>
 							<p id="hp-sfi" class="mt-1 font-mono text-2xl font-bold text-amber-400">—</p>
-							<p class="font-mono text-[10px] text-muted-foreground/50">óptimo &gt; 150</p>
+							<p class="font-mono text-[10px] text-muted-foreground">óptimo &gt; 150</p>
 						</div>
 						<div class="flex flex-col items-center rounded-xl border border-border/60 bg-background/40 py-3">
 							<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Índice A</p>
 							<p id="hp-a" class="mt-1 font-mono text-2xl font-bold text-foreground">—</p>
-							<p class="font-mono text-[10px] text-muted-foreground/50">bajo = mejor</p>
+							<p class="font-mono text-[10px] text-muted-foreground">bajo = mejor</p>
 						</div>
 					</div>
 				</div>

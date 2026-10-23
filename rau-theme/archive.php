@@ -11,7 +11,8 @@ $titles = array(
 	'diploma'      => 'Todos los Diplomas y Certificaciones',
 	'galeria_item' => 'Galería Completa',
 );
-$heading = isset( $titles[ $type ] ) ? $titles[ $type ] : get_the_archive_title();
+// get_the_archive_title() trae HTML ("Categoría: <span>…</span>"); con esc_html se veían las etiquetas.
+$heading = isset( $titles[ $type ] ) ? $titles[ $type ] : wp_strip_all_tags( get_the_archive_title() );
 ?>
 <section class="mx-auto max-w-[96rem] px-4 sm:px-6 py-16">
 	<h1 class="mb-8 max-w-2xl font-display text-3xl font-bold sm:text-4xl"><?php echo esc_html( $heading ); ?></h1>

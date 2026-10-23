@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.36.0
+Version: 19.37.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -275,6 +275,11 @@ Text Domain: rau-theme
 /* ---- WordPress: contenido del editor de bloques (Tailwind preflight quita los margenes por defecto) ---- */
 .screen-reader-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);white-space:nowrap;}
 .entry-content p{margin-bottom:1.1em;}
+/* Una URL o un correo largos no pueden ensanchar la página en móvil. */
+.entry-content,h1{overflow-wrap:break-word;}
+/* Enlaces de "text-primary hover:underline": dentro de un párrafo solo se distinguían por el color
+   (contraste 1,32:1 con el texto de alrededor; WCAG 1.4.1 pide algo más que el color). */
+.text-primary.hover\:underline{text-decoration-line:underline;text-underline-offset:2px;}
 .entry-content h1,.entry-content h2,.entry-content h3,.entry-content h4{margin:1.4em 0 0.5em;font-weight:700;}
 .entry-content h2{font-size:1.5rem;}
 .entry-content h3{font-size:1.2rem;}
