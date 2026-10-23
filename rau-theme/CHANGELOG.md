@@ -264,6 +264,22 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.44.0 — receptor probado con el KiwiSDR real
+
+Con el relevo publicado (rau-kiwi.danielmontoyae.workers.dev) se probó contra el HK4RAU real:
+KiwiSDR 2, v1.902, `mode=rx8.wf3`. WWV en 10 MHz llegó con S9 y la cascada de 40 m mostró las
+estaciones en la escala correcta.
+
+**La cascada no mandaba datos.** El receptor empareja audio y cascada por la marca de tiempo de la
+URL (`/ws/kiwi/<marca>/SND` y `/W/F`); el cliente usaba una distinta para cada uno, y la cascada se
+conectaba pero quedaba vacía. Ahora comparten marca y la cascada se abre 300 ms después del audio,
+como hace la interfaz oficial.
+
+**Solo 3 canales con cascada.** El HK4RAU tiene 8 canales de audio y 3 de cascada. Si los de cascada
+están ocupados, el receptor sigue sonando y avisa, en lugar de cortar toda la conexión.
+
+---
+
 ## 19.43.0 — el KiwiSDR dentro del sitio
 
 **Por qué no se podía.** El KiwiSDR solo habla HTTP: el proxy de kiwisdr.com cierra la conexión

@@ -250,7 +250,10 @@ $relay = get_option( 'rau_kiwi_relay', '' );
 	}
 	function pares(t){ var o={}; t.split(' ').forEach(function(p){ var i=p.indexOf('='); if(i>0){ var v=p.slice(i+1); try { v=decodeURIComponent(v); } catch(e){} o[p.slice(0,i)]=v; } else if(p) o[p]=''; }); return o; }
 
-	function avisoMsg(o){
+	function avisoMsg(o, stream){
+		// El HK4RAU tiene 8 canales de audio pero solo 3 con cascada: si esos están ocupados se sigue
+		// escuchando sin cascada en vez de cortar todo.
+		if('too_busy' in o && stream==='W/F'){ $('rx-esc-cen').textContent='Cascada no disponible: sus canales están ocupados. El audio sigue.'; try{ st.wf.onclose=null; st.wf.close(); }catch(e){} st.wf=null; return true; }
 		if('too_busy' in o){ msg('Los '+o.too_busy+' canales del receptor están ocupados. Mira abajo a qué horas suele haber canal libre.'); apagar(true); return true; }
 		if('badp' in o && o.badp!=='0'){ msg('El receptor no aceptó la conexión (todos los canales libres requieren clave).'); apagar(true); return true; }
 		if('down' in o){ msg('El receptor está en mantenimiento. Intenta más tarde.'); apagar(true); return true; }
@@ -259,13 +262,15 @@ $relay = get_option( 'rau_kiwi_relay', '' );
 	}
 
 	function abrir(stream, onmsg, onbin){
-		var ws=new WebSocket(RELAY+'/ws/kiwi/'+Date.now()+'/'+stream);
+		// SND y W/F llevan la misma marca de tiempo: así el receptor los empareja en el mismo canal.
+		// Con marcas distintas la cascada se conecta pero nunca manda datos (probado con HK4RAU).
+		var ws=new WebSocket(RELAY+'/ws/kiwi/'+st.ts+'/'+stream);
 		ws.binaryType='arraybuffer';
 		ws.onopen=function(){ ws.send('SET auth t=kiwi p='); ws.send('SERVER DE CLIENT hk4rau.com '+stream); };
 		ws.onmessage=function(ev){
 			if(typeof ev.data==='string') return;
 			var u8=new Uint8Array(ev.data), tag=String.fromCharCode(u8[0],u8[1],u8[2]);
-			if(tag==='MSG'){ var o=pares(new TextDecoder().decode(u8.subarray(4))); if(!avisoMsg(o)) onmsg(o); }
+			if(tag==='MSG'){ var o=pares(new TextDecoder().decode(u8.subarray(4))); if(!avisoMsg(o, stream)) onmsg(o); }
 			else onbin(tag, ev.data, u8);
 		};
 		ws.onerror=function(){ if(st.on) msg('No fue posible conectar con el receptor. Revisa tu conexión o intenta en unos minutos.'); };
@@ -277,7 +282,7 @@ $relay = get_option( 'rau_kiwi_relay', '' );
 		st.ctx=st.ctx||new (window.AudioContext||window.webkitAudioContext)();
 		st.ctx.resume();
 		st.gain=st.gain||st.ctx.createGain(); st.gain.connect(st.ctx.destination); volumen();
-		st.on=true; st.t=0; st.dec={i:0,p:0}; st.rpos=0; st.rprev=0;
+		st.on=true; st.t=0; st.dec={i:0,p:0}; st.rpos=0; st.rprev=0; st.ts=Date.now();
 		$('rx-power').textContent='■ Detener';
 		msg('Conectando con el receptor…');
 		st.snd=abrir('SND', function(o){
@@ -300,7 +305,7 @@ $relay = get_option( 'rau_kiwi_relay', '' );
 			else { m=new Float32Array(datos.length>>1); for(var i=0;i<m.length;i++) m[i]=dv.getInt16(10+2*i,false)/32768; }
 			reproducir(m);
 		});
-		st.wf=abrir('W/F', function(o){
+		setTimeout(function(){ if(!st.on) return; st.wf=abrir('W/F', function(o){
 			if(o.wf_fft_size) st.fft=+o.wf_fft_size;
 			if(o.zoom_max) st.zoomMax=+o.zoom_max;
 			if(o.bandwidth) st.bw=+o.bandwidth;
@@ -316,7 +321,7 @@ $relay = get_option( 'rau_kiwi_relay', '' );
 			wfStart=xbin/maxBins*st.bw; wfSpan=st.bw/Math.pow(2,z);
 			$('rx-esc-izq').textContent=(wfStart/1000).toFixed(1)+' kHz'; $('rx-esc-der').textContent=((wfStart+wfSpan)/1000).toFixed(1)+' kHz';
 			linea(datos); marca();
-		});
+		}); }, 300);
 		clearInterval(st.ka);
 		st.ka=setInterval(function(){ send(st.snd,'SET keepalive'); send(st.wf,'SET keepalive'); }, 3000);
 	}
