@@ -311,6 +311,18 @@ const MORSE={
    viniera después dejaba de inicializarse: por eso los paneles del final de la página (DX Spots,
    DMR, WSPR, D-STAR) se quedaban en "Cargando…" indefinidamente mientras los de arriba
    funcionaban bien. Con esto, un id que falte deja un botón inerte en vez de tumbar la página. */
+/* QTH del usuario (Mi QTH, guardado en el navegador) o Medellín si no hay. La consola tenía su
+   propia copia, RAU_QTH_MAPA, encerrada en el bloque del mapa: "Ahora mismo, ¿qué trabajo?" y el
+   botón "Mi QTH" del conversor de coordenadas la leían desde fuera y fallaban con ReferenceError.
+   La primera mostraba "No se pudieron leer las condiciones" aunque los datos llegaban bien. */
+function rauQth(){
+	try {
+		var g=JSON.parse(localStorage.getItem('rau_mi_qth')||'null');
+		if(g && typeof g.lat==='number' && typeof g.lng==='number') return g;
+	} catch(e){}
+	return {lat:6.2442,lng:-75.5812};
+}
+
 function rauOn(id, evento, fn){
 	var el=document.getElementById(id);
 	if(!el){
@@ -3599,7 +3611,7 @@ rauOn('gain-dbd','input',function(){
 	}
 
 	function pintar(solar, spots){
-		var lat=RAU_QTH_MAPA.lat, lng=RAU_QTH_MAPA.lng;
+		var qth=rauQth(), lat=qth.lat, lng=qth.lng;
 		var ahora=new Date();
 		var minUTC=ahora.getUTCHours()*60+ahora.getUTCMinutes();
 		var ev=solEventos(ahora, lat, lng);
@@ -3678,7 +3690,7 @@ rauOn('gain-dbd','input',function(){
 			var bueno = mejor.q===2;
 			titular.className='rounded-xl border p-6 '+(bueno?'border-emerald-400/40 bg-emerald-400/5 text-emerald-400':'border-amber-400/40 bg-amber-400/5 text-amber-400');
 			bandaEl.textContent=mejor.banda;
-			var razon='Es la banda más alta con condiciones '+ETIQUETA[mejor.q].toLowerCase()+' de '+(esDia?'día':'noche')+'.';
+			var razon='Es la banda más alta con propagación '+ETIQUETA[mejor.q].toLowerCase()+' de '+(esDia?'día':'noche')+'.';
 			if(enBanda) razon+=' Además hay '+enBanda+' spot'+(enBanda===1?'':'s')+' reciente'+(enBanda===1?'':'s')+' ahí, así que no es solo teoría.';
 			else razon+=' Aún no hay spots ahí: puede estar abierta y desierta, que es cuando conviene llamar CQ.';
 			if(!isNaN(k) && k>=5) razon+=' Ojo: con K='+k+' las rutas hacia el norte pueden estar cerradas aunque la banda figure abierta.';
@@ -3850,7 +3862,8 @@ rauOn('gain-dbd','input',function(){
 		}, { enableHighAccuracy:true, timeout:10000 });
 	});
 	rauOn('coords-qth','click',function(){
-		entrada.value=RAU_QTH_MAPA.lat.toFixed(5)+', '+RAU_QTH_MAPA.lng.toFixed(5);
+		var qth=rauQth();
+		entrada.value=qth.lat.toFixed(5)+', '+qth.lng.toFixed(5);
 		convertir();
 	});
 	convertir();

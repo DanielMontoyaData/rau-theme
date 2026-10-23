@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.38.0' );
+define( 'RAU_THEME_VERSION', '19.39.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -135,7 +135,7 @@ function rau_ics_maybe_output() {
 			echo "DTSTART;VALUE=DATE:{$dt}\r\n";
 			if ( 'semanal' === get_post_meta( $id, 'recurrencia', true ) ) echo "RRULE:FREQ=WEEKLY\r\n";
 			echo "SUMMARY:" . rau_ics_escape( get_the_title() ) . "\r\n";
-			if ( $desc ) echo "DESCRIPTION:" . rau_ics_escape( implode( '\n', $desc ) ) . "\r\n";
+			if ( $desc ) echo "DESCRIPTION:" . rau_ics_escape( implode( "\n", $desc ) ) . "\r\n";
 			if ( $loc ) echo "LOCATION:" . rau_ics_escape( $loc ) . "\r\n";
 			echo "URL:" . esc_url_raw( get_permalink() ) . "\r\n";
 			echo "END:VEVENT\r\n";

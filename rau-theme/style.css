@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.38.0
+Version: 19.39.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -395,6 +395,14 @@ iframe, table, pre, code, textarea {
 	.rau-panel, section, main, header, footer {
 		max-width: 100vw;
 	}
+}
+
+/* ── Saltos dentro de la página ──────────────────────────────────────────
+   La cabecera es fija y mide 4rem (h-16). Sin este margen, todo scrollIntoView y todo enlace
+   #ancla dejaban el título de destino debajo de ella: /herramientas/{id}/ abría la herramienta
+   correcta con el nombre tapado. */
+html {
+	scroll-padding-top: 5rem;
 }
 
 /* ── Splash de bienvenida (solo portada, una vez por sesión) ──────────── */

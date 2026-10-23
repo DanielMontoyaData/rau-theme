@@ -264,6 +264,34 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.39.0 — revisión de las 60 herramientas en producción
+
+Se abrieron las 60 URLs /herramientas/{id}/ en un móvil simulado, registrando también los errores
+que el código atrapa sin mostrar.
+
+**"Ahora mismo, ¿qué trabajo?" nunca funcionó en producción.** Mostraba "No se pudieron leer las
+condiciones" aunque los datos solares y los spots llegaban bien. Leía `RAU_QTH_MAPA`, una variable
+declarada dentro del bloque del mapa y por tanto invisible desde el suyo: `ReferenceError`, que el
+`.catch()` convertía en un aviso de red. Como la página carga todas las herramientas, el error se
+repetía en las 60 URLs. El botón "Mi QTH" del conversor de coordenadas tenía el mismo fallo. Ahora
+las dos usan `rauQth()`, una sola función global para el QTH guardado o Medellín.
+
+**Comprobación 19, nueva.** Busca constantes en mayúsculas declaradas dentro de un bloque y leídas
+desde otro. Probada reintroduciendo el fallo: lo detecta y da los bloques; sin él, pasa.
+
+**El nombre de la herramienta quedaba bajo la cabecera.** Al abrir /herramientas/{id}/ la página
+bajaba hasta la herramienta y la cabecera fija (4rem) tapaba su título. `scroll-padding-top` en
+`html` lo corrige para todo salto del sitio.
+
+**Un solo H1 para 60 URLs.** Cada herramienta tenía su propio `<title>` y descripción, pero todas
+compartían "Herramientas de Radio" como encabezado principal. Ahora el H1 es el nombre de la
+herramienta.
+
+**Calendario .ics: `\n` literal en la descripción.** `implode('\n')` con comillas simples dejaba
+una barra que `rau_ics_escape()` volvía a escapar: Google Calendar mostraba "rueda\nFrecuencia".
+
+---
+
 ## 19.38.0 — lo que ve quien llega por primera vez
 
 **El splash tapaba la portada 5,5 segundos.** En la primera visita de cada sesión el escudo cubría

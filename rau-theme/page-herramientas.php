@@ -28,8 +28,13 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 }
 ?>
 <section class="mx-auto max-w-[96rem] px-4 sm:px-6 py-16">
-	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Utilidades técnicas</p>
-	<h1 class="mb-2 font-display text-3xl font-bold sm:text-4xl">Herramientas de Radio</h1>
+	<?php
+	// En /herramientas/{id}/ el H1 es la herramienta: las 60 URLs ya tenían su propio <title> y su
+	// descripción, pero compartían "Herramientas de Radio" como encabezado principal.
+	$tool_h1 = get_query_var( 'rau_tool' ) ? rau_find_tool_by_id( sanitize_title( get_query_var( 'rau_tool' ) ) ) : null;
+	?>
+	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary"><?php echo $tool_h1 ? 'Herramientas de Radio' : 'Utilidades técnicas'; ?></p>
+	<h1 class="mb-2 font-display text-3xl font-bold sm:text-4xl"><?php echo esc_html( $tool_h1 ? $tool_h1['label'] : 'Herramientas de Radio' ); ?></h1>
 	<p class="mb-10 max-w-2xl text-muted-foreground">Calculadoras y recursos operativos para radioaficionados. Todo funciona directamente en el navegador, sin necesidad de instalar nada.</p>
 
 	<!-- ── TABS ─────────────────────────────────────────────── -->

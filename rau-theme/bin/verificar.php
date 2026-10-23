@@ -466,6 +466,40 @@ if ( preg_match_all( '#<iframe\b[^>]*\ssrc="https?://#', $html, $mm ) ) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */
+titulo( '19. Constantes de un bloque leídas desde otro' );
+// Cada herramienta vive en su propio (function(){ … })(). RAU_QTH_MAPA se declaraba dentro del
+// bloque del mapa y "Ahora mismo, ¿qué trabajo?" la leía desde el suyo: ReferenceError, atrapado
+// por un .catch() que mostraba "No se pudieron leer las condiciones" con los datos ya descargados.
+// Busca nombres EN_MAYÚSCULAS declarados (var, let, const) en un bloque y usados en otro que no los
+// declara ni los toma de window. Las declaradas al inicio de la línea (fuera de todo bloque) son
+// globales a propósito, como MORSE o PFX_GEO, y se pueden leer desde cualquier herramienta.
+$bloques_iife = preg_split( '/^\}\)\(\);\s*$/m', $js );
+preg_match_all( '/^(?:var|let|const)\s+([A-Z][A-Z0-9_]{3,})\s*=/m', $js, $globales );
+$declara = array_fill_keys( $globales[1], null );
+foreach ( $bloques_iife as $i => $b ) {
+	if ( preg_match_all( '/\b(?:var|let|const)\s+([A-Z][A-Z0-9_]{3,})\s*=/', $b, $mm ) ) {
+		foreach ( $mm[1] as $n ) {
+			if ( array_key_exists( $n, $declara ) && null === $declara[ $n ] ) continue;
+			$declara[ $n ][] = $i;
+		}
+	}
+}
+$fugas = array();
+foreach ( $declara as $n => $donde ) {
+	if ( null === $donde ) continue;
+	foreach ( $bloques_iife as $i => $b ) {
+		if ( in_array( $i, $donde, true ) ) continue;
+		if ( preg_match( '/(?<![\w.$])' . $n . '\b/', preg_replace( '#/\*.*?\*/|//[^\n]*#s', '', $b ) ) ) $fugas[] = "$n (declarada en el bloque " . ( $donde[0] + 1 ) . ', usada en el ' . ( $i + 1 ) . ')';
+	}
+}
+if ( $fugas ) {
+	mal( count( $fugas ) . ' constante(s) leídas fuera del bloque que las declara' );
+	foreach ( array_unique( $fugas ) as $f ) echo "          $f\n";
+} else {
+	ok( count( $declara ) . ' constantes en mayúsculas, cada una usada solo donde se declara' );
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
 echo "\n" . str_repeat( '=', 72 ) . "\n";
 if ( $fallos ) {
 	echo "\033[31m$fallos comprobación(es) fallan\033[0m";
