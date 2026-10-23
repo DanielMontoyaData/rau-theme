@@ -1,0 +1,20 @@
+# WordPress core / config (no aplica a este repo, solo el tema, pero por si acaso)
+wp-config.php
+.htaccess
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Backups y logs
+*.sql
+*.log
+*.bak
+
+# Dependencias (si en el futuro se agrega build con npm)
+node_modules/
