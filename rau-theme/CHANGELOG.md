@@ -264,6 +264,31 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.40.0 — los errores avisan; el celular estorba menos
+
+**Aviso por correo de errores de JavaScript.** "Ahora mismo" estuvo rota desde su publicación sin
+que nadie lo supiera, porque su `.catch()` mostraba un aviso de red. Un script en `wp_head`
+escucha los errores sin atrapar y las promesas rechazadas, y `rauErr(e)` se agregó a los 48
+`.catch()` del tema (todos menos el registro del service worker). Solo se avisan errores de
+programación (ReferenceError, TypeError, SyntaxError, RangeError) que no sean cortes de red, y solo
+de scripts del propio sitio. Llegan a `admin_email` con el mensaje, la línea, la página, la versión
+del tema y el navegador. Límites: cada error distinto una vez al día, 3 avisos por visitante cada
+10 minutos, 10 correos al día en total. Probado contra el sitio en vivo con el fallo de "Ahora
+mismo" todavía publicado: un solo aviso, el correcto, y ninguno por errores de red.
+
+**El botón del chat tapaba texto en el celular.** Baja de 56 a 48 px en pantallas pequeñas y se
+aparta al desplazarse hacia abajo; vuelve al subir. Con el chat abierto no se mueve.
+
+**Zonas táctiles de 12–17 px.** Spots DX, frecuencias para copiar, satélites y canales solares
+eran botones de texto demasiado bajos para un dedo. En pantallas táctiles miden ahora 24 px, el
+mínimo de WCAG 2.2; los enlaces del pie y las casillas del mapa también crecen.
+
+**/herramientas/dxcc/ abría bajo el borde de la pantalla.** Las herramientas de arriba terminaban
+de cargar después del salto y empujaban el panel. Se vuelve a alinear al terminar la carga, salvo
+que la persona ya haya empezado a moverse.
+
+---
+
 ## 19.39.0 — revisión de las 60 herramientas en producción
 
 Se abrieron las 60 URLs /herramientas/{id}/ en un móvil simulado, registrando también los errores

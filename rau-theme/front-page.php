@@ -320,7 +320,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 							badge.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;"></span><span style="font-family:monospace;font-size:0.75rem;color:#22c55e;">En línea</span>';
 						} else { throw new Error(); }
 					})
-					.catch(function(){
+					.catch(function(e){ rauErr(e);
 						badge.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span><span style="font-family:monospace;font-size:0.75rem;color:hsl(var(--muted-foreground));">Sin confirmar</span>';
 						if(users) users.textContent = '—';
 					});
@@ -411,7 +411,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 				if(isNaN(k)||isNaN(sfi)) throw new Error('sin lectura solar');
 				updateGauge(k, sfi, d.aindex);
 			})
-			.catch(function(){
+			.catch(function(e){ rauErr(e);
 				var e=document.getElementById('gauge-estado'); if(e) e.textContent='Sin datos';
 				var d2=document.getElementById('gauge-desc'); if(d2) d2.textContent='No se pudo cargar la información solar';
 			});

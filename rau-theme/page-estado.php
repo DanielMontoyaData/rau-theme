@@ -102,7 +102,7 @@ $repetidores = rau_get_repeaters_data();
 					badge.innerHTML='<span class="h-2 w-2 rounded-full bg-rose-400"></span>';
 					texto.textContent='Sin conexión';
 				}
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				document.getElementById('estado-sdr-badge').innerHTML='<span class="h-2 w-2 rounded-full bg-rose-400"></span>';
 				document.getElementById('estado-sdr-texto').textContent='Sin conexión';
 			});
@@ -126,7 +126,7 @@ $repetidores = rau_get_repeaters_data();
 			}).join('');
 			el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" class="w-full h-24">'+barras+'</svg>'
 				+'<p class="mt-2 text-xs text-muted-foreground">Total: '+datos.reduce(function(a,d){return a+d.total;},0)+' check-ins en las últimas 12 semanas</p>';
-		}).catch(function(){});
+		}).catch(function(e){ rauErr(e);});
 })();
 </script>
 

@@ -109,7 +109,7 @@ if('serviceWorker' in navigator){
 			}).then(function(){
 				btn.textContent='🔔 Notificaciones activadas';
 				if(status){ status.classList.remove('hidden'); status.textContent='Listo. Recibirás avisos de RAU aunque tengas el navegador cerrado.'; }
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				btn.disabled=false; btn.textContent='🔔 Activar notificaciones de RAU';
 				if(status){ status.classList.remove('hidden'); status.textContent='No se pudo activar. Intenta de nuevo.'; }
 			});
@@ -160,6 +160,16 @@ if('serviceWorker' in navigator){
 	var quickEl=document.getElementById('rau-bot-quick');
 	var form=document.getElementById('rau-bot-form');
 	var input=document.getElementById('rau-bot-input');
+
+	// En el celular el botón tapaba el final de las líneas mientras se leía. Se aparta al bajar y
+	// vuelve al subir, que es cuando alguien busca ayuda; con el chat abierto no se mueve.
+	var ultimoY=window.scrollY;
+	window.addEventListener('scroll', function(){
+		var y=window.scrollY, abierto=!panel.classList.contains('hidden');
+		if(abierto || Math.abs(y-ultimoY)<8) return;
+		toggleBtn.classList.toggle('rau-bot-apartado', y>ultimoY && y>200);
+		ultimoY=y;
+	}, { passive:true });
 
 	var FAQ=[
 		{ id:'asociarse', pregunta:'¿Cómo me asocio a RAU?',
@@ -281,7 +291,7 @@ if('serviceWorker' in navigator){
 			method:'POST',
 			headers:{'Content-Type':'application/x-www-form-urlencoded'},
 			body:'pregunta='+encodeURIComponent(texto)+'&encontrada='+(encontrada?'1':'')
-		}).catch(function(){});
+		}).catch(function(e){ rauErr(e);});
 		setTimeout(function(){
 			agregarMensaje(buscarRespuesta(texto), true);
 		}, 300);

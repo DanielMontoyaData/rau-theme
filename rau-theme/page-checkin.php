@@ -317,7 +317,7 @@ $total_hoy = (int) $checkins_hoy->found_posts;
 						+'<span class="font-mono text-xs text-muted-foreground">'+h.hace+'</span>'
 						+'</div>';
 				}).join('');
-			}).catch(function(){});
+			}).catch(function(e){ rauErr(e);});
 	}
 	cargarLastHeard();
 	setInterval(cargarLastHeard, 30000);
@@ -382,7 +382,7 @@ $total_hoy = (int) $checkins_hoy->found_posts;
 				if(bounds.length>1) map.fitBounds(bounds, { padding:[30,30] });
 			};
 			document.head.appendChild(script);
-		}).catch(function(){});
+		}).catch(function(e){ rauErr(e);});
 })();
 </script>
 

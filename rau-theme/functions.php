@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.39.0' );
+define( 'RAU_THEME_VERSION', '19.40.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -1646,6 +1646,90 @@ add_action( 'admin_post_rau_contacto', 'rau_contacto_handle' );
 add_action( 'admin_post_nopriv_rau_contacto', 'rau_contacto_handle' );
 
 /**
+ * Aviso por correo de errores de JavaScript.
+ *
+ * "Ahora mismo, ¿qué trabajo?" estuvo rota desde que se publicó y nadie lo supo: un
+ * ReferenceError caía en un .catch() que mostraba "Vuelve a intentarlo en un momento", igual que
+ * un corte de red. Cada error de programación (ReferenceError, TypeError, SyntaxError, RangeError)
+ * que ocurra en el sitio, atrapado o no, llega ahora a admin_email. Los de red no: esos ya los
+ * explica la propia herramienta y no se arreglan tocando el código.
+ *
+ * Límites, para que un fallo en la portada no mande mil correos: cada error distinto se avisa una
+ * vez al día, como mucho 10 correos al día en total y 3 avisos por visitante cada 10 minutos.
+ */
+function rau_js_error_script() {
+	$url = admin_url( 'admin-ajax.php?action=rau_js_error' );
+	?>
+<script>
+(function(){
+	var url=<?php echo wp_json_encode( $url ); ?>, avisados={}, n=0;
+	var RED=/Failed to fetch|NetworkError|Load failed|Network request failed|aborted|JSON|Unexpected token|Unexpected end/i;
+	function enviar(msg, src, tipo){
+		msg=String(msg||'').slice(0,300);
+		if(!msg || avisados[msg] || n>=5) return;
+		avisados[msg]=1; n++;
+		var d=new FormData();
+		d.append('msg', msg);
+		d.append('src', String(src||'').replace(location.origin,'').replace(/\?[^:)]*/,'').slice(0,200));
+		d.append('tipo', tipo);
+		d.append('pagina', (location.pathname+location.hash).slice(0,200));
+		try { if(!(navigator.sendBeacon && navigator.sendBeacon(url, d))) fetch(url, {method:'POST', body:d, keepalive:true}); } catch(e){}
+	}
+	// Para los .catch(): avisa solo de errores de programación, nunca de cortes de red.
+	window.rauErr=function(e){
+		if(!e || !(e instanceof ReferenceError || e instanceof TypeError || e instanceof SyntaxError || e instanceof RangeError)) return;
+		if(RED.test(e.message)) return;
+		if(window.console && console.error) console.error(e);
+		enviar(e.name+': '+e.message, (String(e.stack||'').split('\n')[1]||'').trim(), 'atrapado');
+	};
+	window.addEventListener('error', function(ev){
+		// Solo scripts del propio sitio: las extensiones del navegador y los terceros no son nuestros.
+		if(!ev.filename || ev.filename.indexOf(location.host)===-1) return;
+		enviar(ev.message, ev.filename+':'+ev.lineno+':'+ev.colno, 'sin atrapar');
+	});
+	window.addEventListener('unhandledrejection', function(ev){ window.rauErr(ev.reason); });
+})();
+</script>
+	<?php
+}
+add_action( 'wp_head', 'rau_js_error_script', 0 );
+
+function rau_js_error() {
+	$msg    = substr( sanitize_text_field( wp_unslash( $_POST['msg'] ?? '' ) ), 0, 300 );
+	$src    = substr( sanitize_text_field( wp_unslash( $_POST['src'] ?? '' ) ), 0, 200 );
+	$tipo   = 'atrapado' === ( $_POST['tipo'] ?? '' ) ? 'atrapado por un .catch()' : 'sin atrapar';
+	$pagina = substr( sanitize_text_field( wp_unslash( $_POST['pagina'] ?? '' ) ), 0, 200 );
+	$ua     = substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ?? '' ) ), 0, 200 );
+	if ( '' === $msg ) wp_die( '', '', array( 'response' => 204 ) );
+
+	// El mismo error desde otra línea de la misma versión sigue siendo el mismo error.
+	$clave = 'rau_jserr_' . md5( $msg . '|' . preg_replace( '/:\d+(:\d+)?\)?$/', '', $src ) );
+	if ( get_transient( $clave ) ) wp_die( '', '', array( 'response' => 204 ) );
+
+	$ip_hash = md5( ( $_SERVER['REMOTE_ADDR'] ?? '' ) . wp_salt( 'nonce' ) );
+	$por_ip  = (int) get_transient( 'rau_jserr_ip_' . $ip_hash );
+	$hoy     = (int) get_transient( 'rau_jserr_hoy' );
+	if ( $por_ip >= 3 || $hoy >= 10 ) wp_die( '', '', array( 'response' => 204 ) );
+
+	set_transient( $clave, 1, DAY_IN_SECONDS );
+	set_transient( 'rau_jserr_ip_' . $ip_hash, $por_ip + 1, 10 * MINUTE_IN_SECONDS );
+	set_transient( 'rau_jserr_hoy', $hoy + 1, DAY_IN_SECONDS );
+
+	$cuerpo = "Un visitante tuvo un error de JavaScript en hk4rau.com.\n\n"
+		. "Error:   {$msg}\n"
+		. "Dónde:   {$src}\n"
+		. "Página:  " . home_url( $pagina ) . "\n"
+		. "Tipo:    {$tipo}\n"
+		. "Tema:    " . RAU_THEME_VERSION . "\n"
+		. "Navegador: {$ua}\n\n"
+		. "Este mismo error no se volverá a avisar en 24 horas. Máximo 10 avisos al día.";
+	wp_mail( get_option( 'admin_email' ), '[RAU] Error de JavaScript: ' . substr( $msg, 0, 80 ), $cuerpo );
+	wp_die( '', '', array( 'response' => 204 ) );
+}
+add_action( 'wp_ajax_rau_js_error', 'rau_js_error' );
+add_action( 'wp_ajax_nopriv_rau_js_error', 'rau_js_error' );
+
+/**
  * El Libro de Visitas es permanente por diseño: el formulario siempre crea
  * las entradas como 'publish' directo, nada las manda a la papelera solo.
  * El único riesgo real es que WordPress vacía la papelera automáticamente
@@ -3056,7 +3140,7 @@ add_action( 'template_redirect', function() {
 							var seg=Math.floor((Date.now()/1000)-json.data.ts);
 							var texto = seg<60 ? 'hace unos segundos' : Math.floor(seg/60)+' min';
 							document.getElementById('qth-hace').textContent=texto;
-						}).catch(function(){});
+						}).catch(function(e){ rauErr(e);});
 				}
 				setInterval(actualizar, 30000);
 			})();

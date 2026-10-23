@@ -208,7 +208,7 @@ $rau_field_rep = rau_get_repetidor_principal();
 				var ms=encontrado.aos-new Date();
 				var h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000);
 				el.innerHTML='<p class="font-mono text-2xl font-bold text-primary">'+(h>0?h+'h ':'')+m+'m</p><p class="font-mono text-xs text-muted-foreground">Elev. máx '+encontrado.maxEl.toFixed(0)+'° · '+encontrado.aos.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+'</p>';
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				el.innerHTML='<p class="text-sm text-muted-foreground">No se pudo calcular.</p>';
 			});
 	}
@@ -324,7 +324,7 @@ $rau_field_rep = rau_get_repetidor_principal();
 					if(!json.success) return;
 					qthToken=json.data.token;
 					document.getElementById('qth-share-link').value=json.data.url;
-				}).catch(function(){});
+				}).catch(function(e){ rauErr(e);});
 		}, function(){ alert('No se pudo obtener tu ubicación.'); }, { enableHighAccuracy:false, maximumAge:60000 });
 	}
 
@@ -352,7 +352,7 @@ $rau_field_rep = rau_get_repetidor_principal();
 			if(qthInterval) clearInterval(qthInterval);
 			if(qthToken){
 				var body=new URLSearchParams(); body.set('token', qthToken);
-				fetch('<?php echo esc_js( admin_url('admin-ajax.php') ); ?>?action=rau_qth_stop', { method:'POST', body:body }).catch(function(){});
+				fetch('<?php echo esc_js( admin_url('admin-ajax.php') ); ?>?action=rau_qth_stop', { method:'POST', body:body }).catch(function(e){ rauErr(e);});
 			}
 			qthToken=null;
 			qthBtn.classList.remove('hidden');

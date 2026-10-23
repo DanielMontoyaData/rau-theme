@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.39.0
+Version: 19.40.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -403,6 +403,36 @@ iframe, table, pre, code, textarea {
    correcta con el nombre tapado. */
 html {
 	scroll-padding-top: 5rem;
+}
+
+/* ── Celular: botón del chat y zonas táctiles ─────────────────────────────
+   El botón flotante (56 px) tapaba el final de las líneas: se achica a 48 px y se aparta al
+   bajar (footer.php). En pantallas táctiles, los botones de texto de las listas (spots DX,
+   frecuencias, satélites) medían 12–17 px de alto: se llevan a 24 px, el mínimo de WCAG 2.2. */
+#rau-bot-toggle {
+	transition: transform .2s ease, opacity .2s ease;
+}
+#rau-bot-toggle.rau-bot-apartado {
+	transform: translateY(150%);
+	opacity: 0;
+	pointer-events: none;
+}
+@media (max-width: 640px) {
+	#rau-bot-toggle { width: 3rem; height: 3rem; right: 1rem; bottom: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+	#rau-bot-toggle { transition: none; }
+}
+@media (pointer: coarse) {
+	.rau-amsat-seleccionar, .rau-hamsat-seleccionar, .rau-dxspot-ir, .rau-dxspot-copiar,
+	.rau-freq-copiar, .rau-sol-canal, #rau-tools a.rounded.border {
+		display: inline-flex;
+		align-items: center;
+		min-height: 24px;
+	}
+	footer a { display: inline-block; padding-block: 4px; }
+	footer a:has(> svg) { padding: 2px; }
+	#rau-tools input[type="checkbox"] { width: 20px; height: 20px; }
 }
 
 /* ── Splash de bienvenida (solo portada, una vez por sesión) ──────────── */

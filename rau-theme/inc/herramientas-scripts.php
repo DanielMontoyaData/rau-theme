@@ -522,7 +522,7 @@ function rauFaseLunar(frac){
 		// que la v1 devolvía RADIANES desde el sur. Si algún día se baja a 1.x hay que convertir.
 		import('https://cdn.jsdelivr.net/npm/suncalc@2.0.2/+esm')
 			.then(function(mod){ window.SunCalc=mod.default||mod; cb(); })
-			.catch(function(){
+			.catch(function(e){ rauErr(e);
 				var posEl=document.getElementById('consola-luna-posicion');
 				if(posEl) posEl.textContent='Posición no disponible';
 			});
@@ -657,7 +657,7 @@ function rauFaseLunar(frac){
 		.then(function(json){
 			if(json.success) dibujarTendencia(json.data);
 			else document.getElementById('consola-tendencia-texto').textContent='Sin datos disponibles';
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			document.getElementById('consola-tendencia-texto').textContent='No se pudo cargar el historial';
 		});
 })();
@@ -680,7 +680,7 @@ function rauFaseLunar(frac){
 					+'<span class="text-amber-400">🔥 '+r.racha+'</span>'
 					+'</div>';
 			}).join('');
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			lista.innerHTML='<p class="text-[11px] text-muted-foreground">No se pudo cargar.</p>';
 		});
 })();
@@ -793,7 +793,7 @@ function rauFaseLunar(frac){
 					alertaEl.classList.add('hidden'); alertaEl.classList.remove('flex');
 				}
 			}
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			// Antes: catch vacío, dejaba "Calculando…" para siempre si esto fallaba
 			var rnBandaErr=document.getElementById('rn-banda');
 			if(rnBandaErr) rnBandaErr.innerHTML='📡 Banda: <span class="text-rose-400">sin datos</span>';
@@ -942,7 +942,7 @@ function rauFaseLunar(frac){
 			.then(function(json){
 				if(json && json.current_weather) cb(json.current_weather);
 				else cb(null);
-			}).catch(function(){ cb(null); });
+			}).catch(function(e){ rauErr(e); cb(null); });
 	}
 	var REPS_MAPA=<?php echo wp_json_encode( $repetidores_consola ?: [] ); ?>;
 	var estadoSolar={sfi:null, kindex:null}; // se llena async desde rau_solar
@@ -1079,7 +1079,7 @@ function rauFaseLunar(frac){
 				estadoSolar.sfi=parseFloat(json.data.sfi);
 				estadoSolar.kindex=parseFloat(json.data.kindex);
 			}
-		}).catch(function(){});
+		}).catch(function(e){ rauErr(e);});
 
 	cargarLeaflet(function(){
 		var map=L.map('consola-mapa', { scrollWheelZoom:false, worldCopyJump:true }).setView([15,-60], 2);
@@ -1110,7 +1110,7 @@ function rauFaseLunar(frac){
 						.addTo(capaRepetidoresMapa)
 						.bindPopup('<strong>'+(r.nombre||r.indicativo||'Repetidor')+'</strong><br>'+(r.frecuencia||'')+' '+(r.offset||''));
 				});
-			}).catch(function(){});
+			}).catch(function(e){ rauErr(e);});
 		}
 
 		function cargarCapaDx(){
@@ -1196,7 +1196,7 @@ function rauFaseLunar(frac){
 					marcadoresComunidad.push(m);
 					m.addTo(map);
 				});
-			}).catch(function(){});
+			}).catch(function(e){ rauErr(e);});
 
 		document.getElementById('mapa-mostrar-comunidad').addEventListener('change', function(){
 			marcadoresComunidad.forEach(function(m){
@@ -1468,7 +1468,7 @@ function rauFaseLunar(frac){
 						badge.textContent='📡 '+(nombres[json.data.fuente] || json.data.fuente);
 						badge.classList.remove('hidden');
 						if(json.data.fuente==='pu4elt_respaldo') badge.classList.add('text-amber-400');
-					}).catch(function(){});
+					}).catch(function(e){ rauErr(e);});
 
 				// Actividad real de AMSAT — barras proporcionales, con manejo honesto si falla o si AMSAT cambia su formato
 				setTimeout(function(){
@@ -1505,7 +1505,7 @@ function rauFaseLunar(frac){
 								if(typeof window.rauSeleccionarSatelite==='function') window.rauSeleccionarSatelite(btn.dataset.valor);
 							});
 						});
-					}).catch(function(){
+					}).catch(function(e){ rauErr(e);
 						var el=document.getElementById('amsat-actividad-lista');
 						if(el) el.innerHTML='<p class="font-mono text-[9px] text-muted-foreground">No disponible ahora mismo — <a href="https://www.amsat.org/status/" target="_blank" rel="noopener" class="text-primary hover:underline">ver en AMSAT ↗</a></p>';
 					});
@@ -1532,12 +1532,12 @@ function rauFaseLunar(frac){
 								if(typeof window.rauSeleccionarSatelite==='function') window.rauSeleccionarSatelite(btn.dataset.valor);
 							});
 						});
-					}).catch(function(){
+					}).catch(function(e){ rauErr(e);
 						var el=document.getElementById('hamsat-activaciones-lista');
 						if(el) el.innerHTML='<p class="font-mono text-[9px] text-muted-foreground">No disponible ahora mismo — <a href="https://hams.at/" target="_blank" rel="noopener" class="text-primary hover:underline">ver en hams.at ↗</a></p>';
 					});
 				}, 2000);
-				}).catch(function(){
+				}).catch(function(e){ rauErr(e);
 					var rnSatErr=document.getElementById('rn-satelite');
 					if(rnSatErr) rnSatErr.innerHTML='🛰️ <span class="text-rose-400">sin datos</span>';
 					var listaSatErr=document.getElementById('mapa-satelites-lista');
@@ -1737,14 +1737,14 @@ function rauFaseLunar(frac){
 					navigator.clipboard.writeText(texto).then(function(){
 						btnCompartir.textContent='✅ Copiado';
 						setTimeout(function(){ btnCompartir.textContent='💬 Copiar como texto'; }, 2000);
-					}).catch(function(){});
+					}).catch(function(e){ rauErr(e);});
 				});
 			})();
 			if(btnCopiar) btnCopiar.addEventListener('click', function(){
 				navigator.clipboard.writeText(window.location.href).then(function(){
 					btnCopiar.textContent='✅ Enlace copiado';
 					setTimeout(function(){ btnCopiar.textContent='🔗 Copiar enlace a este punto'; }, 2000);
-				}).catch(function(){});
+				}).catch(function(e){ rauErr(e);});
 			});
 
 			obtenerClima(e.latlng.lat, e.latlng.lng, function(c){
@@ -1943,7 +1943,7 @@ function rauFaseLunar(frac){
 			}
 
 			if(d.updated) document.getElementById('atx-actualizado').textContent='Actualizado: '+d.updated;
-		}).catch(function(){});
+		}).catch(function(e){ rauErr(e);});
 })();
 
 /* ── CENTRO DE MANDO: BANCO DE TRABAJO "CONSTRUIR ANTENA" (piloto) ── */
@@ -2176,7 +2176,16 @@ function rauFaseLunar(frac){
 			// Quien llega a /herramientas/{id}/ viene por esa herramienta: se lleva la vista al panel
 			// (sin animación, para que no parezca un salto después de cargar).
 			var pInicial=document.getElementById('panel-'+INITIAL_TOOL);
-			if(pInicial) pInicial.scrollIntoView({block:'start'});
+			if(pInicial){
+				pInicial.scrollIntoView({block:'start'});
+				// Las herramientas de arriba terminan de cargar después del salto y empujan el panel
+				// hacia abajo: /herramientas/dxcc/ quedaba bajo el borde de la pantalla. Se vuelve a
+				// alinear al terminar la carga, salvo que la persona ya haya empezado a moverse.
+				var tocado=false;
+				['wheel','touchstart','keydown'].forEach(function(ev){ window.addEventListener(ev, function(){ tocado=true; }, { once:true, passive:true }); });
+				var realinear=function(){ if(!tocado && Math.abs(pInicial.getBoundingClientRect().top-80)>40) pInicial.scrollIntoView({block:'start'}); };
+				window.addEventListener('load', function(){ realinear(); setTimeout(realinear, 1500); });
+			}
 			return;
 		}
 		var startId = location.hash.replace('#','');
@@ -2423,7 +2432,7 @@ tickClock(); setInterval(tickClock,1000);
 			el.className=el.className.split(/\s+/).filter(function(c){
 				return !/^text-(emerald|amber|rose|primary|muted)/.test(c);
 			}).join(' ')+' '+cls;
-		}).catch(()=>{
+		}).catch((e)=>{ rauErr(e);
 			document.getElementById('prop-status').textContent='No se pudo cargar el panel solar. Consulta los enlaces externos abajo.';
 		});
 })();
@@ -2478,7 +2487,7 @@ tickClock(); setInterval(tickClock,1000);
 					new Notification('¡Banda alta abierta! 📡', { body:'RAU detectó buena condición en 15-10m ahora mismo.', icon:'<?php echo esc_url( get_template_directory_uri() . "/assets/images/favicon-32x32.png" ); ?>' });
 				}
 				yaEstabaAbierta=hayAlerta;
-			}).catch(()=>{
+			}).catch((e)=>{ rauErr(e);
 				document.getElementById('bandalert-status').textContent='No se pudo cargar el panel de condiciones. Intenta de nuevo más tarde.';
 			});
 	}
@@ -2766,7 +2775,7 @@ rauOn('gain-dbd','input',function(){
 				+'<span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-rose-400"></span> Índice K (hoy: '+(ultimo.k||'—')+')</span>'
 				+'</div>'+svg
 				+'<p class="mt-2 text-xs text-muted-foreground">El historial empieza a acumularse desde que se instaló esta versión del tema — entre más días pasen, más útil se vuelve la gráfica.</p>';
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			el.innerHTML='<p class="text-sm text-muted-foreground">No se pudo cargar el historial. Intenta de nuevo más tarde.</p>';
 		});
 })();
@@ -2891,7 +2900,7 @@ rauOn('gain-dbd','input',function(){
 			el.innerHTML='<p class="font-mono text-3xl font-bold">'+xray+'</p>'
 				+'<p class="mt-1 font-mono text-lg font-bold '+resultado.color+'">'+resultado.nivel+'</p>'
 				+'<p class="mt-2 text-sm text-muted-foreground">'+resultado.desc+' — duración típica: '+resultado.duracion+'</p>';
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			el.innerHTML='<p class="text-sm text-muted-foreground">No se pudo cargar el dato actual.</p>';
 		});
 })();
@@ -3103,7 +3112,7 @@ rauOn('gain-dbd','input',function(){
 						+'<span class="font-mono text-xs text-muted-foreground">'+r.freq+' MHz · '+r.modo+' · SNR '+r.snr+'dB · hace '+Math.round(r.hace_seg/60)+'min</span>'
 						+'</div>';
 				}).join('')+'</div>';
-			}).catch(function(){ el.innerHTML='<p class="text-sm text-rose-400">Error de conexión.</p>'; });
+			}).catch(function(e){ rauErr(e); el.innerHTML='<p class="text-sm text-rose-400">Error de conexión.</p>'; });
 	}
 	btn.addEventListener('click', buscar);
 	document.getElementById('psk-indicativo').addEventListener('keydown', function(e){ if(e.key==='Enter') buscar(); });
@@ -3718,12 +3727,12 @@ rauOn('gain-dbd','input',function(){
 		// Los spots son un extra: si el cluster falla, la síntesis sigue teniendo sentido sin ellos.
 		Promise.all([
 			fetch(base+'?action=rau_solar', {cache:'no-store'}).then(function(r){ return r.json(); }),
-			fetch(base+'?action=rau_dx_spots', {cache:'no-store'}).then(function(r){ return r.json(); }).catch(function(){ return null; })
+			fetch(base+'?action=rau_dx_spots', {cache:'no-store'}).then(function(r){ return r.json(); }).catch(function(e){ rauErr(e); return null; })
 		]).then(function(res){
 			if(!res[0] || !res[0].success) throw new Error('sin datos solares');
 			var spots=(res[1] && res[1].success) ? res[1].data : null;
 			pintar(res[0].data, spots);
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			cargando.textContent='No se pudieron leer las condiciones. Vuelve a intentarlo en un momento.';
 		});
 	}
@@ -4253,7 +4262,7 @@ rauOn('gain-dbd','input',function(){
 				dibujar(j.elevation, d, h1, h2,
 					parseFloat(document.getElementById('ter-freq').value)||146);
 			})
-			.catch(function(){
+			.catch(function(e){ rauErr(e);
 				clearTimeout(corte);
 				// Falla contenida: solo este panel. El resto de la página no se entera.
 				aviso('No se pudieron obtener las elevaciones. El servicio de Open-Meteo puede estar caído o bloqueado por tu red. El resto del sitio funciona igual.','error');
@@ -4437,7 +4446,7 @@ rauOn('gain-dbd','input',function(){
 					+(d.evento?'<p class="mt-1 text-xs text-muted-foreground">Actividad: '+esc(d.evento)+'</p>':'')
 					+(d.fecha?'<p class="text-xs text-muted-foreground">Fecha: '+esc(d.fecha)+'</p>':'')
 					+'</div>';
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				resultado.innerHTML='<div class="rounded-xl border border-rose-400/30 bg-rose-400/5 p-4 text-sm text-rose-400">No se pudo verificar. Intenta de nuevo.</div>';
 			});
 	}
@@ -4906,7 +4915,7 @@ rauOn('az-calc','click',function(){
 
 			satSelect.innerHTML=TLES.map(function(s,i){ return '<option value="'+i+'">'+s.name+'</option>'; }).join('');
 			statusEl.textContent='Listo — '+TLES.length+' satélite(s) cargado(s). Ingresa tu grid y calcula.';
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			statusEl.textContent='No se pudieron cargar los datos orbitales. Revisa tu conexión e intenta de nuevo.';
 		});
 
@@ -5073,7 +5082,7 @@ rauOn('az-calc','click',function(){
 				} else {
 					bandsEl.innerHTML='<p class="col-span-2 text-center text-xs text-muted-foreground sm:col-span-4">Sin datos de banda en esta actualización.</p>';
 				}
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				document.getElementById('dash-solar-status').textContent='No se pudo cargar la propagación.';
 			});
 	}
@@ -5090,7 +5099,7 @@ rauOn('az-calc','click',function(){
 				} else {
 					badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span><span class="font-mono text-[10px] text-rose-400">Sin conexión</span>';
 				}
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span><span class="font-mono text-[10px] text-rose-400">Sin conexión</span>';
 			});
 	}
@@ -5111,7 +5120,7 @@ rauOn('az-calc','click',function(){
 					badge.classList.add('hidden');
 					badge.classList.remove('inline-flex');
 				}
-			}).catch(function(){});
+			}).catch(function(e){ rauErr(e);});
 	}
 	loadYT(); setInterval(loadYT, 5*60*1000);
 
@@ -5182,7 +5191,7 @@ rauOn('az-calc','click',function(){
 				}
 				idIntervaloCountdown=setInterval(actualizarCountdown, 1000);
 				actualizarCountdown();
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				el.innerHTML='<p class="text-center text-xs text-muted-foreground">No se pudo calcular la próxima pasada.</p>';
 			});
 	}
@@ -5366,7 +5375,7 @@ var CODIGOS_Q=[
 				list.appendChild(d);
 			});
 		})
-		.catch(function(){
+		.catch(function(e){ rauErr(e);
 			document.getElementById('pota-loading').innerHTML='<p class="text-sm text-muted-foreground">No se pudo cargar la API de POTA. Intenta más tarde.</p>';
 		});
 	});
@@ -6201,7 +6210,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 			if(!blob) return;
 			var file=new File([blob], qslFilename(), {type:'image/png'});
 			if(navigator.canShare && navigator.canShare({files:[file]})){
-				navigator.share({files:[file], title:'QSL Digital RAU'}).catch(function(){});
+				navigator.share({files:[file], title:'QSL Digital RAU'}).catch(function(e){ rauErr(e);});
 			}
 		}, 'image/png');
 	});
@@ -6405,7 +6414,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 				var original=btn.textContent;
 				btn.textContent='✅ copiado';
 				setTimeout(function(){ btn.textContent=original; }, 1200);
-			}).catch(function(){});
+			}).catch(function(e){ rauErr(e);});
 			// Conexión Frecuencia → Log: pre-llenar la Bitácora Rápida, sin obligar a escribirla a mano
 			var bitacoraFreq=document.getElementById('bitacora-freq');
 			if(bitacoraFreq) bitacoraFreq.value=freq;
@@ -6452,7 +6461,7 @@ setTimeout(function(){
 			el.innerHTML=json.data.map(function(r){
 				return '<div class="flex justify-between gap-2"><span class="text-foreground">'+r.indicativo+'</span><span class="text-muted-foreground truncate">'+r.nodo+'</span></div>';
 			}).join('');
-		}).catch(function(){
+		}).catch(function(e){ rauErr(e);
 			el.innerHTML='No disponible ahora mismo — <a href="https://dstarusers.org/lastheard.php" target="_blank" rel="noopener" class="text-primary hover:underline">ver en dstarusers.org ↗</a>';
 		});
 }, 2500);
@@ -6484,7 +6493,7 @@ setTimeout(function(){
 				return '<div class="flex justify-between gap-2"><span class="text-foreground">'+tx+' → '+rx+'</span><span class="text-muted-foreground">'+banda+' · '+dist+'km · '+snr+'dB</span></div>';
 			}).join('');
 		})
-		.catch(function(){
+		.catch(function(e){ rauErr(e);
 			clearTimeout(tiempoAgotado);
 			el.innerHTML='No se pudo conectar con WSPR Live ahora mismo. <a href="https://wspr.live/gui" target="_blank" rel="noopener" class="text-primary hover:underline">Ver en WSPR Live ↗</a>';
 		});
@@ -6659,11 +6668,11 @@ setTimeout(function(){
 							var original=btn.textContent;
 							btn.textContent='✅ copiado';
 							setTimeout(function(){ btn.textContent=original; }, 1200);
-						}).catch(function(){});
+						}).catch(function(e){ rauErr(e);});
 					});
 				});
 				if(rnDxEl) rnDxEl.innerHTML='🌎 DX: <span class="text-primary font-bold">'+json.data.length+' spots</span>';
-			}).catch(function(){
+			}).catch(function(e){ rauErr(e);
 				clearTimeout(tiempoAgotado);
 				el.innerHTML='<p class="text-muted-foreground">No se pudo cargar en este momento.</p>';
 				var rnDxErr=document.getElementById('rn-dx');
