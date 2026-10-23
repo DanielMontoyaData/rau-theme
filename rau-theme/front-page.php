@@ -276,7 +276,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 						if(!j.success){ pinta('#f43f5e','Fuera de línea'); users.textContent='—'; return; }
 						var d=j.data;
 						users.textContent=d.libres==null?'—':(d.libres+' de '+d.max);
-						d.libres===0 ? pinta('#f59e0b','Lleno') : pinta('#22c55e','Canal libre');
+						d.libres===0 ? pinta('#f59e0b','Muy ocupado') : pinta('#22c55e','Canal libre');
 					}).catch(function(e){ rauErr(e); pinta('#f59e0b','Sin datos'); users.textContent='—'; });
 					fetch(AJAX+'?action=rau_sdr_historial', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
 						if(!j.success) return;

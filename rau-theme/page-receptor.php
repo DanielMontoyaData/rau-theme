@@ -124,7 +124,10 @@ $relay = get_option( 'rau_kiwi_relay', '' );
 			var el=document.getElementById('rx-estado');
 			if(!j.success){ el.innerHTML='<span class="h-2 w-2 rounded-full bg-rose-400"></span> Receptor fuera de línea'; return; }
 			var d=j.data, lleno=d.libres===0;
-			el.innerHTML='<span class="h-2 w-2 rounded-full '+(lleno?'bg-amber-400':'bg-emerald-400')+'"></span> '+(lleno?'Todos los canales ocupados':(d.libres+' de '+d.max+' canales libres'));
+			// /status topa los usuarios en users_max (7) aunque el receptor tenga 8 canales y se refresca cada
+			// pocos segundos: "7 de 7" no garantiza que no haya canal (el 24-oct-2026 se conectó así). Por eso
+			// "muy ocupado" y no "lleno"; el rechazo definitivo lo da el propio receptor al conectar.
+			el.innerHTML='<span class="h-2 w-2 rounded-full '+(lleno?'bg-amber-400':'bg-emerald-400')+'"></span> '+(lleno?'Muy ocupado ahora: prueba igual':(d.libres+' de '+d.max+' canales libres'));
 			document.getElementById('rx-max').textContent=d.max;
 			document.getElementById('rx-d-libres').textContent=d.libres==null?'—':d.libres;
 			document.getElementById('rx-d-users').textContent=d.users==null?'—':d.users+' de '+d.max;
@@ -146,6 +149,7 @@ $relay = get_option( 'rau_kiwi_relay', '' );
 				return '<div title="'+titulo+'" class="flex-1 rounded-t '+(h.hora===ahora?'bg-accent':'bg-primary/60')+'" style="height:'+alto+'%"></div>';
 			}).join('');
 			if(j.data.muestras<36){ nota.textContent='Recolectando datos: '+j.data.muestras+' mediciones hasta ahora. En un par de días la gráfica será confiable.'; return; }
+			if(hs.every(function(h){ return !h.libres; })){ nota.textContent='Estos días el receptor ha estado casi siempre en su máximo: los decodificadores automáticos ocupan los canales. Aun así a veces se consigue uno.'; return; }
 			var mejores=hs.filter(function(h){ return h.libres!=null; }).sort(function(a,b){ return b.libres-a.libres; }).slice(0,3).map(function(h){ return h.hora+' h'; });
 			nota.textContent='Mejores horas para conseguir canal: '+mejores.join(', ')+'. La barra resaltada es la hora actual.';
 		}).catch(function(e){ rauErr(e); });

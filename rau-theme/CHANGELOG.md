@@ -264,6 +264,17 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.44.1 — "7 de 7" no es "lleno"
+
+Con el receptor integrado en vivo, el estado decía "Todos los canales ocupados" y la conexión se
+lograba igual. En el código del KiwiSDR (support/stats.cpp, rx/rx_server_ajax.cpp) `users` cuenta los
+canales ocupados de los 8, se topa en `users_max` (7, los que no piden clave) y se recalcula cada
+pocos segundos. "7 de 7" puede convivir con un canal libre. El sitio dice ahora "Muy ocupado: prueba
+igual" y el botón sigue disponible; el aviso de canales llenos solo aparece si el receptor rechaza la
+conexión. La gráfica por hora explica cuando todo el período está en el máximo.
+
+---
+
 ## 19.44.0 — receptor probado con el KiwiSDR real
 
 Con el relevo publicado (rau-kiwi.danielmontoyae.workers.dev) se probó contra el HK4RAU real:
