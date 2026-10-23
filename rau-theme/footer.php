@@ -22,21 +22,21 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 				<span class="font-display font-bold"><?php bloginfo( 'name' ); ?> · Radioaficionados Unidos</span>
 			</div>
 			<div class="flex items-center gap-3">
-				<a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" title="WhatsApp" class="transition-opacity hover:opacity-75">
-					<svg class="h-6 w-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+				<a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" title="WhatsApp" aria-label="WhatsApp de RAU (abre en otra pestaña)" class="transition-opacity hover:opacity-75">
+					<svg aria-hidden="true" focusable="false" class="h-6 w-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 						<path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.558 4.116 1.534 5.845L0 24l6.345-1.508A11.934 11.934 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z" fill="#25D366"/>
 						<path d="M12 2.182c-5.423 0-9.818 4.395-9.818 9.818 0 1.878.535 3.63 1.46 5.114L2.727 21.27l4.29-1.375A9.773 9.773 0 0 0 12 21.636c5.423 0 9.818-4.395 9.818-9.818S17.423 2.182 12 2.182z" fill="#FEFEFE"/>
 						<path d="M17.507 14.398c-.29-.145-1.718-.847-1.984-.944-.265-.097-.458-.145-.651.145-.193.29-.748.944-.917 1.137-.169.193-.338.217-.627.072-.29-.145-1.223-.451-2.329-1.437-.861-.768-1.442-1.717-1.611-2.007-.169-.29-.018-.447.127-.591.13-.13.29-.338.435-.507.145-.169.193-.29.29-.483.096-.193.048-.362-.024-.507-.073-.145-.651-1.57-.892-2.149-.235-.564-.474-.487-.651-.496l-.554-.01c-.193 0-.507.072-.772.362-.265.29-1.013.99-1.013 2.414s1.037 2.8 1.182 2.993c.145.193 2.04 3.116 4.942 4.37.691.298 1.23.476 1.65.609.694.22 1.325.189 1.824.114.556-.083 1.718-.702 1.96-1.38.242-.677.242-1.257.169-1.38-.072-.12-.265-.193-.555-.338z" fill="#25D366"/>
 					</svg>
 				</a>
-				<a href="https://www.instagram.com/hk4rau" target="_blank" rel="noreferrer" title="Instagram" class="text-muted-foreground transition-colors hover:text-primary">
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.2" cy="6.8" r="1"></circle></svg>
+				<a href="https://www.instagram.com/hk4rau" target="_blank" rel="noreferrer" title="Instagram" aria-label="Instagram de RAU (abre en otra pestaña)" class="text-muted-foreground transition-colors hover:text-primary">
+					<svg aria-hidden="true" focusable="false" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.2" cy="6.8" r="1"></circle></svg>
 				</a>
-				<a href="https://www.facebook.com/share/1Cahc9bBYr/" target="_blank" rel="noreferrer" title="Facebook" class="text-muted-foreground transition-colors hover:text-primary">
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 8.5h2.5V5H14c-2 0-3.5 1.5-3.5 3.5V11H8v3h2.5v6h3v-6H16l.5-3h-3V9c0-.3.2-.5.5-.5z"></path></svg>
+				<a href="https://www.facebook.com/share/1Cahc9bBYr/" target="_blank" rel="noreferrer" title="Facebook" aria-label="Facebook de RAU (abre en otra pestaña)" class="text-muted-foreground transition-colors hover:text-primary">
+					<svg aria-hidden="true" focusable="false" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 8.5h2.5V5H14c-2 0-3.5 1.5-3.5 3.5V11H8v3h2.5v6h3v-6H16l.5-3h-3V9c0-.3.2-.5.5-.5z"></path></svg>
 				</a>
-				<a href="https://youtube.com/@radioaficionadosunidos" target="_blank" rel="noreferrer" title="YouTube" class="text-muted-foreground transition-colors hover:text-primary">
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="6" width="18" height="12" rx="3"></rect><path d="M11 10l4 2-4 2z" fill="currentColor" stroke="none"></path></svg>
+				<a href="https://youtube.com/@radioaficionadosunidos" target="_blank" rel="noreferrer" title="YouTube" aria-label="Canal de YouTube de RAU (abre en otra pestaña)" class="text-muted-foreground transition-colors hover:text-primary">
+					<svg aria-hidden="true" focusable="false" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="6" width="18" height="12" rx="3"></rect><path d="M11 10l4 2-4 2z" fill="currentColor" stroke="none"></path></svg>
 				</a>
 				<a href="https://www.qrz.com/db/HK4RAU" target="_blank" rel="noreferrer" title="Perfil QRZ — HK4RAU" class="font-mono text-xs text-muted-foreground transition-colors hover:text-primary">QRZ↗</a>
 			</div>

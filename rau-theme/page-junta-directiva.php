@@ -48,7 +48,7 @@ $board = new WP_Query( array(
 			<?php rau_icon( 'users', 'h-8 w-8 text-primary' ); ?>
 		</div>
 		<p class="mb-2 font-display text-xl font-bold">Aún no hay directivos publicados</p>
-		<p class="max-w-sm text-sm text-muted-foreground">Agrégalos en el escritorio → Junta Directiva → Agregar nuevo.</p>
+		<p class="max-w-sm text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Agrégalos en el escritorio → Junta Directiva → Agregar nuevo.' : 'Pronto publicaremos la junta directiva.'; ?></p>
 	</div>
 	<?php endif; ?>
 </section>

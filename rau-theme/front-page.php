@@ -83,7 +83,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 		?>
 		<div class="mt-10 flex flex-wrap gap-x-8 gap-y-3 font-mono text-sm">
 			<div><span class="text-2xl font-bold text-primary"><?php echo esc_html( count( rau_get_herramientas_tabs() ) ); ?></span> <span class="text-muted-foreground">herramientas gratis</span></div>
-			<div><span class="text-2xl font-bold text-primary"><?php echo esc_html( $hero_reps ); ?></span> <span class="text-muted-foreground">repetidores</span></div>
+			<div><span class="text-2xl font-bold text-primary"><?php echo esc_html( $hero_reps ); ?></span> <span class="text-muted-foreground"><?php echo 1 === (int) $hero_reps ? 'repetidor' : 'repetidores'; ?></span></div>
 			<?php if ( $hero_flags ) : ?>
 			<div><span class="text-2xl font-bold text-primary"><?php echo esc_html( count( $hero_flags ) ); ?></span> <span class="text-muted-foreground">países alcanzados</span></div>
 			<?php endif; ?>
@@ -424,7 +424,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 	<div class="mb-8 flex flex-wrap items-end justify-between gap-4"><h2 class="max-w-2xl font-display text-3xl font-bold sm:text-4xl">Repetidores</h2><a href="<?php echo esc_url( get_post_type_archive_link( 'repetidor' ) ); ?>" class="text-sm font-medium text-primary hover:underline">Ver directorio completo →</a></div>
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 		<?php if ( ! $repetidores_home->have_posts() ) : ?>
-			<p class="text-sm text-muted-foreground">Aún no hay repetidores publicados. Agrégalos en el escritorio → Repetidores.</p>
+			<p class="text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Aún no hay repetidores publicados. Agrégalos en el escritorio → Repetidores.' : 'Pronto publicaremos aquí los repetidores de la red.'; ?></p>
 		<?php else : $rep_idx = 0; while ( $repetidores_home->have_posts() ) : $repetidores_home->the_post(); $rid = get_the_ID();
 			$status = get_post_meta( $rid, 'status', true ) ?: 'activo';
 		?>
@@ -466,7 +466,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 			<?php if ( $hay_eventos ) : ?>
 				<p class="text-sm text-muted-foreground">No hay actividades programadas por ahora. Las anteriores siguen disponibles en <a href="<?php echo esc_url( get_post_type_archive_link( 'evento' ) ); ?>" class="text-primary hover:underline">el calendario completo</a>.</p>
 			<?php else : ?>
-				<p class="text-sm text-muted-foreground">Aún no hay eventos publicados. Agrégalos en el escritorio → Eventos.</p>
+				<p class="text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Aún no hay eventos publicados. Agrégalos en el escritorio → Eventos.' : 'No hay actividades programadas por ahora. Síguenos en el grupo de WhatsApp para enterarte de la próxima.'; ?></p>
 			<?php endif; ?>
 		<?php else : $evt_idx = 0; while ( $events->have_posts() ) : $events->the_post(); $eid = get_the_ID();
 			$start = get_post_meta( $eid, 'start', true );
@@ -520,7 +520,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 				</div>
 			</div>
 			<?php endwhile; wp_reset_postdata(); else : ?>
-				<p class="text-sm text-muted-foreground">Aún no hay historias publicadas. Agrégalas en el escritorio → Historias de la Comunidad.</p>
+				<p class="text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Aún no hay historias publicadas. Agrégalas en el escritorio → Historias de la Comunidad.' : 'Pronto compartiremos aquí historias de la comunidad.'; ?></p>
 			<?php endif; ?>
 		</div>
 	</div>

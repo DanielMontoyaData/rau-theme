@@ -42,7 +42,7 @@ $miembros = new WP_Query( array(
 					<span class="text-4xl">👥</span>
 				</div>
 				<p class="mb-2 font-display text-xl font-bold">Aún no hay miembros publicados</p>
-				<p class="max-w-sm text-sm text-muted-foreground">Agrégalos en el escritorio → Directorio de Miembros, y marca la casilla «Directorio público» de quienes lo autorizaron.</p>
+				<p class="max-w-sm text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Agrégalos en el escritorio → Directorio de Miembros, y marca la casilla «Directorio público» de quienes lo autorizaron.' : 'Pronto publicaremos el directorio de miembros.'; ?></p>
 			</div>
 		<?php endif; ?>
 	</div>

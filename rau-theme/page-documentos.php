@@ -35,7 +35,7 @@ $documentos = new WP_Query( array( 'post_type' => 'documento', 'posts_per_page' 
 					<span class="text-4xl">📄</span>
 				</div>
 				<p class="mb-2 font-display text-xl font-bold">Aún no hay documentos publicados</p>
-				<p class="max-w-sm text-sm text-muted-foreground">Agrégalos en el escritorio → Biblioteca de Documentos → Agregar nuevo.</p>
+				<p class="max-w-sm text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Agrégalos en el escritorio → Biblioteca de Documentos → Agregar nuevo.' : 'Pronto publicaremos documentos aquí.'; ?></p>
 			</div>
 		<?php endif; ?>
 	</div>

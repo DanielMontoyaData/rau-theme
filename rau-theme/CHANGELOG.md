@@ -264,6 +264,26 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.38.0 — lo que ve quien llega por primera vez
+
+**El splash tapaba la portada 5,5 segundos.** En la primera visita de cada sesión el escudo cubría
+la página entera y no se podía hacer nada hasta que terminara la animación. Medido con un móvil
+simulado: 5.563 ms. Ahora dura 1,6 s con la misma animación, y se salta con un toque o con Esc.
+
+**Instrucciones del escritorio a la vista del público.** Cuando una sección estaba vacía, cualquier
+visitante leía "Agrégalos en el escritorio → …". Tras retirar los datos de ejemplo eso pasaba en el
+Libro QSL, Turnos y Próximas actividades. Ahora esa indicación solo la ve quien puede editar; el
+público lee un mensaje neutro. Portada (repetidores, eventos, historias), Directorio, Pulguero,
+Libro QSL, Documentos, Junta Directiva y Turnos.
+
+**"1 repetidores".** El contador de la portada concuerda en número.
+
+**Iconos sociales sin nombre.** WhatsApp, Instagram, Facebook y YouTube del pie eran enlaces con
+solo un SVG: un lector de pantalla los anunciaba como "enlace". Llevan `aria-label` y el SVG se
+oculta a la accesibilidad.
+
+---
+
 ## 19.37.0 — análisis del sitio en producción
 
 Se recorrieron desde fuera las 134 URLs del sitemap de hk4rau.com con un navegador real

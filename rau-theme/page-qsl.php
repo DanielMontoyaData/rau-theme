@@ -36,7 +36,7 @@ $qsos = new WP_Query( array( 'post_type' => 'qso', 'posts_per_page' => 50, 'orde
 			</div>
 		</div>
 		<?php endwhile; wp_reset_postdata(); else : ?>
-			<div class="px-6 py-10 text-center text-sm text-muted-foreground">Aún no hay contactos registrados. Agrégalos en el escritorio → Libro de Guardia (QSL).</div>
+			<div class="px-6 py-10 text-center text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Aún no hay contactos registrados. Agrégalos en el escritorio → Libro de Guardia (QSL).' : 'Aún no hay contactos registrados en el libro.'; ?></div>
 		<?php endif; ?>
 	</div>
 </section>

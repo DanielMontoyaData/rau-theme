@@ -59,7 +59,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 		if (splash.parentNode) splash.parentNode.removeChild(splash);
 	}
 	splash.addEventListener('click', finish);
-	window.setTimeout(finish, 5000);
+	document.addEventListener('keydown', function(e){ if (e.key === 'Escape') finish(); }, { once: true });
+	window.setTimeout(finish, 1600);
 })();
 </script>
 <?php endif; ?>

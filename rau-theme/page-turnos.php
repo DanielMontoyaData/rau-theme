@@ -46,7 +46,7 @@ $hoy = current_time( 'Y-m-d' );
 					<span class="text-4xl">🕐</span>
 				</div>
 				<p class="mb-2 font-display text-xl font-bold">Aún no hay turnos programados</p>
-				<p class="max-w-sm text-sm text-muted-foreground">Agrégalos en el escritorio → Turnos de Guardia → Agregar nuevo.</p>
+				<p class="max-w-sm text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Agrégalos en el escritorio → Turnos de Guardia → Agregar nuevo.' : 'No hay turnos de guardia publicados por ahora.'; ?></p>
 			</div>
 		<?php endif; ?>
 	</div>
