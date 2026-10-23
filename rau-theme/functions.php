@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.41.0' );
+define( 'RAU_THEME_VERSION', '19.42.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -618,6 +618,61 @@ function rau_whatsapp_url() {
 	return 'https://wa.me/' . rau_whatsapp_numero();
 }
 
+/** ¿Es un indicativo de verdad? Una repetidora recién cargada puede tener "PENDIENTE" o nada. */
+function rau_indicativo_confirmado( $callsign ) {
+	return (bool) preg_match( '/^(HK|HJ|5[JK])\d/i', trim( (string) $callsign ) );
+}
+
+/**
+ * Frecuencias para programar una repetidora: RX, TX y desplazamiento a partir de lo que esté
+ * guardado. El desplazamiento llega escrito de varias formas ("-600 kHz", "-0.600", "+0.6 MHz"):
+ * un valor sin unidad mayor que 10 se toma en kHz, el resto en MHz. Devuelve null si falta la
+ * frecuencia o el desplazamiento, para no mostrar una TX inventada.
+ */
+function rau_programacion_repetidor( $id ) {
+	$freq = (float) str_replace( ',', '.', preg_replace( '/[^0-9.,]/', '', (string) get_post_meta( $id, 'frequency', true ) ) );
+	$off  = trim( (string) get_post_meta( $id, 'offset', true ) );
+	if ( ! $freq || ! preg_match( '/^([+-])?\s*([0-9]+(?:[.,][0-9]+)?)\s*(khz|mhz)?/i', $off, $m ) ) return null;
+	$valor = (float) str_replace( ',', '.', $m[2] );
+	$mhz   = ( 'khz' === strtolower( $m[3] ?? '' ) || ( empty( $m[3] ) && $valor > 10 ) ) ? $valor / 1000 : $valor;
+	$signo = '-' === $m[1] ? -1 : 1;
+	$tono  = trim( (string) get_post_meta( $id, 'tone', true ) );
+	if ( $tono && ! preg_match( '/hz$/i', $tono ) ) $tono .= ' Hz';
+	$fmt = function( $mhz ) {
+		return $mhz >= 1
+			? rtrim( rtrim( number_format( $mhz, 3, '.', '' ), '0' ), '.' ) . ' MHz'
+			: rtrim( rtrim( number_format( $mhz * 1000, 1, '.', '' ), '0' ), '.' ) . ' kHz';
+	};
+	return array(
+		'rx'          => number_format( $freq, 3, '.', '' ) . ' MHz',
+		'tx'          => number_format( $freq + $signo * $mhz, 3, '.', '' ) . ' MHz',
+		'shift'       => ( $signo < 0 ? '−' : '+' ) . $fmt( $mhz ),
+		'shift_abs'   => $fmt( $mhz ),
+		'signo_texto' => $signo < 0 ? 'negativo (−)' : 'positivo (+)',
+		'tono'        => $tono,
+		'modo'        => get_post_meta( $id, 'mode', true ) ?: 'FM',
+	);
+}
+
+/**
+ * Orden de las repetidoras en el directorio y en la portada: la principal (HK4RAU) primero y las
+ * demás por nombre. Antes salían por fecha de publicación, y Medellín, la principal, iba de última.
+ */
+function rau_ordenar_repetidoras( array $posts ) {
+	usort( $posts, function( $a, $b ) {
+		$pa = 'HK4RAU' === get_post_meta( $a->ID, 'callsign', true );
+		$pb = 'HK4RAU' === get_post_meta( $b->ID, 'callsign', true );
+		return $pa === $pb ? strcasecmp( $a->post_title, $b->post_title ) : ( $pa ? -1 : 1 );
+	} );
+	return $posts;
+}
+add_action( 'pre_get_posts', function( $q ) {
+	if ( ! is_admin() && $q->is_main_query() && $q->is_post_type_archive( 'repetidor' ) ) $q->set( 'posts_per_page', -1 );
+} );
+add_filter( 'the_posts', function( $posts, $q ) {
+	return ( ! is_admin() && $q->is_main_query() && $q->is_post_type_archive( 'repetidor' ) ) ? rau_ordenar_repetidoras( $posts ) : $posts;
+}, 10, 2 );
+
 function rau_get_repetidor_principal() {
 	$cache = get_transient( 'rau_repetidor_principal' );
 	if ( false !== $cache ) return $cache;
@@ -1077,7 +1132,6 @@ function rau_descripcion_de_respaldo() {
 		'page-diplomas.php'            => 'Diplomas oficiales emitidos por HK4RAU para sus miembros y operadores participantes en actividades especiales.',
 		'page-directorio-miembros.php' => 'Directorio de miembros de Radioaficionados Unidos que autorizaron publicar sus datos.',
 		'page-documentos.php'          => 'Actas, estatutos y resoluciones de la asociación en un solo lugar.',
-		'page-elmer.php'               => 'Programa Elmer: conectamos a quienes recién obtuvieron su indicativo con miembros de RAU dispuestos a acompañarlos.',
 		'page-emergencia-modo.php'     => 'Modo Emergencia de RAU: frecuencias, hora UTC y datos esenciales en una página ligera, pensada para conectividad limitada.',
 		'page-estado.php'              => 'Estado de RAU: todo lo operativo de la asociación en un solo lugar.',
 		'page-field.php'               => 'RAU Field: vista simplificada para operación portátil y POTA, con botones grandes y pensada para usarse con una mano.',

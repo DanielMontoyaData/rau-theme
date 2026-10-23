@@ -21,7 +21,10 @@ $events    = new WP_Query( array(
 	'order'          => 'ASC',
 	'meta_query'     => array( array( 'key' => 'start', 'value' => current_time( 'Y-m-d' ), 'compare' => '>=', 'type' => 'DATE' ) ),
 ) );
-$repetidores_home = new WP_Query( array( 'post_type' => 'repetidor', 'posts_per_page' => 4, 'post_status' => 'publish' ) );
+// Todas las repetidoras, la principal (HK4RAU) primero y el resto por nombre. Antes salían las 4
+// últimas publicadas: Medellín, la principal, quedaba fuera de la portada.
+$repetidores_home = new WP_Query( array( 'post_type' => 'repetidor', 'posts_per_page' => -1, 'post_status' => 'publish' ) );
+$repetidores_home->posts = rau_ordenar_repetidoras( $repetidores_home->posts );
 $alerts    = new WP_Query( array( 'post_type' => 'alerta', 'posts_per_page' => -1, 'meta_query' => array( array( 'key' => 'active', 'value' => '1' ) ), 'post_status' => 'publish' ) );
 $historias = new WP_Query( array( 'post_type' => 'historia', 'posts_per_page' => 4, 'post_status' => 'publish' ) );
 $libro_preview = new WP_Query( array( 'post_type' => 'libro_visitas', 'posts_per_page' => 3, 'post_status' => 'publish', 'orderby' => 'date', 'order' => 'DESC' ) );
@@ -89,6 +92,40 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 			<?php endif; ?>
 		</div>
 
+		<?php
+		// Lo primero que se ve tenía solo textos fijos: nada decía que el sitio está vivo. Tres cosas con
+		// fecha que cambian solas: la próxima actividad, la guía de la licencia y el último mensaje del
+		// Libro de Visitas.
+		$proximo = $events->posts ? $events->posts[0] : null;
+		$ultimo  = $libro_preview->posts ? $libro_preview->posts[0] : null;
+		?>
+		<div class="mt-10 grid max-w-4xl gap-3 sm:grid-cols-3">
+			<?php if ( $proximo ) : $p_start = get_post_meta( $proximo->ID, 'start', true ); ?>
+			<a href="<?php echo esc_url( get_permalink( $proximo ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
+				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Próxima actividad</p>
+				<p class="mt-1 text-sm font-semibold"><?php echo esc_html( ucfirst( date_i18n( 'l j \d\e F', strtotime( $p_start ) ) ) ); ?></p>
+				<p class="text-sm text-muted-foreground"><?php echo esc_html( get_the_title( $proximo ) ); ?></p>
+			</a>
+			<?php else : ?>
+			<a href="<?php echo esc_url( get_post_type_archive_link( 'evento' ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
+				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Calendario</p>
+				<p class="mt-1 text-sm text-muted-foreground">Mallas, ruedas y concursos de la red</p>
+			</a>
+			<?php endif; ?>
+			<a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
+				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">¿Quieres tu licencia?</p>
+				<p class="mt-1 text-sm font-semibold">El trámite paso a paso</p>
+				<p class="text-sm text-muted-foreground">Examen, pago y costos <?php echo esc_html( current_time( 'Y' ) ); ?></p>
+			</a>
+			<?php if ( $ultimo ) : ?>
+			<a href="<?php echo esc_url( home_url( '/libro-de-visitas/' ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
+				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Libro de Visitas · hace <?php echo esc_html( human_time_diff( get_post_time( 'U', true, $ultimo ), time() ) ); ?></p>
+				<p class="mt-1 line-clamp-2 text-sm italic text-muted-foreground">&ldquo;<?php echo esc_html( wp_trim_words( wp_strip_all_tags( $ultimo->post_content ), 14 ) ); ?>&rdquo;</p>
+				<p class="text-xs font-semibold"><?php echo esc_html( get_post_meta( $ultimo->ID, 'nombre', true ) ?: get_the_title( $ultimo ) ); ?></p>
+			</a>
+			<?php endif; ?>
+		</div>
+
 		<div class="mt-8 flex items-center gap-4">
 			<span class="font-mono text-lg sm:text-xl tracking-[0.35em] text-primary/80" title="RAU en código Morse">.-. .- ..-</span>
 			<svg viewBox="0 0 200 30" class="hidden h-6 w-32 text-primary/40 sm:block" aria-hidden="true">
@@ -103,48 +140,6 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 		</div>
 	</section>
 </div>
-
-<section class="mx-auto max-w-[96rem] px-4 sm:px-6 py-6">
-	<div class="rounded-2xl border-2 border-primary/30 bg-card p-5 sm:p-6">
-		<div class="mb-4 flex items-center justify-between">
-			<div>
-				<p class="font-mono text-[11px] uppercase tracking-[0.25em] text-primary">Solo por diversión</p>
-				<h2 class="font-display text-lg font-bold sm:text-xl">🎛 Radio RAU</h2>
-			</div>
-			<p class="hidden font-mono text-xs text-muted-foreground sm:block">Gira el dial y busca una estación…</p>
-		</div>
-
-		<div class="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
-			<div>
-				<div class="mb-3 flex items-end justify-between">
-					<div>
-						<p id="radio-freq" class="font-mono text-3xl font-bold tabular-nums text-primary sm:text-4xl">14.250</p>
-						<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">MHz</p>
-					</div>
-					<button id="radio-power" type="button" aria-pressed="false" class="inline-flex items-center gap-1.5 rounded-full border-2 border-border bg-background px-3 py-1.5 font-mono text-xs font-bold text-muted-foreground">
-						<span id="radio-power-dot" class="h-2 w-2 rounded-full bg-muted-foreground"></span> OFF
-					</button>
-				</div>
-
-				<input type="range" id="radio-dial" min="0" max="1000" value="500" class="w-full accent-primary" aria-label="Sintonizar frecuencia">
-
-				<div class="mt-3 flex items-center gap-3">
-					<span class="font-mono text-[10px] uppercase text-muted-foreground">Señal</span>
-					<div class="h-2 flex-1 overflow-hidden rounded-full bg-background">
-						<div id="radio-smeter" class="h-full w-0 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-rose-400 transition-all duration-150"></div>
-					</div>
-					<span class="font-mono text-[10px] uppercase text-muted-foreground">Volumen</span>
-					<input type="range" id="radio-vol" aria-label="Volumen del reproductor" min="0" max="100" value="40" class="w-20 accent-primary">
-				</div>
-				<p id="radio-status" class="mt-2 font-mono text-xs text-muted-foreground">Apagada — dale al botón para encenderla.</p>
-			</div>
-
-			<div class="hidden h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border/60 sm:flex">
-				<svg id="radio-icon" class="h-9 w-9 text-muted-foreground transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l3 3M20 4l-3 3"></path><circle cx="12" cy="14" r="7"></circle><path d="M12 14v-4"></path><path d="M9 21h6"></path></svg>
-			</div>
-		</div>
-	</div>
-</section>
 
 <section class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
 	<div class="grid gap-4 lg:grid-cols-2">
@@ -422,7 +417,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 <section id="repetidores" class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
 	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Red de Repetidores</p>
 	<div class="mb-8 flex flex-wrap items-end justify-between gap-4"><h2 class="max-w-2xl font-display text-3xl font-bold sm:text-4xl">Repetidores</h2><a href="<?php echo esc_url( get_post_type_archive_link( 'repetidor' ) ); ?>" class="text-sm font-medium text-primary hover:underline">Ver directorio completo →</a></div>
-	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 		<?php if ( ! $repetidores_home->have_posts() ) : ?>
 			<p class="text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Aún no hay repetidores publicados. Agrégalos en el escritorio → Repetidores.' : 'Pronto publicaremos aquí los repetidores de la red.'; ?></p>
 		<?php else : $rep_idx = 0; while ( $repetidores_home->have_posts() ) : $repetidores_home->the_post(); $rid = get_the_ID();
@@ -433,8 +428,9 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 				<h3 class="font-semibold"><?php the_title(); ?></h3>
 				<span class="inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ring-1 <?php echo esc_attr( rau_status_classes( $status ) ); ?>"><?php echo esc_html( $status ); ?></span>
 			</div>
-			<p class="font-mono text-xs text-primary"><?php echo esc_html( get_post_meta( $rid, 'callsign', true ) ); ?> · <?php echo esc_html( get_post_meta( $rid, 'band', true ) ); ?></p>
-			<p class="mt-2 font-mono text-sm"><?php echo esc_html( get_post_meta( $rid, 'frequency', true ) ); ?> <span class="text-xs text-muted-foreground"><?php echo esc_html( get_post_meta( $rid, 'offset', true ) ); ?></span></p>
+			<?php $callsign = get_post_meta( $rid, 'callsign', true ); $tono = get_post_meta( $rid, 'tone', true ); ?>
+			<p class="font-mono text-xs <?php echo rau_indicativo_confirmado( $callsign ) ? 'text-primary' : 'text-muted-foreground'; ?>"><?php echo esc_html( rau_indicativo_confirmado( $callsign ) ? $callsign : 'Indicativo por confirmar' ); ?> · <?php echo esc_html( get_post_meta( $rid, 'band', true ) ); ?></p>
+			<p class="mt-2 font-mono text-sm"><?php echo esc_html( get_post_meta( $rid, 'frequency', true ) ); ?> <span class="text-xs text-muted-foreground"><?php echo esc_html( get_post_meta( $rid, 'offset', true ) ); ?><?php if ( $tono ) : ?> · tono <?php echo esc_html( $tono ); ?><?php endif; ?></span></p>
 			<p class="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><svg class="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1116 0z"></path></svg><?php echo esc_html( get_post_meta( $rid, 'location', true ) ); ?></p>
 		</div>
 		<?php endwhile; wp_reset_postdata(); endif; ?>
@@ -505,6 +501,9 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 	</a>
 	<?php endif; ?>
 
+	<?php // Con una sola historia la sección parecía abandonada; el Libro de Visitas, justo debajo, ya
+	// muestra lo que dice la comunidad. Vuelve a aparecer en cuanto haya dos o más.
+	if ( $historias->post_count >= 2 || current_user_can( 'edit_posts' ) ) : ?>
 	<div class="mt-12">
 		<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Historias de la Comunidad</p>
 		<div class="mb-6 flex flex-wrap items-end justify-between gap-4"><h3 class="font-display text-2xl font-bold">Lo que dicen quienes ya son parte de RAU</h3><a href="<?php echo esc_url( get_post_type_archive_link( 'historia' ) ); ?>" class="text-sm font-medium text-primary hover:underline">Ver todas →</a></div>
@@ -524,6 +523,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 			<?php endif; ?>
 		</div>
 	</div>
+	<?php endif; ?>
 
 	<div class="mt-12 rounded-2xl border border-primary/30 bg-card p-6 sm:p-8">
 		<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -566,6 +566,8 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 			<div class="mt-6">
 				<p class="mb-3 text-sm font-medium text-foreground">¿Tienes licencia activa, la tienes vencida, o quieres sacarla por primera vez?</p>
 				<div class="mb-4 flex flex-wrap gap-3 text-sm">
+					<a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary hover:underline">🪪 Cómo sacar la licencia, paso a paso</a>
+					<span class="text-muted-foreground">·</span>
 					<a href="<?php echo esc_url( home_url( '/herramientas/examen/' ) ); ?>" class="text-primary hover:underline">📝 Practica con el Simulador de Examen RABCA</a>
 					<span class="text-muted-foreground">·</span>
 					<a href="<?php echo esc_url( home_url( '/herramientas/licencia/' ) ); ?>" class="text-primary hover:underline">📅 Configura el Recordatorio de Vencimiento</a>
@@ -578,6 +580,48 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 	</div>
 </section>
 </div>
+
+<section class="mx-auto max-w-[96rem] px-4 sm:px-6 pb-10">
+	<div class="rounded-2xl border-2 border-primary/30 bg-card p-5 sm:p-6">
+		<div class="mb-4 flex items-center justify-between">
+			<div>
+				<p class="font-mono text-[11px] uppercase tracking-[0.25em] text-primary">Solo por diversión</p>
+				<h2 class="font-display text-lg font-bold sm:text-xl">🎛 Radio RAU</h2>
+			</div>
+			<p class="hidden font-mono text-xs text-muted-foreground sm:block">Gira el dial y busca una estación…</p>
+		</div>
+
+		<div class="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
+			<div>
+				<div class="mb-3 flex items-end justify-between">
+					<div>
+						<p id="radio-freq" class="font-mono text-3xl font-bold tabular-nums text-primary sm:text-4xl">14.250</p>
+						<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">MHz</p>
+					</div>
+					<button id="radio-power" type="button" aria-pressed="false" class="inline-flex items-center gap-1.5 rounded-full border-2 border-border bg-background px-3 py-1.5 font-mono text-xs font-bold text-muted-foreground">
+						<span id="radio-power-dot" class="h-2 w-2 rounded-full bg-muted-foreground"></span> OFF
+					</button>
+				</div>
+
+				<input type="range" id="radio-dial" min="0" max="1000" value="500" class="w-full accent-primary" aria-label="Sintonizar frecuencia">
+
+				<div class="mt-3 flex items-center gap-3">
+					<span class="font-mono text-[10px] uppercase text-muted-foreground">Señal</span>
+					<div class="h-2 flex-1 overflow-hidden rounded-full bg-background">
+						<div id="radio-smeter" class="h-full w-0 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-rose-400 transition-all duration-150"></div>
+					</div>
+					<span class="font-mono text-[10px] uppercase text-muted-foreground">Volumen</span>
+					<input type="range" id="radio-vol" aria-label="Volumen del reproductor" min="0" max="100" value="40" class="w-20 accent-primary">
+				</div>
+				<p id="radio-status" class="mt-2 font-mono text-xs text-muted-foreground">Apagada — dale al botón para encenderla.</p>
+			</div>
+
+			<div class="hidden h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border/60 sm:flex">
+				<svg id="radio-icon" class="h-9 w-9 text-muted-foreground transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l3 3M20 4l-3 3"></path><circle cx="12" cy="14" r="7"></circle><path d="M12 14v-4"></path><path d="M9 21h6"></path></svg>
+			</div>
+		</div>
+	</div>
+</section>
 
 <script>
 (function(){
@@ -751,7 +795,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 	var siguiente = proximos[0];
 	if(siguiente){
 		document.getElementById('home-concurso-nombre').textContent = siguiente.nombre;
-		document.getElementById('home-concurso-dias').textContent = siguiente.faltan<=0 ? '¡Es este fin de semana!' : 'Faltan '+siguiente.faltan+' días';
+		document.getElementById('home-concurso-dias').textContent = siguiente.faltan<=0 ? '¡Es este fin de semana!' : siguiente.faltan===1 ? 'Empieza mañana' : 'Faltan '+siguiente.faltan+' días';
 		widget.classList.remove('hidden');
 	}
 })();

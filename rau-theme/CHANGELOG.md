@@ -264,6 +264,37 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.42.0 — portada con fecha, repetidoras para programar, sin Programa Elmer
+
+**El Programa Elmer no existe.** El chat lo ofrecía, la guía de la licencia lo enlazaba y había una
+página con su plantilla. La página quedó en borrador, se quitaron `page-elmer.php`, su descripción
+SEO y su sección en INSTRUCCIONES.md, y la respuesta del chat ahora es "Estoy empezando, ¿me
+ayudan?": guía de la licencia, simulador, programa de los martes y WhatsApp. Sigue respondiendo a
+quien escriba "elmer" o "mentor".
+
+**La portada no decía que el sitio está vivo.** Bajo el hero, tres tarjetas que cambian solas: la
+próxima actividad con su fecha, la guía de la licencia y el último mensaje del Libro de Visitas con
+"hace N días". Radio RAU, que es un juguete, pasó del segundo lugar al final. "Historias de la
+Comunidad" se oculta con menos de dos historias (había una y la sección parecía abandonada); el
+Libro de Visitas, justo debajo, ya cumple esa función. "Faltan 1 días" ahora es "Empieza mañana".
+"Cómo asociarse" enlaza primero la guía de la licencia.
+
+**Repetidoras.** La portada mostraba las 4 últimas publicadas y dejaba fuera a Medellín, la
+principal. Ahora salen todas, la principal (HK4RAU) primero y las demás por nombre, igual que en el
+directorio (`rau_ordenar_repetidoras()`; antes ordenaba por fecha). Las tarjetas muestran el tono.
+Un indicativo que no es indicativo ("PENDIENTE") se muestra como "Indicativo por confirmar".
+
+**Ficha de repetidora: "Programa tu radio".** La ficha daba frecuencia y tono pero no el
+desplazamiento, y nadie decía la frecuencia de transmisión. Nueva fila "Desplazamiento" y una
+tarjeta con RX, TX calculada, desplazamiento y tono, más los pasos para configurar el radio.
+`rau_programacion_repetidor()` entiende "-600 kHz", "-0.600" y "+5 MHz"; si falta un dato no
+muestra una TX inventada. Probado con seis formatos.
+
+**Probado en un WordPress local** (7.1.3 con SQLite y datos de prueba): portada, directorio y
+ficha en escritorio y celular, sin errores de PHP.
+
+---
+
 ## 19.41.0 — el chat explica la licencia paso a paso
 
 Sacar la licencia es la duda más común de quien llega, y el chat solo respondía "practica con el

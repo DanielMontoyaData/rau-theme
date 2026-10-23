@@ -50,10 +50,11 @@ get_header();
 		<div class="grid grid-cols-2 gap-2 border-b border-border/50 px-6 py-4 last:border-0 md:grid-cols-12 md:items-center md:gap-4">
 			<div class="col-span-2 md:col-span-3">
 				<p class="font-semibold"><a href="<?php the_permalink(); ?>" class="hover:text-primary"><?php the_title(); ?></a></p>
-				<p class="font-mono text-xs text-primary"><?php echo esc_html( get_post_meta( $rid, 'callsign', true ) ); ?> · <?php echo esc_html( get_post_meta( $rid, 'band', true ) ); ?></p>
+				<?php $callsign = get_post_meta( $rid, 'callsign', true ); ?>
+				<p class="font-mono text-xs <?php echo rau_indicativo_confirmado( $callsign ) ? 'text-primary' : 'text-muted-foreground'; ?>"><?php echo esc_html( rau_indicativo_confirmado( $callsign ) ? $callsign : 'Indicativo por confirmar' ); ?> · <?php echo esc_html( get_post_meta( $rid, 'band', true ) ); ?></p>
 			</div>
 			<div class="md:col-span-2 font-mono text-sm"><?php echo esc_html( get_post_meta( $rid, 'frequency', true ) ); ?><span class="block text-xs text-muted-foreground"><?php echo esc_html( get_post_meta( $rid, 'offset', true ) ); ?></span></div>
-			<div class="md:col-span-1 font-mono text-sm text-muted-foreground"><?php echo esc_html( get_post_meta( $rid, 'tone', true ) ?: '—' ); ?></div>
+			<div class="md:col-span-1 font-mono text-sm text-muted-foreground"><span class="md:hidden">Tono </span><?php echo esc_html( get_post_meta( $rid, 'tone', true ) ?: '—' ); ?></div>
 			<div class="md:col-span-2 text-sm"><?php echo esc_html( get_post_meta( $rid, 'mode', true ) ); ?></div>
 			<div class="md:col-span-2 flex items-center gap-1 text-sm text-muted-foreground">
 				<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1116 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>

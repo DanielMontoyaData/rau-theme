@@ -21,7 +21,9 @@ while ( have_posts() ) : the_post();
 	</div>
 
 	<?php if ( 'repetidor' === $type ) : ?>
-		<div class="mt-8 max-w-md overflow-hidden rounded-2xl border border-border/70 bg-card">
+		<div class="mt-8 grid max-w-4xl gap-6 lg:grid-cols-2 lg:items-start">
+		<div>
+		<div class="overflow-hidden rounded-2xl border border-border/70 bg-card">
 			<?php
 			$estado_iconos_rep = [ 'activo' => '🟢', 'intermitente' => '🟡', 'mantenimiento' => '🔵', 'fuera de servicio' => '🔴' ];
 			$estado_rep = get_post_meta( get_the_ID(), 'status', true ) ?: 'activo';
@@ -29,10 +31,11 @@ while ( have_posts() ) : the_post();
 			$estado_rep_icono = $estado_iconos_rep[ $estado_rep_norm ] ?? '⚪';
 			$fecha_verif = get_post_meta( get_the_ID(), 'fecha_verificacion', true );
 			$rows = array(
-				'Indicativo' => get_post_meta( get_the_ID(), 'callsign', true ),
+				'Indicativo' => rau_indicativo_confirmado( get_post_meta( get_the_ID(), 'callsign', true ) ) ? get_post_meta( get_the_ID(), 'callsign', true ) : 'Por confirmar',
 				'Estado'     => $estado_rep_icono . ' ' . ucfirst( $estado_rep_norm ),
 				'Banda'      => get_post_meta( get_the_ID(), 'band', true ),
 				'Frecuencia' => get_post_meta( get_the_ID(), 'frequency', true ),
+				'Desplazamiento' => get_post_meta( get_the_ID(), 'offset', true ) ?: '—',
 				'Tono CTCSS' => get_post_meta( get_the_ID(), 'tone', true ) ?: '—',
 				'DCS'        => get_post_meta( get_the_ID(), 'dcs', true ) ?: '—',
 				'Modo'       => get_post_meta( get_the_ID(), 'mode', true ),
@@ -46,7 +49,7 @@ while ( have_posts() ) : the_post();
 				</div>
 			<?php endforeach; ?>
 		</div>
-		<p class="mt-2 max-w-md font-mono text-[10px] text-muted-foreground">
+		<p class="mt-2 font-mono text-[10px] text-muted-foreground">
 			<?php if ( $fecha_verif ) : ?>
 				Última verificación: <?php echo esc_html( $fecha_verif ); ?>
 			<?php else : ?>
@@ -166,6 +169,33 @@ while ( have_posts() ) : the_post();
 		})();
 		</script>
 		<?php endif; ?>
+		</div>
+
+		<?php
+		// Lo que hay que poner en el radio. La ficha daba frecuencia y tono, pero no el desplazamiento,
+		// y nadie decía la frecuencia de transmisión: es la cuenta que más se equivoca quien empieza.
+		$prog = rau_programacion_repetidor( get_the_ID() );
+		if ( $prog ) : ?>
+		<div class="rounded-2xl border border-primary/30 bg-card p-5 sm:p-6">
+			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Programa tu radio</p>
+			<h2 class="mb-4 font-display text-lg font-bold">Así la configuras</h2>
+			<div class="grid grid-cols-2 gap-3">
+				<div class="rounded-xl bg-background p-3"><p class="text-xs text-muted-foreground">Recibes en (RX)</p><p class="font-mono text-lg font-bold text-primary"><?php echo esc_html( $prog['rx'] ); ?></p></div>
+				<div class="rounded-xl bg-background p-3"><p class="text-xs text-muted-foreground">Transmites en (TX)</p><p class="font-mono text-lg font-bold"><?php echo esc_html( $prog['tx'] ); ?></p></div>
+				<div class="rounded-xl bg-background p-3"><p class="text-xs text-muted-foreground">Desplazamiento</p><p class="font-mono font-semibold"><?php echo esc_html( $prog['shift'] ); ?></p></div>
+				<div class="rounded-xl bg-background p-3"><p class="text-xs text-muted-foreground">Tono de subida</p><p class="font-mono font-semibold"><?php echo esc_html( $prog['tono'] ?: 'Sin tono' ); ?></p></div>
+			</div>
+			<ol class="mt-4 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+				<li>Sintoniza <span class="font-mono text-foreground"><?php echo esc_html( $prog['rx'] ); ?></span> en modo <?php echo esc_html( $prog['modo'] ); ?>.</li>
+				<li>Activa el desplazamiento <?php echo esc_html( $prog['signo_texto'] ); ?> de <span class="font-mono text-foreground"><?php echo esc_html( $prog['shift_abs'] ); ?></span>.</li>
+				<?php if ( $prog['tono'] ) : ?><li>Activa el tono (TONE o ENC) en <span class="font-mono text-foreground"><?php echo esc_html( $prog['tono'] ); ?></span>.</li><?php endif; ?>
+				<li>Escucha primero; si el canal está libre, identifícate con tu indicativo.</li>
+			</ol>
+			<p class="mt-4 text-xs text-muted-foreground">¿Muchas repetidoras? Cárgalas todas de una vez con el <a href="<?php echo esc_url( admin_url( 'admin-post.php?action=rau_export_chirp' ) ); ?>" class="text-primary hover:underline">archivo para CHIRP</a>.</p>
+		</div>
+		<?php endif; ?>
+		</div>
+
 		<p class="mt-4 flex flex-wrap gap-3 text-sm">
 			<a href="<?php echo esc_url( get_post_type_archive_link( 'repetidor' ) ); ?>" class="text-primary hover:underline">← Ver todos los repetidores</a>
 			<span class="text-muted-foreground">·</span>

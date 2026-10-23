@@ -106,13 +106,6 @@ configuración.
    `fecha_inicio`, `fecha_fin` (ambas en formato AAAA-MM-DD), `notas` (opcional). El turno que
    incluya la fecha de hoy se marca automáticamente como "En turno".
 
-### Programa Elmer (mentores)
-Usa el mismo Directorio de Miembros: a quien quieras marcar como mentor, agrégale los campos
-`mentor` = `1` y `especialidad` (ej. "HF y antenas"). Luego crea una **Página** (ej. "Programa
-Elmer"), plantilla **"Programa Elmer (Mentores)"** — listará automáticamente a todos los que
-tengan `mentor=1`. El botón "Pedir contacto" abre un correo pre-escrito a `contacto@rau.org`
-(cámbialo por el correo real en `page-elmer.php` si es distinto).
-
 ### SEO y qué se ve al compartir en redes
 El tema ya genera automáticamente meta descripción y etiquetas Open Graph (para que se vea
 bien al compartir en WhatsApp/Facebook) usando tu logo y el subtítulo del hero. No necesitas
