@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.49.0
+Version: 19.50.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -766,3 +766,113 @@ html.rau-splash-active body {
 	.rx-fila::-webkit-scrollbar { display: none; }
 	.rx-fila > * { flex-shrink: 0; }
 }
+
+/* ══ Receptor con frente de radio (19.50.0) ════════════════════════════════════════════════
+   Chasis oscuro, pantalla LCD ámbar con dígitos de 7 segmentos (DSEG7, licencia OFL, en
+   assets/fonts), S-metro segmentado con escala S1–S9+60, perilla VFO moleteada y teclas con luz
+   de estado. El ámbar es el mismo de la cascada por defecto. */
+@font-face { font-family: 'DSEG7'; src: url('assets/fonts/DSEG7Classic-Bold.woff2') format('woff2'); font-display: swap; }
+.rx-radio { --rx-ambar: #ffb547; --rx-ambar-tenue: rgba(255, 181, 71, .07); position: relative; border-radius: 1.25rem; padding: 1rem; color: #cbd5e1;
+	background: linear-gradient(180deg, #252e3d 0%, #171d28 50%, #121722 100%); border: 1px solid #2f3a4d;
+	box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 24px 48px -24px rgba(0,0,0,.75); }
+@media (min-width: 640px) { .rx-radio { padding: 1.1rem 1.5rem 1.5rem; } }
+/* El diseño depende del ancho del propio receptor (página completa, columna de la consola o celular), no del de la ventana */
+#rx-componente { container-type: inline-size; container-name: radio; }
+.rx-radio .text-muted-foreground { color: #8a96a8; }
+.rx-radio .text-foreground { color: #e2e8f0; }
+.rx-placa { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .75rem; margin-bottom: .75rem; font-family: ui-monospace, monospace; }
+.rx-placa-marca { font-weight: 800; letter-spacing: .25em; color: #e2e8f0; font-size: .8rem; }
+.rx-placa-modelo { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #5f6b7d; }
+.rx-frente { display: grid; gap: 1rem; }
+.rx-lcd { display: flex; flex-direction: column; justify-content: center; }
+@container radio (min-width: 860px) { .rx-frente { grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; } }
+
+/* Pantalla */
+.rx-lcd { position: relative; overflow: hidden; border-radius: .7rem; padding: .7rem 1rem .8rem; color: var(--rx-ambar);
+	background: radial-gradient(120% 140% at 30% 0%, #1f1808 0%, #0e0b05 55%, #070503 100%); border: 2px solid #090c12;
+	box-shadow: inset 0 0 0 1px rgba(255,181,71,.08), inset 0 10px 28px rgba(0,0,0,.65), 0 1px 0 rgba(255,255,255,.06); }
+.rx-lcd::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(170deg, rgba(255,255,255,.06), transparent 38%); }
+.rx-lcd-fila { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; font-family: ui-monospace, monospace; font-size: 10px; }
+.rx-ind { padding: 1px 5px; border-radius: 3px; border: 1px solid rgba(255,181,71,.16); color: rgba(255,181,71,.22); letter-spacing: .08em; }
+.rx-ind.is-on { color: var(--rx-ambar); border-color: rgba(255,181,71,.55); text-shadow: 0 0 6px rgba(255,181,71,.5); }
+#rx-ind-rx.is-on { color: #4ade80; border-color: rgba(74,222,128,.6); text-shadow: 0 0 6px rgba(74,222,128,.6); }
+.rx-ind-rojo.is-on { color: #f87171; border-color: rgba(248,113,113,.6); text-shadow: 0 0 6px rgba(248,113,113,.6); }
+.rx-lcd-banda { margin-left: auto; letter-spacing: .12em; text-shadow: 0 0 6px rgba(255,181,71,.4); }
+.rx-lcd-freq { position: relative; display: flex; align-items: flex-end; gap: .55rem; margin: .45rem 0 .55rem; line-height: 1; font-family: 'DSEG7', ui-monospace, monospace; font-size: clamp(2.1rem, 9cqw, 3.9rem); }
+.rx-fantasma { position: absolute; left: 0; bottom: 0; color: var(--rx-ambar-tenue); pointer-events: none; }
+.rx-lcd #rx-freq { position: relative; color: var(--rx-ambar); text-shadow: 0 0 14px rgba(255,181,71,.45); }
+.rx-lcd .rx-dig { padding: 0; border-radius: 2px; }
+.rx-lcd .rx-dig-vacio { opacity: 1; }
+.rx-lcd .rx-dig:hover, .rx-lcd .rx-dig:active { background-color: rgba(255,181,71,.12); }
+.rx-lcd .rx-dig::before, .rx-lcd .rx-dig::after { font-family: ui-monospace, monospace; }
+.rx-lcd-unidad { font-family: ui-monospace, monospace; font-size: .8rem; letter-spacing: .18em; color: rgba(255,181,71,.65); padding-bottom: .3em; }
+
+/* S-metro */
+.rx-smetro-escala { position: relative; height: 14px; font-family: ui-monospace, monospace; font-size: 9px; color: rgba(255,181,71,.7); }
+.rx-smetro-escala span { position: absolute; transform: translateX(-50%); }
+.rx-smetro-escala span:nth-child(1) { left: 0; transform: none; }
+.rx-smetro-escala span:nth-child(2) { left: 5.3%; }
+.rx-smetro-escala span:nth-child(3) { left: 15.8%; }
+.rx-smetro-escala span:nth-child(4) { left: 26.3%; }
+.rx-smetro-escala span:nth-child(5) { left: 36.8%; }
+.rx-smetro-escala span:nth-child(6) { left: 47.4%; }
+.rx-smetro-escala span:nth-child(7) { left: 64.9%; color: #f87171; }
+.rx-smetro-escala span:nth-child(8) { left: 82.5%; color: #f87171; }
+.rx-smetro-escala span:nth-child(9) { left: 100%; transform: translateX(-100%); color: #f87171; }
+.rx-smetro-barra { position: relative; height: 12px; overflow: hidden; border-radius: 2px; container-type: inline-size;
+	background: repeating-linear-gradient(90deg, rgba(255,181,71,.13) 0 5px, transparent 5px 7px); }
+.rx-smetro-relleno { height: 100%; width: 0; transition: width .12s;
+	background-image: linear-gradient(90deg, #f59e0b 0%, #fcd34d 47%, #f87171 52%, #ef4444 100%); background-size: 100cqw 100%; background-repeat: no-repeat;
+	-webkit-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px); mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px);
+	filter: drop-shadow(0 0 3px rgba(255,181,71,.55)); }
+.rx-smetro-pico { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: #fde68a; box-shadow: 0 0 5px #fbbf24; transition: left .25s; }
+.rx-lcd-pie { margin-top: .4rem; justify-content: space-between; gap: .75rem; color: rgba(255,181,71,.85); }
+.rx-lcd-pie #rx-libres { color: rgba(255,181,71,.55); }
+
+/* Perilla VFO */
+.rx-mandos { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+@container radio (min-width: 860px) { .rx-mandos { justify-content: flex-end; } .rx-teclas-grandes { width: 17rem; } }
+@container radio (min-width: 480px) { .rx-teclas-grandes { flex: 1; max-width: 22rem; } }
+.rx-teclas-fila > .rx-tecla { flex: 1 1 auto; }
+.rx-perilla-caja { display: flex; flex-direction: column; align-items: center; gap: .45rem; }
+.rx-perilla { --giro: 0deg; position: relative; flex-shrink: 0; width: 104px; height: 104px; border-radius: 50%; cursor: grab; touch-action: none; user-select: none;
+	background: radial-gradient(circle at 50% 30%, #3d4759 0%, #262d3a 55%, #171c25 100%);
+	box-shadow: 0 8px 16px rgba(0,0,0,.6), 0 0 0 4px #0f131b, 0 0 0 5px #2f3a4d, inset 0 2px 2px rgba(255,255,255,.12), inset 0 -4px 8px rgba(0,0,0,.6); }
+@container radio (min-width: 860px) { .rx-perilla { width: 124px; height: 124px; } }
+.rx-perilla::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; transform: rotate(var(--giro));
+	background: repeating-conic-gradient(#323b4b 0 3deg, #181d26 3deg 6deg);
+	-webkit-mask: radial-gradient(circle, transparent 0 66%, #000 67%); mask: radial-gradient(circle, transparent 0 66%, #000 67%); }
+.rx-perilla::after { content: ''; position: absolute; inset: 20%; border-radius: 50%;
+	background: radial-gradient(circle at 38% 30%, #56617a 0%, #2a3240 60%, #1e242f 100%);
+	box-shadow: inset 0 1px 1px rgba(255,255,255,.18), 0 3px 6px rgba(0,0,0,.55); }
+.rx-perilla-hoyo { position: absolute; z-index: 1; left: 50%; top: 50%; width: 13px; height: 13px; margin: -6.5px; border-radius: 50%;
+	background: radial-gradient(circle at 40% 35%, #0c0f14, #262d39); box-shadow: inset 0 2px 3px rgba(0,0,0,.85), 0 1px 0 rgba(255,255,255,.08);
+	transform: rotate(var(--giro)) translateY(-22px); }
+@container radio (min-width: 860px) { .rx-perilla-hoyo { transform: rotate(var(--giro)) translateY(-27px); } }
+.rx-perilla.is-girando { cursor: grabbing; }
+.rx-perilla:focus-visible { outline: 2px solid var(--rx-ambar); outline-offset: 6px; }
+.rx-perilla-txt { font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6b778a; }
+
+/* Teclas con luz de estado */
+.rx-teclas-grandes { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
+.rx-teclas-fila { display: flex; flex-wrap: wrap; gap: .5rem; }
+#rx-app .rx-tecla { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.25rem; padding: .4rem .8rem .4rem 1.1rem;
+	border-radius: .5rem; border: 1px solid #344055; background: linear-gradient(180deg, #2b3446, #1c2330); color: #cbd5e1; font-family: ui-monospace, monospace; font-size: 12px;
+	box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 2px 0 #0a0e15, 0 3px 6px rgba(0,0,0,.35); transition: transform .06s, box-shadow .06s, border-color .15s, color .15s; }
+#rx-app .rx-tecla::before { content: ''; position: absolute; left: .45rem; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: #3a4354; }
+#rx-app .rx-tecla:hover { border-color: #4d5c77; color: #fff; }
+#rx-app .rx-tecla:active { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 0 #0a0e15; }
+#rx-app .rx-tecla[aria-pressed="true"] { color: #ffd58a; border-color: rgba(255,181,71,.55); background: linear-gradient(180deg, #363020, #221c11); }
+#rx-app .rx-tecla[aria-pressed="true"]::before { background: var(--rx-ambar); box-shadow: 0 0 6px var(--rx-ambar), 0 0 2px #fff7e0; }
+#rx-app .rx-tecla-sub { color: #7c8799; font-size: 11px; }
+#rx-app .rx-tecla[aria-pressed="true"] .rx-tecla-sub { color: rgba(255,213,138,.75); }
+#rx-app .rx-tecla-power { min-height: 2.75rem; padding: .5rem 1.25rem; font-size: 14px; font-weight: 700; color: #052e14; border-color: #15803d; background: linear-gradient(180deg, #4ade80, #16a34a); }
+#rx-app .rx-tecla-power::before { display: none; }
+#rx-app .rx-tecla-power[aria-pressed="true"] { color: #fff; border-color: #991b1b; background: linear-gradient(180deg, #f87171, #b91c1c); }
+.rx-separador { width: 1px; align-self: stretch; margin: 0 .25rem; background: #344055; }
+
+/* Panorámico y controles sobre el chasis */
+#rx-app #rx-pantalla { border-color: #090c12; background: #04060a; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 1px 0 rgba(255,255,255,.05); }
+#rx-app select, #rx-app input[type="text"] { background: #0c1018; border-color: #344055; color: #e2e8f0; }
+#rx-app #rx-cw { background: #0c1018; border-color: #2a3446; }
+.rx-ayuda-digitos { margin-top: .5rem; font-family: ui-monospace, monospace; font-size: 10px; color: #6b778a; }

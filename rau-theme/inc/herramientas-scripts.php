@@ -6969,7 +6969,9 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	function pintarTarjeta(o){
 		var el=document.getElementById('consola-oido-bandas');
 		if(!el) return;
-		var filas=o.vigiladas.slice().sort(function(a,b){ return orden.indexOf(a)-orden.indexOf(b); }).map(function(b){
+		// La banda con más actividad arriba: de día, lo primero que se lee no es «40 m · nadie oído»
+		var cuenta=function(b){ return o.bandas[b] ? o.bandas[b].n : 0; };
+		var filas=o.vigiladas.slice().sort(function(a,b){ return cuenta(b)-cuenta(a) || orden.indexOf(a)-orden.indexOf(b); }).map(function(b){
 			var m=o.bandas[b], n=m?m.n:0;
 			var col=n>=5?'text-emerald-400':n>=1?'text-amber-400':'text-rose-400';
 			var regs=m ? Object.keys(m.regiones).sort(function(x,y){ return m.regiones[y]-m.regiones[x]; }).slice(0,3).map(function(r){ return regiones[r]+' '+m.regiones[r]; }).join(' · ') : 'nadie oído: cerrada o sin actividad';

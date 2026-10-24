@@ -264,6 +264,34 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.50.0 — el receptor con frente de radio
+
+El receptor tiene ahora el aspecto y los mandos de un equipo de comunicaciones.
+
+- **Pantalla LCD ámbar.** La frecuencia se escribe como en un radio (7.150.00 MHz) con dígitos de 7
+  segmentos (fuente DSEG7, licencia OFL, incluida en `assets/fonts` con su licencia). Detrás va
+  «88.888.88» casi apagado, como los segmentos sin encender. Eso también resuelve el hueco que
+  dejaba el dígito de 10 MHz oculto: ahora es un segmento apagado. Los dígitos se siguen tocando
+  arriba y abajo para sintonizar.
+- **Indicadores del LCD.**
+  - RX se enciende en verde al escuchar y REC en rojo al grabar.
+  - Siempre a la vista: VFO A, modo, ancho del filtro (2.4k…), AGC y banda.
+- **S-metro con escala real.** Va de S1 a S9 y de +20 a +60 dB (−127 a −13 dBm), es segmentado, pasa
+  de ámbar a rojo sobre S9 y tiene retención de pico.
+- **Perilla VFO.** Es moleteada y gira de verdad: con el dedo o el ratón alrededor del centro, con la
+  rueda o con las flechas, a un paso cada 12° (30 por vuelta).
+- **Teclas con luz de estado.** Bandas, segmentos, modos y pasos llevan una luz ámbar cuando están
+  activos (`aria-pressed`). Escuchar es verde y pasa a Detener en rojo.
+- **Diseño adaptable al espacio del propio receptor.** Usa consultas de contenedor, no el ancho de la
+  ventana:
+  - en la página completa, pantalla, perilla y teclas van en una fila;
+  - en la columna de la consola y en celular, los mandos van debajo de la pantalla.
+
+**«Abierta ahora».** La banda con más estaciones oídas va arriba. De día ya no se lee primero «40 m ·
+nadie oído».
+
+---
+
 ## 19.49.0 — página más liviana, bitácora única y decodificador de CW
 
 **Peso de Herramientas.** Los ~400 KB de JavaScript iban en el HTML de cada una de las 61

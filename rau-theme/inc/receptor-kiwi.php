@@ -37,30 +37,54 @@ function rau_receptor_plan() {
 function rau_receptor_kiwi( $args = array() ) {
 	$args  = wp_parse_args( $args, array( 'estado' => true ) );
 	$relay = get_option( 'rau_kiwi_relay', '' );
-	$btn   = 'rounded-md border border-border bg-background px-3 py-2 font-mono text-xs hover:border-primary/50';
+	$btn   = 'rx-tecla';
 	$sel   = 'rounded-md border border-border bg-background px-2 py-2 font-mono text-xs';
 	?>
 	<div id="rx-componente">
 	<?php if ( $relay ) : ?>
-	<div id="rx-app" tabindex="0" class="rounded-2xl border border-primary/30 bg-card p-4 outline-none sm:p-6" aria-label="Receptor KiwiSDR: usa las flechas para sintonizar">
-		<div class="flex flex-wrap items-center justify-between gap-4">
-			<div>
-				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Frecuencia · <span id="rx-modo-txt">LSB</span></p>
-				<p class="font-mono text-4xl font-bold tabular-nums text-primary sm:text-5xl"><span id="rx-freq" class="rx-digitos" role="group" aria-label="Frecuencia: toca la parte de arriba o de abajo de un dígito para subirlo o bajarlo">7150.00</span> <span class="text-base text-muted-foreground">kHz</span></p>
-				<p class="mt-1 font-mono text-[10px] text-muted-foreground">Toca arriba o abajo de un dígito para subirlo o bajarlo, o usa la rueda sobre él.</p>
+	<div id="rx-app" tabindex="0" class="rx-radio outline-none" aria-label="Receptor KiwiSDR: usa las flechas para sintonizar">
+		<div class="rx-placa">
+			<span class="rx-placa-marca">HK4RAU</span>
+			<span class="rx-placa-modelo">KiwiSDR 2 · receptor de comunicaciones · 10 kHz – 30 MHz</span>
+		</div>
+		<div class="rx-frente">
+			<div class="rx-lcd" aria-live="off">
+				<div class="rx-lcd-fila">
+					<span id="rx-ind-rx" class="rx-ind">RX</span>
+					<span class="rx-ind is-on">VFO A</span>
+					<span id="rx-modo-txt" class="rx-ind is-on">LSB</span>
+					<span id="rx-ind-filtro" class="rx-ind is-on">2.7k</span>
+					<span id="rx-ind-agc" class="rx-ind is-on">AGC</span>
+					<span id="rx-ind-rec" class="rx-ind rx-ind-rojo">REC</span>
+					<span id="rx-ind-banda" class="rx-lcd-banda">40 m</span>
+				</div>
+				<div class="rx-lcd-freq">
+					<span class="rx-fantasma" aria-hidden="true">88.888.88</span>
+					<span id="rx-freq" class="rx-digitos" role="group" aria-label="Frecuencia: toca la parte de arriba o de abajo de un dígito para subirlo o bajarlo">7.150.00</span>
+					<span class="rx-lcd-unidad">MHz</span>
+				</div>
+				<div class="rx-smetro">
+					<div class="rx-smetro-escala" aria-hidden="true"><span>S</span><span>1</span><span>3</span><span>5</span><span>7</span><span>9</span><span>+20</span><span>+40</span><span>+60</span></div>
+					<div class="rx-smetro-barra"><div id="rx-smeter" class="rx-smetro-relleno"></div><div id="rx-pico" class="rx-smetro-pico"></div><div id="rx-sq-marca" class="absolute inset-y-0 hidden w-0.5 bg-accent"></div></div>
+					<div class="rx-lcd-fila rx-lcd-pie"><span id="rx-s">—</span><span id="rx-libres"></span></div>
+				</div>
 			</div>
-			<div class="min-w-[12rem] flex-1 sm:max-w-xs">
-				<div class="flex items-center justify-between font-mono text-[11px] text-muted-foreground"><span>Señal</span><span id="rx-s">—</span></div>
-				<div class="relative mt-1 h-2 overflow-hidden rounded-full bg-background"><div id="rx-smeter" class="h-full w-0 rounded-full bg-primary transition-all duration-150"></div><div id="rx-sq-marca" class="absolute inset-y-0 hidden w-0.5 bg-accent"></div></div>
-				<p id="rx-libres" class="mt-1 font-mono text-[11px] text-muted-foreground"></p>
-			</div>
-			<div class="flex flex-wrap items-center gap-2">
-				<button id="rx-power" type="button" class="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90">▶ Escuchar</button>
-				<button id="rx-mute" type="button" class="<?php echo esc_attr( $btn ); ?> h-11" aria-pressed="false" title="Silenciar">🔊</button>
-				<button id="rx-rec" type="button" class="<?php echo esc_attr( $btn ); ?> h-11" aria-pressed="false" title="Grabar lo que suena (WAV)">● Grabar</button>
-				<button id="rx-share" type="button" class="<?php echo esc_attr( $btn ); ?> h-11" title="Compartir esta frecuencia">Compartir</button>
+			<div class="rx-mandos">
+				<div class="rx-perilla-caja">
+					<div id="rx-perilla" class="rx-perilla" role="slider" tabindex="0" aria-label="Perilla de sintonía: gírala o usa las flechas" aria-valuetext="7150.00 kHz"><span class="rx-perilla-hoyo"></span></div>
+					<span class="rx-perilla-txt">VFO · <span class="rx-paso-txt">1 kHz</span></span>
+				</div>
+				<div class="rx-teclas-grandes">
+					<button id="rx-power" type="button" class="rx-tecla rx-tecla-power" aria-pressed="false">▶ Escuchar</button>
+					<div class="rx-teclas-fila">
+						<button id="rx-mute" type="button" class="rx-tecla" aria-pressed="false" title="Silenciar">🔊</button>
+						<button id="rx-rec" type="button" class="rx-tecla" aria-pressed="false" title="Grabar lo que suena (WAV)">● Grabar</button>
+						<button id="rx-share" type="button" class="rx-tecla" title="Compartir esta frecuencia">Compartir</button>
+					</div>
+				</div>
 			</div>
 		</div>
+		<p class="rx-ayuda-digitos">Toca arriba o abajo de un dígito para subirlo o bajarlo, gira la perilla o usa la rueda.</p>
 
 		<div id="rx-pantalla" class="relative mt-5 touch-none select-none overflow-hidden rounded-xl border border-border/60 bg-background" style="cursor:crosshair">
 			<canvas id="rx-plan" class="block h-[20px] w-full" aria-hidden="true"></canvas>
@@ -102,8 +126,8 @@ function rau_receptor_kiwi( $args = array() ) {
 			</label>
 			<div>
 				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Paso</p>
-				<div id="rx-pasos" class="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Paso de sintonía">
-					<button type="button" data-v="0.01" class="rx-paso-op px-2.5 py-2 font-mono text-xs">10 Hz</button><button type="button" data-v="0.1" class="rx-paso-op border-l border-border px-2.5 py-2 font-mono text-xs">100 Hz</button><button type="button" data-v="1" class="rx-paso-op border-l border-border px-2.5 py-2 font-mono text-xs">1 kHz</button><button type="button" data-v="5" class="rx-paso-op border-l border-border px-2.5 py-2 font-mono text-xs">5 kHz</button>
+				<div id="rx-pasos" class="flex flex-wrap gap-1.5" role="group" aria-label="Paso de sintonía">
+					<button type="button" data-v="0.01" class="rx-paso-op rx-tecla">10 Hz</button><button type="button" data-v="0.1" class="rx-paso-op rx-tecla">100 Hz</button><button type="button" data-v="1" class="rx-paso-op rx-tecla">1 kHz</button><button type="button" data-v="5" class="rx-paso-op rx-tecla">5 kHz</button>
 				</div>
 			</div>
 			<div>
@@ -288,7 +312,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		var $=function(id){ return document.getElementById(id); };
 		var st={freq:7150, modo:'lsb', filtro:1, paso:1, zoom:7, zoomMax:14, fft:1024, bw:30000000, on:false, snd:null, wf:null, ctx:null, gain:null,
 			t:0, dec:{i:0,p:0}, rate:12000, rpos:0, rprev:0, ka:null, ts:0, paleta:'ambar', contraste:30, sq:0, agc:true, mute:false, sqAbierto:true, sqHasta:0,
-			grab:null, esp:[], wfStart:0, wfSpan:0, piso:null, lut:null, ultXbin:-1, ultZoom:-1, spots:[], golpes:[], vigia:null};
+			grab:null, esp:[], wfStart:0, wfSpan:0, piso:null, lut:null, ultXbin:-1, ultZoom:-1, spots:[], golpes:[], vigia:null, pico:0, perilla:0};
 		try {
 			var g=JSON.parse(localStorage.getItem('rau_rx')||'null');
 			if(g){ if(g.freq) st.freq=g.freq; if(MODOS[g.modo]) st.modo=g.modo; if(g.zoom!=null) st.zoom=g.zoom|0; if(PALETAS.hasOwnProperty(g.paleta)) st.paleta=g.paleta;
@@ -438,28 +462,33 @@ function rau_receptor_kiwi( $args = array() ) {
 		function redibujarFijos(){ dibujarPlan(); dibujarEscala(); dibujarEspectro(); dibujarSpots(); marcas(); }
 
 		/* ── Sintonía ─────────────────────────────────────────────────────── */
-		/* La frecuencia grande es un sintonizador: cada dígito sube o baja su propio valor */
-		var VALORES=[10000,1000,100,10,1,null,0.1,0.01];
+		/* La frecuencia grande es un sintonizador, en el formato de un radio: MHz.kHz.decenas de Hz
+		   (7.150.00). Cada dígito sube o baja su propio valor. Detrás va «88.888.88» casi apagado,
+		   como los segmentos sin encender de un LCD; el dígito de 10 MHz, si es cero, queda apagado. */
+		var VALORES=[10000,1000,null,100,10,1,null,0.1,0.01];
 		function pintarDigitos(){
-			var t=st.freq.toFixed(2); while(t.length<8) t=' '+t;
-			$('rx-freq').innerHTML=t.split('').map(function(ch, i){
+			var t=st.freq.toFixed(2).replace('.',''); while(t.length<7) t='0'+t;
+			var txt=t.slice(0,2)+'.'+t.slice(2,5)+'.'+t.slice(5,7);
+			$('rx-freq').innerHTML=txt.split('').map(function(ch, i){
 				var v=VALORES[i];
-				if(v===null) return '<span>.</span>';
-				if(ch===' ') return '<span class="rx-dig rx-dig-vacio" data-v="'+v+'" aria-hidden="true">0</span>';
-				var nombre=v>=1 ? (v>=1000 ? v/1000+' MHz' : v+' kHz') : Math.round(v*1000)+' Hz';
-				return '<span class="rx-dig" data-v="'+v+'" role="button" tabindex="-1" aria-label="Dígito de '+nombre+': '+ch+'">'+ch+'</span>';
+				if(v===null) return '<span class="rx-punto">.</span>';
+				var apagado = i===0 && ch==='0';
+				var nombre=v>=1000 ? v/1000+' MHz' : v>=1 ? v+' kHz' : Math.round(v*1000)+' Hz';
+				return '<span class="rx-dig'+(apagado?' rx-dig-vacio':'')+'" data-v="'+v+'" role="button" tabindex="-1" aria-label="Dígito de '+nombre+': '+ch+'">'+(apagado?'!':ch)+'</span>';
 			}).join('');
+			$('rx-perilla').setAttribute('aria-valuetext', st.freq.toFixed(2)+' kHz');
 		}
 		function anchoTxt(){ var k=st.bw/Math.pow(2,st.zoom)/1000; return k>=1000 ? (k/1000).toFixed(k>=10000?0:1)+' MHz' : Math.round(k)+' kHz'; }
 		function pasoTxt(v){ return v>=1 ? v+' kHz' : Math.round(v*1000)+' Hz'; }
 		function pintarBanda(){
 			var b=bandaDe(st.freq), seg=segmentoDe(b, st.freq), otra=OTRAS.filter(function(o){ return st.freq>=o[3][0] && st.freq<=o[3][1]; })[0];
-			document.querySelectorAll('.rx-banda').forEach(function(x){ var on=(b && x.dataset.b===b.n) || (otra && x.dataset.o===otra[0]); x.classList.toggle('bg-primary',!!on); x.classList.toggle('text-primary-foreground',!!on); x.setAttribute('aria-pressed', !!on);
+			$('rx-ind-banda').textContent = b ? b.n : otra ? otra[0].replace('Onda corta ','OC ').replace('Hora ','') : 'GEN';
+			document.querySelectorAll('.rx-banda').forEach(function(x){ var on=(b && x.dataset.b===b.n) || (otra && x.dataset.o===otra[0]); x.setAttribute('aria-pressed', !!on);
 				// En celular la fila se desliza: que la banda activa quede a la vista sin mover la página
 				if(on && $('rx-bandas').scrollWidth>$('rx-bandas').clientWidth) $('rx-bandas').scrollLeft=Math.max(0, x.offsetLeft-$('rx-bandas').offsetLeft-24); });
 			$('rx-segmentos').innerHTML = b ? '<span class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">'+b.n+':</span>'+b.s.map(function(x){
 				var on=seg===x[0];
-				return '<button type="button" data-f="'+x[1]+'" data-m="'+x[2]+'" class="rx-seg rounded-md border px-2.5 py-1.5 font-mono text-xs '+(on?'border-primary/60 bg-primary/15 text-primary':'border-border bg-background hover:border-primary/50')+'" aria-pressed="'+on+'">'+x[0]+' <span class="text-muted-foreground">'+(x[1]/1000).toFixed(3)+'</span></button>';
+				return '<button type="button" data-f="'+x[1]+'" data-m="'+x[2]+'" class="rx-seg rx-tecla" aria-pressed="'+on+'">'+x[0]+' <span class="rx-tecla-sub">'+(x[1]/1000).toFixed(3)+'</span></button>';
 			}).join('') : '';
 			var nov=PLAN.novicio.filter(function(x){ return st.freq>=x[0] && st.freq<x[1]; })[0];
 			$('rx-donde').textContent = b ? b.n+' · '+(seg==='FT8'?'segmento FT8 (digital)':seg==='CW'?'segmento de telegrafía':'segmento de fonía')+' · '+(nov?'Novicio: '+nov[2]:'solo Primera y Avanzada')
@@ -469,10 +498,12 @@ function rau_receptor_kiwi( $args = array() ) {
 			pintarDigitos(); if(document.activeElement!==$('rx-input')) $('rx-input').value=st.freq.toFixed(2);
 			$('rx-zoom').textContent=st.zoom; $('rx-ancho').textContent=anchoTxt(); $('rx-modo-txt').textContent=MODOS[st.modo].n;
 			document.querySelectorAll('.rx-paso-txt').forEach(function(x){ x.textContent=pasoTxt(st.paso); });
-			document.querySelectorAll('.rx-paso-op').forEach(function(x){ var on=+x.dataset.v===st.paso; x.classList.toggle('bg-primary/15',on); x.classList.toggle('text-primary',on); x.setAttribute('aria-pressed',on); });
+			document.querySelectorAll('.rx-paso-op').forEach(function(x){ x.setAttribute('aria-pressed', +x.dataset.v===st.paso); });
+			var fb=MODOS[st.modo].f[st.filtro]; $('rx-ind-filtro').textContent=((fb[1]-fb[0])/1000).toFixed(1)+'k';
+			$('rx-ind-agc').classList.toggle('is-on', st.agc);
 			pintarBanda();
 			$('rx-cw').classList.toggle('hidden', st.modo!=='cw');
-			document.querySelectorAll('.rx-modo').forEach(function(b){ var on=b.dataset.m===st.modo; b.classList.toggle('bg-primary',on); b.classList.toggle('text-primary-foreground',on); });
+			document.querySelectorAll('.rx-modo').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.m===st.modo); });
 		}
 		function enviarModo(){ var f=MODOS[st.modo].f[st.filtro]; send(st.snd, 'SET mod='+st.modo+' low_cut='+f[0]+' high_cut='+f[1]+' freq='+st.freq.toFixed(3)); }
 		function sintonizar(f, modo, recentrar){
@@ -617,7 +648,10 @@ function rau_receptor_kiwi( $args = array() ) {
 		function smeter(raw){
 			var dbm=0.1*raw-127, s=dbm<=-73 ? Math.max(0,Math.round((dbm+127)/6)) : 9;
 			$('rx-s').textContent=(dbm<=-73 ? 'S'+s : 'S9+'+Math.round(dbm+73)+' dB')+' · '+Math.round(dbm)+' dBm';
-			$('rx-smeter').style.width=Math.max(0,Math.min(100,(dbm+127)/94*100))+'%';
+			var pct=Math.max(0,Math.min(100,(dbm+127)/114*100));
+			$('rx-smeter').style.width=pct+'%';
+			st.pico = pct>st.pico ? pct : Math.max(pct, st.pico-0.8);
+			$('rx-pico').style.left=st.pico+'%';
 			// Silenciador del lado del navegador: abre por encima del umbral y espera 0,8 s antes de cerrar
 			if(st.sq>0){ var umbral=-127+6*st.sq, ahora=Date.now();
 				if(dbm>=umbral){ st.sqHasta=ahora+800; if(!st.sqAbierto){ st.sqAbierto=true; volumen(); } }
@@ -631,7 +665,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			g.partes.push(i16); g.n+=m.length;
 		}
 		function pararGrabacion(){
-			var g=st.grab; st.grab=null; $('rx-rec').textContent='● Grabar'; $('rx-rec').setAttribute('aria-pressed','false'); $('rx-rec').classList.remove('text-rose-400');
+			var g=st.grab; st.grab=null; $('rx-rec').textContent='● Grabar'; $('rx-ind-rec').classList.remove('is-on'); $('rx-rec').setAttribute('aria-pressed','false'); $('rx-rec').classList.remove('text-rose-400');
 			if(!g || !g.n) return;
 			var tasa=Math.round(st.rate), dv=new DataView(new ArrayBuffer(44)), s=function(o,t){ for(var i=0;i<t.length;i++) dv.setUint8(o+i,t.charCodeAt(i)); };
 			s(0,'RIFF'); dv.setUint32(4,36+g.n*2,true); s(8,'WAVE'); s(12,'fmt '); dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
@@ -672,7 +706,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.ctx=st.ctx||new (window.AudioContext||window.webkitAudioContext)(); st.ctx.resume();
 			if(!st.gain){ st.gain=st.ctx.createGain(); st.gain.connect(st.ctx.destination); }
 			st.on=true; st.t=0; st.dec={i:0,p:0}; st.rpos=0; st.rprev=0; st.ts=Date.now(); st.esp=[]; st.sqAbierto=st.sq===0; volumen();
-			$('rx-power').textContent='■ Detener'; $('rx-ayuda').classList.add('hidden'); $('rx-avisar').classList.add('hidden');
+			$('rx-power').textContent='■ Detener'; $('rx-power').setAttribute('aria-pressed','true'); $('rx-ind-rx').classList.add('is-on'); $('rx-ayuda').classList.add('hidden'); $('rx-avisar').classList.add('hidden');
 			msg('Conectando con el receptor…');
 			st.snd=abrir('SND', function(o){
 				if(o.audio_rate) send(st.snd, 'SET AR OK in='+o.audio_rate+' out='+Math.round(st.ctx.sampleRate));
@@ -726,7 +760,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.on=false; clearInterval(st.ka); clearInterval(st.miniT); mini();
 			[st.snd, st.wf].forEach(function(ws){ if(ws){ ws.onclose=null; try{ ws.close(); }catch(e){} } });
 			st.snd=st.wf=null; st.ultXbin=-1;
-			$('rx-power').textContent='▶ Escuchar'; $('rx-s').textContent='—'; $('rx-smeter').style.width='0';
+			$('rx-power').textContent='▶ Escuchar'; $('rx-power').setAttribute('aria-pressed','false'); $('rx-ind-rx').classList.remove('is-on'); $('rx-s').textContent='—'; $('rx-smeter').style.width='0'; st.pico=0; $('rx-pico').style.left='0';
 			if(!silencioso) msg('Desconectado. El canal quedó libre para otra persona.');
 			limpiarCascada(); st.esp=[]; dibujarEspectro(); vistaLocal(true);
 		}
@@ -752,17 +786,31 @@ function rau_receptor_kiwi( $args = array() ) {
 		}
 
 		/* ── Controles ────────────────────────────────────────────────────── */
-		var chip='rx-banda rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs hover:border-primary/50';
+		var chip='rx-banda rx-tecla';
 		$('rx-bandas').innerHTML=BANDAS.map(function(b){ return '<button type="button" data-b="'+b.n+'" class="'+chip+'">'+b.n+'</button>'; }).join('')
-			+'<span class="mx-1 w-px self-stretch bg-border" aria-hidden="true"></span>'
+			+'<span class="rx-separador" aria-hidden="true"></span>'
 			+OTRAS.map(function(o){ return '<button type="button" data-o="'+o[0]+'" class="'+chip+'">'+o[0].replace('Onda corta ','OC ').replace('Hora WWV ','WWV ')+'</button>'; }).join('');
-		$('rx-modos').innerHTML=Object.keys(MODOS).map(function(k){ return '<button type="button" data-m="'+k+'" class="rx-modo rounded-md border border-border bg-background px-3 py-2 font-mono text-xs">'+MODOS[k].n+'</button>'; }).join('');
+		$('rx-modos').innerHTML=Object.keys(MODOS).map(function(k){ return '<button type="button" data-m="'+k+'" class="rx-modo rx-tecla">'+MODOS[k].n+'</button>'; }).join('');
 		$('rx-bandas').addEventListener('click', function(e){
 			var x=e.target.closest('.rx-banda'); if(!x) return;
 			if(x.dataset.b){ var b=BANDAS.filter(function(y){ return y.n===x.dataset.b; })[0], s=b.s.filter(function(y){ return y[0]==='Fonía'; })[0]||b.s[0]; sintonizar(s[1], s[2]); }
 			else { var o=OTRAS.filter(function(y){ return y[0]===x.dataset.o; })[0]; sintonizar(o[1], o[2]); }
 		});
 		$('rx-segmentos').addEventListener('click', function(e){ var x=e.target.closest('.rx-seg'); if(x) sintonizar(+x.dataset.f, x.dataset.m); });
+
+		/* Perilla: girarla sintoniza un paso cada 12° (30 pasos por vuelta), como un VFO con
+		   «clics». Funciona con ratón y dedo (ángulo alrededor del centro), con la rueda y con flechas. */
+		var giro=null, perilla=$('rx-perilla');
+		function anguloDe(e){ var r=perilla.getBoundingClientRect(); return Math.atan2(e.clientY-(r.top+r.height/2), e.clientX-(r.left+r.width/2))*180/Math.PI; }
+		function girar(pasos){ st.perilla+=pasos*12; perilla.style.setProperty('--giro', st.perilla+'deg'); sintonizar(Math.round((redondear(st.freq)+pasos*st.paso)*100)/100, null, false); }
+		perilla.addEventListener('pointerdown', function(e){ e.preventDefault(); giro={a:anguloDe(e), resto:0}; try { perilla.setPointerCapture(e.pointerId); } catch(err){} perilla.classList.add('is-girando'); });
+		perilla.addEventListener('pointermove', function(e){
+			if(!giro) return; var a=anguloDe(e), d=a-giro.a; if(d>180) d-=360; if(d<-180) d+=360; giro.a=a; giro.resto+=d;
+			var n=Math.trunc(giro.resto/12); if(n){ giro.resto-=n*12; girar(n); }
+		});
+		['pointerup','pointercancel'].forEach(function(ev){ perilla.addEventListener(ev, function(){ giro=null; perilla.classList.remove('is-girando'); }); });
+		perilla.addEventListener('wheel', function(e){ e.preventDefault(); girar(e.deltaY<0?1:-1); }, {passive:false});
+		perilla.addEventListener('keydown', function(e){ var k={ArrowRight:1, ArrowUp:1, ArrowLeft:-1, ArrowDown:-1, PageUp:10, PageDown:-10}[e.key]; if(!k) return; e.preventDefault(); e.stopPropagation(); girar(k); });
 
 		/* Dígitos: tocar la mitad de arriba sube, la de abajo baja; rueda encima; en pantalla táctil,
 		   deslizar el dedo hacia arriba o abajo sobre el dígito. */
@@ -797,24 +845,24 @@ function rau_receptor_kiwi( $args = array() ) {
 		});
 		$('rx-zoom-mas').addEventListener('click', function(){ zoomA(st.zoom+1); guardar(); });
 		$('rx-zoom-menos').addEventListener('click', function(){ zoomA(st.zoom-1); guardar(); });
-		$('rx-filtro-sel').value=st.filtro; $('rx-filtro-sel').addEventListener('change', function(){ st.filtro=+this.value; enviarModo(); marcas(); guardar(); });
+		$('rx-filtro-sel').value=st.filtro; $('rx-filtro-sel').addEventListener('change', function(){ st.filtro=+this.value; enviarModo(); marcas(); guardar(); pintarFreq(); });
 		$('rx-pasos').addEventListener('click', function(e){ var x=e.target.closest('.rx-paso-op'); if(!x) return; st.paso=+x.dataset.v; guardar(); pintarFreq(); });
 		$('rx-paleta').value=st.paleta; $('rx-paleta').addEventListener('change', function(){ st.paleta=this.value; construirLut(); limpiarCascada(); dibujarEspectro(); guardar(); });
 		$('rx-contraste').value=st.contraste; $('rx-contraste-v').textContent=st.contraste+' dB';
 		$('rx-contraste').addEventListener('input', function(){ st.contraste=+this.value; $('rx-contraste-v').textContent=st.contraste+' dB'; guardar(); });
 		$('rx-sq').addEventListener('input', function(){
 			st.sq=+this.value; $('rx-sq-v').textContent=st.sq?'S'+st.sq:'apagado';
-			$('rx-sq-marca').classList.toggle('hidden', !st.sq); $('rx-sq-marca').style.left=(6*st.sq/94*100)+'%';
+			$('rx-sq-marca').classList.toggle('hidden', !st.sq); $('rx-sq-marca').style.left=(6*st.sq/114*100)+'%';
 			if(!st.sq){ st.sqAbierto=true; volumen(); }
 		});
 		$('rx-vol').addEventListener('input', volumen);
-		$('rx-agc').addEventListener('change', function(){ st.agc=this.checked; agc(); });
+		$('rx-agc').addEventListener('change', function(){ st.agc=this.checked; agc(); pintarFreq(); });
 		$('rx-mute').addEventListener('click', function(){ st.mute=!st.mute; this.textContent=st.mute?'🔇':'🔊'; this.setAttribute('aria-pressed', st.mute); volumen(); });
 		$('rx-rec').addEventListener('click', function(){
 			if(st.grab){ pararGrabacion(); msg('Grabación guardada en tus descargas.'); return; }
 			if(!st.on){ msg('Primero pulsa «Escuchar»; luego graba.'); return; }
 			st.grab={partes:[], n:0, freq:st.freq, modo:st.modo, inicio:Date.now()};
-			this.textContent='■ Parar grabación'; this.setAttribute('aria-pressed','true'); this.classList.add('text-rose-400');
+			this.textContent='■ Parar grabación'; this.setAttribute('aria-pressed','true'); this.classList.add('text-rose-400'); $('rx-ind-rec').classList.add('is-on');
 			msg('Grabando '+st.freq.toFixed(2)+' kHz. Pulsa «Parar grabación» para descargar el WAV.');
 		});
 		$('rx-share').addEventListener('click', function(){
