@@ -40,16 +40,16 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 	<!-- ── TABS ─────────────────────────────────────────────── -->
 	<div id="rau-tools">
 
-	<div id="rau-tour-banner" class="mb-4 hidden items-start justify-between gap-4 rounded-xl border-2 border-primary/40 bg-primary/5 p-4">
+	<div id="rau-tour-banner" class="rau-solo-consola mb-4 hidden items-start justify-between gap-4 rounded-xl border-2 border-primary/40 bg-primary/5 p-4">
 			<div>
 				<p class="font-display text-sm font-bold">👋 ¿Primera vez aquí?</p>
-				<p class="mt-1 text-sm text-muted-foreground">Elige un modo de trabajo abajo para varias herramientas conectadas a la vez, o busca directo entre las <strong><?php echo count( $tabs ); ?> herramientas</strong> individuales más abajo.</p>
+				<p class="mt-1 text-sm text-muted-foreground">Esto es un centro de mando: en el medio, el receptor del club en vivo; a la izquierda, cómo están las condiciones; a la derecha, tu bitácora. Cambia de banda en cualquier parte y todo se ajusta. Las <strong><?php echo count( $tabs ); ?> herramientas</strong> están en «Catálogo» y en el buscador.</p>
 			</div>
 			<button id="rau-tour-cerrar" type="button" class="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium">Entendido</button>
 		</div>
 
 	<!-- CONSOLA RAU — CENTRO DE MANDO -->
-	<div class="rau-consola mb-8 overflow-hidden rounded-2xl border-2 border-primary/40 bg-[#050914] shadow-[0_0_40px_-12px_hsl(var(--primary)/0.3)]">
+	<div id="rau-consola" class="rau-consola mb-8 overflow-hidden rounded-2xl border-2 border-primary/40 bg-[#050914] shadow-[0_0_40px_-12px_hsl(var(--primary)/0.3)]">
 
 		<!-- Franja superior: reloj + estado, siempre visible -->
 		<div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-primary/20 bg-black/40 px-4 py-2.5 sm:px-5">
@@ -61,9 +61,11 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<span id="consola-local" class="tabular-nums text-muted-foreground">--:--:--</span>
 				<span class="text-muted-foreground">local</span>
 			</div>
-			<div class="flex items-center gap-4 font-mono text-xs text-muted-foreground">
+			<div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
 				<span>Mejor banda ahora: <strong id="consola-mejor-banda" class="text-primary">—</strong></span>
 				<span id="consola-proximo-evento">Próximo: calculando…</span>
+				<button type="button" id="consola-rx-chip" class="rounded-full border border-border/70 px-2 py-0.5 hover:border-primary/40 hover:text-primary">🎧 Receptor: …</button>
+				<button type="button" id="consola-estacion-chip" class="rounded-full border border-border/70 px-2 py-0.5 hover:border-primary/40 hover:text-primary">⚙ Mi estación</button>
 			</div>
 		</div>
 
@@ -72,7 +74,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 			<span id="consola-alerta-storm-texto">Tormenta geomagnética en curso — HF puede estar muy afectado. Prioriza 40m/80m.</span>
 		</div>
 
-		<div class="border-b border-primary/20 bg-black/30 px-4 py-3 sm:px-5">
+		<div class="rau-solo-consola border-b border-primary/20 bg-black/30 px-4 py-3 sm:px-5">
 			<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📻 Radio Now</p>
 			<?php
 			$rau_rn_rep = rau_get_repetidor_principal();
@@ -93,12 +95,43 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 			</div>
 		</div>
 
-		<!-- 3 COLUMNAS estilo HamClock: izquierda (clima espacial + satélites), centro (mapa), derecha (comunidad) -->
-		<div class="grid grid-cols-1 gap-4 p-3 sm:p-4 lg:grid-cols-12">
+		<?php // Centro de mando (19.46.0): el receptor del club en el centro y todo lo demás conectado a
+		      // su frecuencia. Izquierda: mirar (condiciones, clima espacial, satélites, redes digitales).
+		      // Centro: escuchar (receptor, estaciones en la banda, mapa). Derecha: operar (mi estación,
+		      // bitácora, frecuencias, notas, comunidad). En celular las tres columnas son pestañas. ?>
+		<div id="consola-columnas" class="rau-solo-consola grid grid-cols-1 gap-4 p-3 sm:p-4 lg:grid-cols-12" data-pestana="escuchar">
 
-			<!-- ══ CENTRO: EL MAPA (DOM primero = prioridad en móvil) ══ -->
-			<div class="lg:order-2 lg:col-span-6">
-				<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📡 Mapa y propagación</p>
+			<!-- ══ CENTRO: ESCUCHAR (DOM primero = prioridad en móvil) ══ -->
+			<div class="rau-col space-y-5 lg:order-2 lg:col-span-6" data-col="escuchar">
+				<div>
+					<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+						<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🎧 Receptor HK4RAU · en vivo desde Medellín</p>
+						<a href="<?php echo esc_url( home_url( '/herramientas/receptor/' ) ); ?>" id="consola-rx-completo" class="font-mono text-[10px] text-muted-foreground hover:text-primary">Pantalla completa ↗</a>
+					</div>
+					<div id="consola-receptor-slot"></div>
+				</div>
+
+				<div id="consola-banda">
+					<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+						<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📶 Estaciones en <span id="consola-banda-nombre">la banda</span></p>
+						<div class="flex flex-wrap items-center gap-1.5 font-mono text-[10px]">
+							<div class="inline-flex overflow-hidden rounded-md border border-border/70" role="group" aria-label="Qué estaciones mostrar">
+								<button type="button" data-filtro="banda" class="rau-banda-filtro is-active px-2 py-1">Esta banda</button>
+								<button type="button" data-filtro="todas" class="rau-banda-filtro border-l border-border/70 px-2 py-1">Todas</button>
+							</div>
+							<label class="flex items-center gap-1 text-muted-foreground"><input type="checkbox" id="consola-banda-dx" checked class="accent-primary"> <span class="text-amber-400">▼</span> Cluster DX</label>
+							<label class="flex items-center gap-1 text-muted-foreground"><input type="checkbox" id="consola-banda-pota" checked class="accent-primary"> <span class="text-emerald-400">▼</span> POTA</label>
+						</div>
+					</div>
+					<div class="rounded-xl border border-border/70 bg-card p-2.5">
+						<div id="consola-banda-conteo" class="mb-2 grid grid-cols-8 gap-1" aria-label="Estaciones reportadas por banda"></div>
+						<div id="consola-banda-lista" class="max-h-96 space-y-1 overflow-y-auto font-mono text-[11px] text-muted-foreground">Cargando estaciones…</div>
+						<p class="mt-2 text-[10px] text-muted-foreground">🎧 la sintoniza en el receptor · 📝 la pasa a la bitácora · 📏 la ubica en el mapa. Las marcas ▼ también aparecen sobre la cascada.</p>
+					</div>
+				</div>
+
+				<div id="consola-mapa-bloque">
+					<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📡 Mapa y propagación</p>
 				<div id="consola-estado-bandas" class="mb-1 grid grid-cols-4 gap-1 sm:grid-cols-8">
 					<div class="rau-banda-tile cursor-pointer rounded-md border border-border/70 bg-card px-1 py-1 text-center hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring" data-banda="80m" role="button" tabindex="0" aria-label="Ver por qué la banda 80m tiene este estado"><span class="block font-mono text-[9px] text-muted-foreground">80m</span><span class="block text-sm">⚪</span></div>
 					<div class="rau-banda-tile cursor-pointer rounded-md border border-border/70 bg-card px-1 py-1 text-center hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring" data-banda="40m" role="button" tabindex="0" aria-label="Ver por qué la banda 40m tiene este estado"><span class="block font-mono text-[9px] text-muted-foreground">40m</span><span class="block text-sm">⚪</span></div>
@@ -153,7 +186,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<p class="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Haz clic en cualquier punto para estimar la propagación desde tu QTH</p>
 				<?php // Más alto que las 24rem originales: el mapa terminaba mucho antes que las columnas
 				      // laterales y dejaba un hueco central grande. ?>
-				<div id="consola-mapa" class="h-72 w-full overflow-hidden rounded-xl sm:h-[34rem]"></div>
+				<div id="consola-mapa" class="h-72 w-full overflow-hidden rounded-xl sm:h-[26rem]"></div>
 				<div id="mapa-clic-panel" class="mt-2 hidden rounded-xl border border-primary/30 bg-primary/5 p-3 font-mono text-xs"></div>
 				<div id="mapa-prevision-24h" class="mt-2 hidden rounded-xl border border-border/70 bg-card p-3">
 					<p class="mb-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Próximas 24 horas hacia este punto</p>
@@ -166,10 +199,11 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 				<p id="mapa-clima-qth" class="mt-2 font-mono text-[11px] text-muted-foreground">Clima en tu QTH: cargando…</p>
 				<p id="mapa-sol-qth-hoy" class="font-mono text-[11px] text-muted-foreground">☀ Hoy en tu QTH: calculando…</p>
+				</div>
 			</div>
 
-			<!-- ══ IZQUIERDA: DATOS EN VIVO + SATÉLITES ══ -->
-			<div class="space-y-4 lg:order-1 lg:col-span-3">
+			<!-- ══ IZQUIERDA: MIRAR ══ -->
+			<div class="rau-col space-y-4 lg:order-1 lg:col-span-3" data-col="mirar">
 				<div>
 					<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📊 Estado en vivo</p>
 					<div class="grid grid-cols-5 gap-1 font-mono">
@@ -184,6 +218,53 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<a href="<?php echo esc_url( home_url( '/herramientas/ciclosolar/' ) ); ?>" class="rounded border border-border/70 bg-background px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground hover:border-primary/40 hover:text-primary">Ciclo Solar</a>
 					</div>
 				</div>
+				<div>
+					<div class="mb-2 flex items-center justify-between">
+						<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">☀️ Clima espacial</p>
+						<span id="consola-impacto-radio" class="font-mono text-[10px] text-muted-foreground">Calculando…</span>
+					</div>
+					<div class="space-y-2.5">
+						<div class="rounded-xl border border-border/70 border-l-2 border-l-amber-400/60 bg-card p-2.5 shadow-sm">
+							<div class="flex items-center gap-2.5">
+								<img id="sol-vivo-img" src="" alt="Imagen del Sol en vivo (NASA SDO)" class="h-12 w-12 shrink-0 rounded-full border border-border object-cover" loading="lazy">
+								<div class="min-w-0">
+									<p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Sol en vivo</p>
+									<p class="truncate text-[9px] text-muted-foreground">NASA SDO · cada 15 min</p>
+								</div>
+							</div>
+							<div class="mt-1.5 flex gap-1">
+								<button type="button" data-canal="hmiif" class="rau-sol-canal is-active rounded px-1.5 py-0.5 font-mono text-[9px] uppercase text-muted-foreground hover:text-primary">Visible</button>
+								<button type="button" data-canal="0193" class="rau-sol-canal rounded px-1.5 py-0.5 font-mono text-[9px] uppercase text-muted-foreground hover:text-primary">AIA 193</button>
+								<button type="button" data-canal="0304" class="rau-sol-canal rounded px-1.5 py-0.5 font-mono text-[9px] uppercase text-muted-foreground hover:text-primary">AIA 304</button>
+							</div>
+						</div>
+
+						<div class="flex items-center gap-2.5 rounded-xl border border-border/70 border-l-2 border-l-violet-400/60 bg-card p-2.5 shadow-sm">
+							<img id="aurora-img" src="" alt="Pronóstico de aurora (NOAA OVATION)" class="h-12 w-16 shrink-0 rounded-lg border border-border object-cover" loading="lazy">
+							<div class="min-w-0">
+								<p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Aurora</p>
+								<p class="text-[9px] leading-tight text-muted-foreground">NOAA OVATION — actividad geomagnética</p>
+							</div>
+						</div>
+
+						<div class="flex items-center gap-2.5 rounded-xl border border-border/70 border-l-2 border-l-slate-400/60 bg-card p-2.5 shadow-sm">
+							<span id="consola-luna-icono" class="shrink-0 text-3xl">🌑</span>
+							<div class="min-w-0">
+								<p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Luna</p>
+								<p class="truncate font-mono text-xs font-bold text-foreground"><span id="consola-luna-nombre">Calculando…</span> <span class="font-normal text-muted-foreground">· <span id="consola-luna-ilum">—</span>%</span></p>
+								<p class="truncate text-[9px] text-muted-foreground" id="consola-luna-posicion">Calculando…</p>
+								<a href="<?php echo esc_url( home_url( '/herramientas/luna/' ) ); ?>" class="text-[9px] text-primary hover:underline">Ver detalle EME →</a>
+							</div>
+						</div>
+
+						<div class="rounded-xl border border-border/70 border-l-2 border-l-primary/60 bg-card p-2.5 shadow-sm">
+							<p class="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Tendencia SFI</p>
+							<svg id="consola-tendencia-svg" viewBox="0 0 280 50" class="h-8 w-full"></svg>
+							<p class="mt-0.5 truncate text-[9px] text-muted-foreground" id="consola-tendencia-texto">Cargando…</p>
+						</div>
+					</div>
+				</div>
+
 				<div class="rounded-xl border border-border/70 bg-card p-2.5">
 					<div class="mb-1.5 flex items-center justify-between">
 						<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">🛰 Satélites</p>
@@ -249,13 +330,6 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 
 				<div>
-					<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📶 DX Spots en vivo</p>
-					<div class="rounded-xl border border-border/70 bg-card p-2.5">
-						<div id="consola-dx-spots" class="space-y-1 font-mono text-[10px] text-muted-foreground">Cargando…</div>
-					</div>
-				</div>
-
-				<div>
 					<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📻 DMR Colombia en vivo (BrandMeister)</p>
 					<div class="rounded-xl border border-border/70 bg-card p-2.5">
 						<div id="consola-bm-lastheard" class="space-y-1 font-mono text-[10px] text-muted-foreground">Conectando…</div>
@@ -275,61 +349,79 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<div id="consola-dstar-lista" class="space-y-1 font-mono text-[10px] text-muted-foreground">Cargando…</div>
 					</div>
 				</div>
-			
+			</div>
 
-					
-
-					
-
+			<!-- ══ DERECHA: OPERAR ══ -->
+			<div class="rau-col space-y-4 lg:order-3 lg:col-span-3" data-col="operar">
+				<div id="consola-estacion" class="rounded-xl border border-primary/30 bg-card p-2.5">
+					<div class="mb-1.5 flex items-center justify-between gap-2">
+						<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">⚙ Mi estación</p>
+						<button type="button" id="estacion-editar" class="font-mono text-[10px] text-primary hover:underline" aria-expanded="false" aria-controls="estacion-form">Configurar</button>
+					</div>
+					<p id="estacion-resumen" class="font-mono text-[11px] text-muted-foreground">Configúrala una vez: tu indicativo y tu locator llenan la bitácora, la QSL, el certificado y las distancias a cada estación.</p>
+					<div id="estacion-form" class="mt-2 hidden">
+						<div class="grid grid-cols-2 gap-1">
+							<input aria-label="Mi indicativo" type="text" id="estacion-indicativo" placeholder="Indicativo" maxlength="12" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] uppercase focus:outline-none focus:ring-1 focus:ring-ring">
+							<input aria-label="Mi locator (grid)" type="text" id="estacion-locator" placeholder="Locator FJ26" maxlength="8" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] uppercase focus:outline-none focus:ring-1 focus:ring-ring">
+							<input aria-label="Potencia en vatios" type="number" id="estacion-potencia" placeholder="Vatios" min="0" max="2000" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
+							<input aria-label="Antena" type="text" id="estacion-antena" placeholder="Antena" maxlength="30" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
+						</div>
+						<button type="button" id="estacion-guardar" class="mt-1.5 w-full rounded-md border border-primary/40 bg-primary/10 py-1 font-mono text-[11px] font-bold text-primary hover:bg-primary/20">Guardar en este navegador</button>
+						<p id="estacion-estado" role="status" aria-live="polite" class="mt-1 font-mono text-[10px] text-muted-foreground"></p>
+					</div>
 				</div>
 
-			<!-- ══ DERECHA: CLIMA ESPACIAL + COMUNIDAD ══ -->
-			<div class="space-y-4 lg:order-3 lg:col-span-3">
-				<div>
-					<div class="mb-2 flex items-center justify-between">
-						<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">☀️ Clima espacial</p>
-						<span id="consola-impacto-radio" class="font-mono text-[10px] text-muted-foreground">Calculando…</span>
+					<div class="rounded-xl border border-border/70 bg-card p-2.5">
+					<div class="mb-1.5 flex items-center justify-between">
+						<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📝 Bitácora rápida</p>
+						<span class="font-mono text-[10px] text-primary">hoy: <strong id="bitacora-contador-hoy">0</strong></span>
 					</div>
-					<div class="space-y-2.5">
-						<div class="rounded-xl border border-border/70 border-l-2 border-l-amber-400/60 bg-card p-2.5 shadow-sm">
-							<div class="flex items-center gap-2.5">
-								<img id="sol-vivo-img" src="" alt="Imagen del Sol en vivo (NASA SDO)" class="h-12 w-12 shrink-0 rounded-full border border-border object-cover" loading="lazy">
-								<div class="min-w-0">
-									<p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Sol en vivo</p>
-									<p class="truncate text-[9px] text-muted-foreground">NASA SDO · cada 15 min</p>
-								</div>
-							</div>
-							<div class="mt-1.5 flex gap-1">
-								<button type="button" data-canal="hmiif" class="rau-sol-canal is-active rounded px-1.5 py-0.5 font-mono text-[9px] uppercase text-muted-foreground hover:text-primary">Visible</button>
-								<button type="button" data-canal="0193" class="rau-sol-canal rounded px-1.5 py-0.5 font-mono text-[9px] uppercase text-muted-foreground hover:text-primary">AIA 193</button>
-								<button type="button" data-canal="0304" class="rau-sol-canal rounded px-1.5 py-0.5 font-mono text-[9px] uppercase text-muted-foreground hover:text-primary">AIA 304</button>
-							</div>
-						</div>
-
-						<div class="flex items-center gap-2.5 rounded-xl border border-border/70 border-l-2 border-l-violet-400/60 bg-card p-2.5 shadow-sm">
-							<img id="aurora-img" src="" alt="Pronóstico de aurora (NOAA OVATION)" class="h-12 w-16 shrink-0 rounded-lg border border-border object-cover" loading="lazy">
-							<div class="min-w-0">
-								<p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Aurora</p>
-								<p class="text-[9px] leading-tight text-muted-foreground">NOAA OVATION — actividad geomagnética</p>
-							</div>
-						</div>
-
-						<div class="flex items-center gap-2.5 rounded-xl border border-border/70 border-l-2 border-l-slate-400/60 bg-card p-2.5 shadow-sm">
-							<span id="consola-luna-icono" class="shrink-0 text-3xl">🌑</span>
-							<div class="min-w-0">
-								<p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Luna</p>
-								<p class="truncate font-mono text-xs font-bold text-foreground"><span id="consola-luna-nombre">Calculando…</span> <span class="font-normal text-muted-foreground">· <span id="consola-luna-ilum">—</span>%</span></p>
-								<p class="truncate text-[9px] text-muted-foreground" id="consola-luna-posicion">Calculando…</p>
-								<a href="<?php echo esc_url( home_url( '/herramientas/luna/' ) ); ?>" class="text-[9px] text-primary hover:underline">Ver detalle EME →</a>
-							</div>
-						</div>
-
-						<div class="rounded-xl border border-border/70 border-l-2 border-l-primary/60 bg-card p-2.5 shadow-sm">
-							<p class="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-foreground/80">Tendencia SFI</p>
-							<svg id="consola-tendencia-svg" viewBox="0 0 280 50" class="h-8 w-full"></svg>
-							<p class="mt-0.5 truncate text-[9px] text-muted-foreground" id="consola-tendencia-texto">Cargando…</p>
-						</div>
+					<div class="grid grid-cols-2 gap-1">
+						<input aria-label="Indicativo" type="text" id="bitacora-indicativo" placeholder="Indicativo" maxlength="12" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] uppercase focus:outline-none focus:ring-1 focus:ring-ring">
+						<input aria-label="MHz" type="text" id="bitacora-freq" placeholder="MHz" maxlength="10" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
+						<select id="bitacora-modo" aria-label="Modo de la comunicación" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
+							<option>SSB</option><option>CW</option><option>FM</option><option>FT8</option><option>FT4</option><option>RTTY</option><option>PSK31</option>
+						</select>
+						<input aria-label="RST" type="text" id="bitacora-rst" placeholder="RST" maxlength="6" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
 					</div>
+					<button type="button" id="bitacora-guardar" class="mt-1.5 w-full rounded-md border border-primary/40 bg-primary/10 py-1 font-mono text-[11px] font-bold text-primary hover:bg-primary/20">+ Registrar QSO</button>
+					<div id="bitacora-confirmacion" role="status" aria-live="polite" class="hidden mt-1.5 rounded-md border border-emerald-400/40 bg-emerald-400/10 p-2 text-center font-mono text-[11px] text-emerald-400"></div>
+					<div id="bitacora-lista" class="mt-2 max-h-32 space-y-1 overflow-y-auto font-mono text-[10px] text-muted-foreground"></div>
+					<p class="mt-1.5 text-[9px] text-muted-foreground">Guardado solo en este navegador — para tu log oficial usa <a href="<?php echo esc_url( home_url( '/herramientas/log/' ) ); ?>" class="text-primary hover:underline">Log ADIF</a> <span id="consola-logadif-conteo"></span>.</p>
+				</div>
+
+				<div class="rounded-xl border border-border/70 bg-card p-2.5">
+					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📻 Frecuencias rápidas <span class="normal-case text-muted-foreground">(clic para copiar)</span></p>
+					<div class="space-y-1 font-mono text-[11px]">
+						<div class="flex justify-between"><span class="text-muted-foreground">VHF FM llamada</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="146.520">146.520</button></div>
+						<?php $rau_rep_principal = rau_get_repetidor_principal(); ?>
+						<div class="flex justify-between"><span class="text-muted-foreground">Repetidora RAU</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="<?php echo esc_attr( $rau_rep_principal['frequency'] ); ?>"><?php echo esc_html( $rau_rep_principal['frequency'] ); ?></button></div>
+						<div class="flex justify-between"><span class="text-muted-foreground">FT8 20m</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="14.074">14.074</button></div>
+						<div class="flex justify-between"><span class="text-muted-foreground">FT8 40m</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="7.074">7.074</button></div>
+						<div class="flex justify-between"><span class="text-muted-foreground">QRP CW 40m</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="7.030">7.030</button></div>
+					</div>
+				</div>
+
+				<?php $rau_rep_red = rau_get_repetidor_principal(); ?>
+				<div class="rounded-xl border border-border/70 bg-card p-2.5">
+					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">🗒 Notas rápidas</p>
+					<textarea aria-label="Recordatorios de esta sesión" id="consola-notas" rows="3" placeholder="Recordatorios de esta sesión…" class="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"></textarea>
+					<p class="mt-1 text-[9px] text-muted-foreground">Se guarda solo en este navegador, se borra si limpias el caché.</p>
+				</div>
+
+					<div class="rounded-xl border border-border/70 bg-card p-2.5">
+					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📡 Estado de la red</p>
+					<?php
+					$estado_iconos = [ 'activo' => '🟢', 'intermitente' => '🟡', 'mantenimiento' => '🔵', 'fuera de servicio' => '🔴' ];
+					$estado_actual = $rau_rep_red['status'] ?? 'activo';
+					$estado_normalizado = strtolower( str_replace( '_', ' ', trim( $estado_actual ) ) );
+					$estado_icono = $estado_iconos[ $estado_normalizado ] ?? '⚪';
+					?>
+					<div class="flex items-center justify-between">
+						<span class="font-mono text-xs font-bold"><?php echo esc_html( $rau_rep_red['callsign'] ?? 'HK4RAU' ); ?></span>
+						<span class="font-mono text-[10px]"><?php echo esc_html( $estado_icono ); ?> <?php echo esc_html( ucfirst( str_replace( '_', ' ', $estado_actual ) ) ); ?></span>
+					</div>
+					<p class="mt-0.5 text-[9px] text-muted-foreground"><?php echo esc_html( $rau_rep_red['frequency'] ?? '—' ); ?> MHz · <?php echo esc_html( $rau_rep_red['location'] ?? '—' ); ?></p>
 				</div>
 
 				<div>
@@ -358,72 +450,15 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						</div>
 					</div>
 				</div>
-			
-
-					<?php // Herramientas personales. Estaban al final de la columna izquierda, que
-					      // acumulaba 14 paneles frente a 7 de la derecha: la izquierda estiraba la
-					      // rejilla y las otras dos columnas quedaban con un hueco enorme debajo.
-					      // Además encajan mejor aquí, junto a Mi Progreso y Comunidad RAU, que son
-					      // también del ámbito "lo mío", y no entre los paneles de datos en vivo. ?>
-
-				<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📻 Frecuencias rápidas <span class="normal-case text-muted-foreground">(clic para copiar)</span></p>
-					<div class="space-y-1 font-mono text-[11px]">
-						<div class="flex justify-between"><span class="text-muted-foreground">VHF FM llamada</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="146.520">146.520</button></div>
-						<?php $rau_rep_principal = rau_get_repetidor_principal(); ?>
-						<div class="flex justify-between"><span class="text-muted-foreground">Repetidora RAU</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="<?php echo esc_attr( $rau_rep_principal['frequency'] ); ?>"><?php echo esc_html( $rau_rep_principal['frequency'] ); ?></button></div>
-						<div class="flex justify-between"><span class="text-muted-foreground">FT8 20m</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="14.074">14.074</button></div>
-						<div class="flex justify-between"><span class="text-muted-foreground">FT8 40m</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="7.074">7.074</button></div>
-						<div class="flex justify-between"><span class="text-muted-foreground">QRP CW 40m</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="7.030">7.030</button></div>
-					</div>
-				</div>
-
-					<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<div class="mb-1.5 flex items-center justify-between">
-						<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📝 Bitácora rápida</p>
-						<span class="font-mono text-[10px] text-primary">hoy: <strong id="bitacora-contador-hoy">0</strong></span>
-					</div>
-					<div class="grid grid-cols-2 gap-1">
-						<input aria-label="Indicativo" type="text" id="bitacora-indicativo" placeholder="Indicativo" maxlength="12" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] uppercase focus:outline-none focus:ring-1 focus:ring-ring">
-						<input aria-label="MHz" type="text" id="bitacora-freq" placeholder="MHz" maxlength="10" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
-						<select id="bitacora-modo" aria-label="Modo de la comunicación" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
-							<option>SSB</option><option>CW</option><option>FM</option><option>FT8</option><option>FT4</option><option>RTTY</option><option>PSK31</option>
-						</select>
-						<input aria-label="RST" type="text" id="bitacora-rst" placeholder="RST" maxlength="6" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
-					</div>
-					<button type="button" id="bitacora-guardar" class="mt-1.5 w-full rounded-md border border-primary/40 bg-primary/10 py-1 font-mono text-[11px] font-bold text-primary hover:bg-primary/20">+ Registrar QSO</button>
-					<div id="bitacora-confirmacion" role="status" aria-live="polite" class="hidden mt-1.5 rounded-md border border-emerald-400/40 bg-emerald-400/10 p-2 text-center font-mono text-[11px] text-emerald-400"></div>
-					<div id="bitacora-lista" class="mt-2 max-h-32 space-y-1 overflow-y-auto font-mono text-[10px] text-muted-foreground"></div>
-					<p class="mt-1.5 text-[9px] text-muted-foreground">Guardado solo en este navegador — para tu log oficial usa <a href="<?php echo esc_url( home_url( '/herramientas/log/' ) ); ?>" class="text-primary hover:underline">Log ADIF</a> <span id="consola-logadif-conteo"></span>.</p>
-				</div>
-
-				
-
-				
-
-				<?php $rau_rep_red = rau_get_repetidor_principal(); ?>
-				<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">🗒 Notas rápidas</p>
-					<textarea aria-label="Recordatorios de esta sesión" id="consola-notas" rows="3" placeholder="Recordatorios de esta sesión…" class="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"></textarea>
-					<p class="mt-1 text-[9px] text-muted-foreground">Se guarda solo en este navegador, se borra si limpias el caché.</p>
-				</div>
-
-					<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📡 Estado de la red</p>
-					<?php
-					$estado_iconos = [ 'activo' => '🟢', 'intermitente' => '🟡', 'mantenimiento' => '🔵', 'fuera de servicio' => '🔴' ];
-					$estado_actual = $rau_rep_red['status'] ?? 'activo';
-					$estado_normalizado = strtolower( str_replace( '_', ' ', trim( $estado_actual ) ) );
-					$estado_icono = $estado_iconos[ $estado_normalizado ] ?? '⚪';
-					?>
-					<div class="flex items-center justify-between">
-						<span class="font-mono text-xs font-bold"><?php echo esc_html( $rau_rep_red['callsign'] ?? 'HK4RAU' ); ?></span>
-						<span class="font-mono text-[10px]"><?php echo esc_html( $estado_icono ); ?> <?php echo esc_html( ucfirst( str_replace( '_', ' ', $estado_actual ) ) ); ?></span>
-					</div>
-					<p class="mt-0.5 text-[9px] text-muted-foreground"><?php echo esc_html( $rau_rep_red['frequency'] ?? '—' ); ?> MHz · <?php echo esc_html( $rau_rep_red['location'] ?? '—' ); ?></p>
-				</div>
-</div>
+			</div>
 		</div>
+
+		<nav id="consola-pestanas" class="rau-solo-consola" aria-label="Secciones del centro de mando">
+			<button type="button" data-ir="escuchar" class="is-active"><span aria-hidden="true">🎧</span>Escuchar</button>
+			<button type="button" data-ir="mirar"><span aria-hidden="true">🌍</span>Mirar</button>
+			<button type="button" data-ir="operar"><span aria-hidden="true">📝</span>Operar</button>
+			<button type="button" data-ir="explorar"><span aria-hidden="true">🧰</span>Explorar</button>
+		</nav>
 
 		<!-- MI ESPACIO DE TRABAJO: pestañas fijadas por el usuario, siempre visibles -->
 		<div id="consola-fijados-wrap" class="hidden flex-wrap items-center gap-1.5 border-b border-primary/20 bg-black/30 px-3 py-2 sm:px-4">
@@ -621,7 +656,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 
 		</div>
 	</div>
-		<div class="mb-8 rounded-2xl border border-border/60 bg-card/40 p-4 sm:p-5">
+		<div id="rau-explorar" class="mb-8 rounded-2xl border border-border/60 bg-card/40 p-4 sm:p-5">
 			<div class="relative mb-5">
 				<svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="M21 21l-4.35-4.35"></path></svg>
 				<input aria-label="Buscar una herramienta" type="search" id="rau-tool-search" autocomplete="off" placeholder="Buscar una herramienta…"
@@ -697,9 +732,12 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 		<!-- DASHBOARD DE LA CATEGORÍA ABIERTA -->
 		<div id="rau-cat-dashboard" class="mt-6 hidden">
 			<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-				<button type="button" id="rau-cat-back" class="inline-flex items-center gap-1.5 font-mono text-sm font-bold text-primary hover:underline">
-					← Todas las categorías
-				</button>
+				<div class="flex flex-wrap items-center gap-3">
+					<button type="button" id="rau-volver-consola" class="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 font-mono text-sm font-bold text-primary hover:bg-primary/20">◉ Centro de mando</button>
+					<button type="button" id="rau-cat-back" class="inline-flex items-center gap-1.5 font-mono text-sm font-bold text-primary hover:underline">
+						← Todas las categorías
+					</button>
+				</div>
 				<div id="rau-cat-jumps" class="flex flex-wrap gap-2"></div>
 			</div>
 			<div id="rau-cat-panels" class="space-y-8"></div>
@@ -2106,9 +2144,9 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 			<div class="mb-4">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Receptor SDR · Medellín</p>
 				<h2 class="font-display text-2xl font-bold">KiwiSDR HK4RAU</h2>
-				<p class="mt-1 text-sm text-muted-foreground">Escucha de 0 a 30 MHz desde el receptor del club. Los botones «Escuchar» de los spots DX, POTA y «Ahora mismo» lo sintonizan aquí.</p>
+				<p class="mt-1 text-sm text-muted-foreground">Escucha de 0 a 30 MHz desde el receptor del club. Es el mismo receptor del centro de mando, en pantalla completa: si ya estabas escuchando, sigue sonando.</p>
 			</div>
-			<?php require_once get_template_directory() . '/inc/receptor-kiwi.php'; rau_receptor_kiwi(); ?>
+			<div id="panel-receptor-slot"><?php require_once get_template_directory() . '/inc/receptor-kiwi.php'; rau_receptor_kiwi(); ?></div>
 		</div>
 
 		<!-- RECORDATORIO DE LICENCIA -->

@@ -264,6 +264,57 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.46.0 — Herramientas como centro de mando
+
+La consola de `/herramientas/` se reorganizó alrededor del receptor del club, en tres columnas:
+
+- **Mirar** (izquierda): estado en vivo, clima espacial, satélites, DMR, WSPR y D-STAR.
+- **Escuchar** (centro): el receptor KiwiSDR, las estaciones en la banda y el mapa.
+- **Operar** (derecha): Mi estación, bitácora, frecuencias rápidas, notas, progreso y comunidad.
+
+**Todo sigue la frecuencia.** El receptor emite el evento `rau:frecuencia` en cada cambio:
+- la bitácora toma la frecuencia y el modo, salvo que la persona los haya escrito a mano;
+- el banco «Construir antena» calcula para esa frecuencia;
+- la banda actual se marca en el mapa;
+- la lista de estaciones se filtra a esa banda.
+
+Tocar una banda del mapa o del conteo sintoniza el receptor.
+
+**Estaciones en la banda.** Reemplaza «DX Spots en vivo». Junta el cluster DX y POTA. Cada estación
+muestra país o parque, distancia y rumbo desde Mi QTH, y antigüedad, con tres botones:
+🎧 la sintoniza, 📝 la pasa a la bitácora y 📏 la ubica en el mapa. Un conteo por banda muestra
+dónde hay movimiento.
+
+**Estaciones sobre la cascada.** Una franja nueva dibuja las marcas ▼ en su frecuencia: ámbar las del
+cluster, verdes las de POTA. Tocar una la sintoniza. Sin conexión, la pantalla igual muestra la banda
+con su plan, su escala y las estaciones. Si el receptor está lleno, el botón «Avísame cuando haya
+canal» revisa cada 30 s y avisa con un tono, una notificación y el título de la pestaña.
+
+**Una herramienta por dirección.** `/herramientas/ahora/` muestra solo «Ahora mismo». La consola se
+pliega y quedan accesos a las demás de la categoría y el botón «◉ Centro de mando». En celular,
+`/herramientas/ahora/` medía 14.500 px. Ahora `/herramientas/qsl/` mide 1.745 px en computador.
+El receptor es uno solo: pasa del centro de la consola al panel «Receptor KiwiSDR» y vuelve sin
+cortar el audio.
+
+**Mi estación.** Se guardan indicativo, locator, potencia y antena en el navegador. El locator queda
+como Mi QTH. El indicativo llena la QSL, el certificado, PSK Reporter y RBN.
+
+**Celular.** Las tres columnas pasan a pestañas fijas abajo: Escuchar, Mirar, Operar y Explorar. En la
+consola, los ajustes avanzados del receptor van plegados.
+
+**Menos carga.** D-STAR, WSPR, BrandMeister (WebSocket), el Sol y la aurora arrancan solo cuando su
+panel se ve (`rauCuandoVisible`). Antes corrían en cada una de las 61 URLs.
+
+**Otros cambios.**
+- El encabezado fijo tapaba el comienzo de lo que se desplazaba a la vista; ahora hay `scroll-margin-top`.
+- Los rótulos FT8 y WWV del plan de bandas se montaban sobre los de novicio; ahora llevan fondo.
+
+Se probó con un receptor simulado y spots de prueba, en computador y en celular. También con el
+HK4RAU y los spots reales: 20 m dio S5 y la cascada mostró las estaciones del cluster sobre sus
+señales.
+
+---
+
 ## 19.45.0 — receptor rediseñado y dentro de Herramientas
 
 El receptor pasó a `inc/receptor-kiwi.php`. Lo usan `/receptor/` y la nueva herramienta

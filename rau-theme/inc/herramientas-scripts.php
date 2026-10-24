@@ -323,6 +323,20 @@ function rauQth(){
 	return {lat:6.2442,lng:-75.5812};
 }
 
+/* Ejecuta fn la primera vez que el elemento se ve (o está a punto de verse). Los paneles en vivo de
+   la consola (D-STAR, WSPR, BrandMeister, Sol, aurora) arrancaban en cada una de las 61 URLs de
+   herramientas aunque la consola estuviera plegada: peticiones y un WebSocket que nadie miraba. Un
+   elemento dentro de algo oculto con display:none nunca intersecta, así que espera de verdad. */
+function rauCuandoVisible(id, fn){
+	var el = typeof id==='string' ? document.getElementById(id) : id;
+	if(!el) return;
+	if(!window.IntersectionObserver){ fn(); return; }
+	var io=new IntersectionObserver(function(entradas){
+		if(entradas.some(function(e){ return e.isIntersecting; })){ io.disconnect(); fn(); }
+	}, {rootMargin:'300px'});
+	io.observe(el);
+}
+
 function rauOn(id, evento, fn){
 	var el=document.getElementById(id);
 	if(!el){
@@ -369,6 +383,12 @@ function rauFaseLunar(frac){
 			panel.classList.toggle('hidden', panel.dataset.modoPanel !== modo);
 		});
 		if(catalogo) catalogo.classList.toggle('hidden', modo!=='catalogo');
+		// Un modo de trabajo vuelve a mostrar la consola completa (si había una herramienta abierta)
+		if(modo!=='catalogo'){
+			var tools=document.getElementById('rau-tools');
+			if(tools) tools.classList.remove('rau-vista-herramienta');
+			if(typeof window.rauUbicarReceptor==='function') window.rauUbicarReceptor();
+		}
 	}
 
 	botones.forEach(function(btn, i){
@@ -466,8 +486,7 @@ function rauFaseLunar(frac){
 			actualizarSol();
 		});
 	});
-	actualizarSol();
-	setInterval(actualizarSol, 15*60*1000);
+	rauCuandoVisible(img, function(){ actualizarSol(); setInterval(actualizarSol, 15*60*1000); });
 
 	// Óvalo auroral — URL confirmada directamente en la página oficial de NOAA/SWPC
 	var imgAurora=document.getElementById('aurora-img');
@@ -475,8 +494,7 @@ function rauFaseLunar(frac){
 		function actualizarAurora(){
 			imgAurora.src='https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg?t='+Date.now();
 		}
-		actualizarAurora();
-		setInterval(actualizarAurora, 15*60*1000);
+		rauCuandoVisible(imgAurora, function(){ actualizarAurora(); setInterval(actualizarAurora, 15*60*1000); });
 	}
 })();
 
@@ -2018,7 +2036,25 @@ function rauFaseLunar(frac){
 	var jumpsEl = document.getElementById('rau-cat-jumps');
 	var storageEl = document.getElementById('rau-panel-storage');
 	var backBtn = document.getElementById('rau-cat-back');
+	var toolsEl = document.getElementById('rau-tools');
 	var satLibState = 'idle'; // idle | loading | ready
+
+	/* Centro de mando (19.46.0). Al abrir una herramienta la consola se pliega y la herramienta
+	   ocupa el centro; al volver, la consola reaparece. Hay un solo receptor en la página: vive en
+	   el centro de la consola y pasa al panel «Receptor KiwiSDR» cuando se abre esa herramienta. Moverlo
+	   no corta el audio. */
+	function vistaHerramienta(on){ if(toolsEl) toolsEl.classList.toggle('rau-vista-herramienta', !!on); }
+	function ubicarReceptor(){
+		var comp=document.getElementById('rx-componente');
+		var slotConsola=document.getElementById('consola-receptor-slot'), slotPanel=document.getElementById('panel-receptor-slot');
+		if(!comp || !slotConsola || !slotPanel) return;
+		var panel=document.getElementById('panel-receptor');
+		var enPanel=toolsEl && toolsEl.classList.contains('rau-vista-herramienta') && panel && panel.parentNode===panelsEl;
+		var destino=enPanel ? slotPanel : slotConsola;
+		if(comp.parentNode!==destino) destino.appendChild(comp);
+		comp.classList.toggle('rx-en-consola', !enPanel);
+	}
+	window.rauUbicarReceptor = ubicarReceptor;
 
 	function loadSatelliteLib(){
 		if(satLibState!=='idle') return;
@@ -2049,6 +2085,7 @@ function rauFaseLunar(frac){
 		// Devolver todos los paneles abiertos a su almacenamiento (nunca se destruyen, solo se mueven)
 		Array.prototype.slice.call(panelsEl.children).forEach(function(p){ storageEl.appendChild(p); });
 		if(!opts.skipHash) history.replaceState(null,'',BASE_URL);
+		vistaHerramienta(false); ubicarReceptor();
 	}
 
 	// Los iframes de terceros llevan data-src y se cargan la primera vez que su panel se muestra.
@@ -2067,6 +2104,16 @@ function rauFaseLunar(frac){
 		// herramienta que las incluye.
 		var catTools = TOOLS.filter(function(t){ return t.cat===catName && !t.oculta; });
 		if(!catTools.length) return false;
+		// Una herramienta por dirección: /herramientas/ahora/ muestra «Ahora mismo» y no las otras
+		// nueve de Operar (eran 14.500 px de página en un celular). Las agrupadas abren a su madre.
+		var mostrar = catTools, objetivo = opts.solo ? TOOLS_BY_ID[opts.solo] : null;
+		if(objetivo){
+			if(objetivo.oculta){
+				var madre = TOOLS.find(function(t){ return (t.incluye||[]).indexOf(objetivo.id)>-1; });
+				if(madre) objetivo = madre;
+			}
+			mostrar = [objetivo];
+		}
 
 		// El catálogo vive dentro del modo "Catálogo" de la consola. Sin pasar a ese modo, el panel
 		// se activaba dentro de un contenedor oculto: /herramientas/qsl/ abría la página y mostraba
@@ -2081,7 +2128,19 @@ function rauFaseLunar(frac){
 		// Devolver lo que estuviera mostrado antes, y traer los paneles de esta categoría
 		Array.prototype.slice.call(panelsEl.children).forEach(function(p){ storageEl.appendChild(p); });
 		jumpsEl.innerHTML='';
-		catTools.forEach(function(t, idx){
+		vistaHerramienta(true);
+		// Accesos a las demás herramientas de la categoría
+		if(catTools.length>1) catTools.forEach(function(t){
+			var pill=document.createElement('button');
+			pill.type='button';
+			var activa = objetivo && objetivo.id===t.id;
+			pill.className='inline-flex items-center rounded-lg border px-3 py-1.5 font-mono text-xs font-medium '+(activa?'border-primary/60 bg-primary/15 text-primary':'border-border/70 bg-card text-muted-foreground hover:border-primary/50 hover:text-primary');
+			if(activa) pill.setAttribute('aria-current','page');
+			pill.textContent=t.label;
+			pill.addEventListener('click', function(){ openTool(t.id); });
+			jumpsEl.appendChild(pill);
+		});
+		mostrar.forEach(function(t, idx){
 			var panel = document.getElementById('panel-'+t.id);
 			if(!panel) return;
 			panel.style.display='';
@@ -2103,18 +2162,10 @@ function rauFaseLunar(frac){
 				marcarVisible(sub);
 			});
 
-			if(catTools.length>1){
-				var pill=document.createElement('button');
-				pill.type='button';
-				pill.className='inline-flex items-center rounded-lg border border-border/70 bg-card px-3 py-1.5 font-mono text-xs font-medium text-muted-foreground hover:border-primary/50 hover:text-primary';
-				pill.textContent=t.label;
-				pill.addEventListener('click', function(){ openTool(t.id); panel.scrollIntoView({block:'start', behavior:'smooth'}); });
-				jumpsEl.appendChild(pill);
-			}
-
 			if(t.id==='satpass' || t.id==='dashboard') loadSatelliteLib();
 		});
 
+		ubicarReceptor();
 		if(!opts.skipHash) history.replaceState(null,'','#'+catName.toLowerCase().replace(/[^a-z0-9]+/g,'-'));
 		if(!opts.skipScroll) dashEl.scrollIntoView({block:'start', behavior:'smooth'});
 		return true;
@@ -2124,17 +2175,27 @@ function rauFaseLunar(frac){
 		opts = opts || {};
 		var t = TOOLS_BY_ID[id];
 		if(!t) return false;
-		activateCategory(t.cat, {skipScroll:true, skipHash:true});
+		activateCategory(t.cat, {skipScroll:true, skipHash:true, solo:id});
 		// URL propia real (/herramientas/{id}/) — no un ancla. pushState para que
 		// atrás/adelante del navegador funcione como si fueran páginas distintas.
 		if(!opts.skipHash){
 			if(opts.replace) history.replaceState(null,'',BASE_URL+id+'/');
 			else history.pushState(null,'',BASE_URL+id+'/');
 		}
-		var panel = document.getElementById('panel-'+id);
-		if(panel && !opts.skipScroll) panel.scrollIntoView({block:'start', behavior:'smooth'});
+		if(!opts.skipScroll) dashEl.scrollIntoView({block:'start', behavior:'smooth'});
 		return true;
 	}
+	function volverConsola(){
+		var antena=document.querySelector('.consola-modo-btn[data-modo="antena"]');
+		if(antena) antena.click();
+		showGrid({skipHash:true});
+		history.pushState(null,'',BASE_URL);
+		var consola=document.getElementById('rau-consola');
+		if(consola) consola.scrollIntoView({block:'start', behavior:'smooth'});
+	}
+	window.rauVolverConsola = volverConsola;
+	var volverBtn=document.getElementById('rau-volver-consola');
+	if(volverBtn) volverBtn.addEventListener('click', volverConsola);
 	/* El receptor KiwiSDR (inc/receptor-kiwi.php) abre su panel con esto desde rauEscuchar() */
 	window.rauAbrirHerramienta = openTool;
 	/* Botones «Escuchar» de spots DX, POTA y «Ahora mismo»: data-khz y, si se sabe, data-modo */
@@ -2186,7 +2247,7 @@ function rauFaseLunar(frac){
 			openTool(INITIAL_TOOL, {skipHash:true, skipScroll:true});
 			// Quien llega a /herramientas/{id}/ viene por esa herramienta: se lleva la vista al panel
 			// (sin animación, para que no parezca un salto después de cargar).
-			var pInicial=document.getElementById('panel-'+INITIAL_TOOL);
+			var pInicial=dashEl;
 			if(pInicial){
 				pInicial.scrollIntoView({block:'start'});
 				// Las herramientas de arriba terminan de cargar después del salto y empujan el panel
@@ -2200,7 +2261,7 @@ function rauFaseLunar(frac){
 			return;
 		}
 		var startId = location.hash.replace('#','');
-		if(!startId) return; // se queda en el grid, es la pantalla de entrada
+		if(!startId){ ubicarReceptor(); return; } // se queda en la consola, que es la pantalla de entrada
 		if(TOOLS_BY_ID[startId]){ openTool(startId, {skipScroll:true}); return; }
 		var catNames = TOOLS.reduce(function(a,t){ if(a.indexOf(t.cat)===-1) a.push(t.cat); return a; }, []);
 		var cat = catNames.find(function(c){ return c.toLowerCase().replace(/[^a-z0-9]+/g,'-')===startId; });
@@ -6471,7 +6532,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 })();
 
 /* ── CONSOLA: D-STAR LAST HEARD — dstarusers.org, actividad global (no filtrada a Colombia, ver justificación en functions.php) ── */
-setTimeout(function(){
+rauCuandoVisible('consola-dstar-lista', function(){
 	var el=document.getElementById('consola-dstar-lista');
 	if(!el) return;
 	fetch('<?php echo esc_js( admin_url('admin-ajax.php') ); ?>?action=rau_dstar_lastheard', {cache:'no-store'})
@@ -6487,13 +6548,13 @@ setTimeout(function(){
 		}).catch(function(e){ rauErr(e);
 			el.innerHTML='No disponible ahora mismo — <a href="https://dstarusers.org/lastheard.php" target="_blank" rel="noopener" class="text-primary hover:underline">ver en dstarusers.org ↗</a>';
 		});
-}, 2500);
+});
 
 /* ── CONSOLA: WSPR DESDE COLOMBIA — wspr.live, base de datos pública real, sin autenticación (documentado en https://wspr.live/) ──
  * No pude confirmar la conectividad de este servicio desde el entorno de desarrollo (toda petición, incluso
  * la más simple posible, devolvió 400) — puede ser una particularidad de la herramienta de pruebas, no
  * necesariamente del servicio. Esta pieza necesita confirmación real en producción más que cualquier otra. */
-setTimeout(function(){
+rauCuandoVisible('consola-wspr-lista', function(){
 	var el=document.getElementById('consola-wspr-lista');
 	if(!el) return;
 	var NOMBRES_BANDA={ '-1':'LF', '0':'MF', '1':'160m', '3':'80m', '5':'60m', '7':'40m', '10':'30m', '14':'20m', '18':'17m', '21':'15m', '24':'12m', '28':'10m', '50':'6m', '70':'4m', '144':'2m', '432':'70cm', '1296':'23cm' };
@@ -6520,7 +6581,7 @@ setTimeout(function(){
 			clearTimeout(tiempoAgotado);
 			el.innerHTML='No se pudo conectar con WSPR Live ahora mismo. <a href="https://wspr.live/gui" target="_blank" rel="noopener" class="text-primary hover:underline">Ver en WSPR Live ↗</a>';
 		});
-}, 3000);
+});
 
 /* ── CONSOLA: BRANDMEISTER LAST HEARD — TG 732 (Colombia Nacional, verificado contra 2 fuentes) ──
  * BrandMeister no tiene una API REST pública para esto — solo WebSocket (Socket.IO) en tiempo real.
@@ -6558,7 +6619,7 @@ setTimeout(function(){
 		document.head.appendChild(script);
 	}
 
-	cargarSocketIO(function(){
+	rauCuandoVisible(el, function(){ cargarSocketIO(function(){
 		try {
 			socket=io('https://api.brandmeister.network', { path:'/lh/socket.io', transports:['websocket'], reconnectionAttempts:3 });
 		} catch(e){
@@ -6592,7 +6653,7 @@ setTimeout(function(){
 				el.innerHTML='No se pudo conectar con BrandMeister ahora mismo. <a href="https://brandmeister.network/?page=lh" target="_blank" rel="noopener" class="text-primary hover:underline">Ver en BrandMeister ↗</a>';
 			}
 		}, 15000);
-	});
+	}); });
 
 	// Desconexión limpia al salir de la página — no dejar sockets abiertos innecesariamente
 	window.addEventListener('beforeunload', function(){
@@ -6626,84 +6687,285 @@ setTimeout(function(){
 		+ '<a href="'+urlDxcc+'" class="mt-1 block font-mono text-[9px] text-primary hover:underline">Editar mi progreso →</a>';
 })();
 
+/* ── CENTRO DE MANDO: ESTACIONES EN LA BANDA (cluster DX + POTA) ──
+   Reemplaza la lista «DX Spots en vivo» de la columna izquierda. Sigue la frecuencia del receptor
+   (evento rau:frecuencia): muestra lo que se reporta en esa banda, con país, distancia y rumbo
+   desde Mi QTH, y le pasa las estaciones al receptor para dibujarlas sobre la cascada. */
 (function(){
-	var el=document.getElementById('consola-dx-spots');
-	if(!el) return;
-	function cargar(){
+	var lista=document.getElementById('consola-banda-lista');
+	if(!lista) return;
+	var ajaxUrl='<?php echo esc_js( admin_url('admin-ajax.php') ); ?>';
+	var bandasHf=[['160m',1800,2000],['80m',3500,4000],['60m',5330,5410],['40m',7000,7300],['30m',10100,10150],['20m',14000,14350],['17m',18068,18168],['15m',21000,21450],['12m',24890,24990],['10m',28000,29700],['6m',50000,54000]];
+	var enConteo=['80m','40m','30m','20m','17m','15m','12m','10m'];
+	var inicioBanda={'80m':3573,'40m':7074,'30m':10136,'20m':14074,'17m':18100,'15m':21074,'12m':24915,'10m':28074};
+	var datos={dx:[], pota:[]}, filtro='banda', khzActual=null;
+
+	function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+	function bandaDe(khz){ for(var i=0;i<bandasHf.length;i++){ if(khz>=bandasHf[i][1] && khz<=bandasHf[i][2]) return bandasHf[i][0]; } return null; }
+	function geoDe(indicativo){
+		if(!indicativo) return null;
+		var raw=String(indicativo).toUpperCase().split('/')[0];
+		for(var l=4; l>=1; l--){
+			var p=PFX_GEO[raw.slice(0,l)];
+			if(p){ var x=p.split('|'); return {nombre:(x[0]||'').replace(/^[^\s]+\s/, ''), lat:parseFloat(x[4]), lng:parseFloat(x[5])}; }
+		}
+		return null;
+	}
+	function distRumbo(lat, lng){
+		if(isNaN(lat) || isNaN(lng)) return null;
+		var q=rauQth(), r=Math.PI/180, f1=q.lat*r, f2=lat*r, dl=(lng-q.lng)*r;
+		var d=2*6371*Math.asin(Math.sqrt(Math.pow(Math.sin((f2-f1)/2),2)+Math.cos(f1)*Math.cos(f2)*Math.pow(Math.sin(dl/2),2)));
+		var y=Math.sin(dl)*Math.cos(f2), x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
+		return {km:Math.round(d), az:Math.round((Math.atan2(y,x)/r+360)%360)};
+	}
+	function minutosDesde(utc){
+		// El cluster da "HH:MM" UTC; POTA una fecha ISO en UTC sin zona
+		var ahora=new Date(), m;
+		if(/^\d{2}:\d{2}$/.test(utc||'')){ m=ahora.getUTCHours()*60+ahora.getUTCMinutes()-(parseInt(utc.slice(0,2),10)*60+parseInt(utc.slice(3),10)); if(m<0) m+=1440; return m>180?null:m; }
+		var t=Date.parse(String(utc||'').replace(/Z?$/,'Z')); if(isNaN(t)) return null;
+		m=Math.round((ahora.getTime()-t)/60000); return m<0||m>180?null:m;
+	}
+	function modoPista(texto){ var t=String(texto||'').toUpperCase(); var m=t.match(/\b(FT8|FT4|CW|SSB|USB|LSB|RTTY|PSK31|FM|AM|JS8)\b/); return m?m[1]:''; }
+	function todas(){
+		var l=[];
+		if(document.getElementById('consola-banda-dx').checked) datos.dx.forEach(function(s){
+			var khz=parseFloat(s.freq)*1000, g=geoDe(s.dx);
+			if(!(khz>0)) return;
+			l.push({fuente:'dx', dx:String(s.dx||'').toUpperCase(), khz:khz, modo:modoPista(s.info), lugar:g?g.nombre:'', dr:g?distRumbo(g.lat,g.lng):null, min:minutosDesde(s.t), info:s.info||''});
+		});
+		if(document.getElementById('consola-banda-pota').checked) datos.pota.forEach(function(s){
+			var khz=parseFloat(s.frequency);
+			if(!(khz>0)) return;
+			l.push({fuente:'pota', dx:String(s.activator||'').toUpperCase(), khz:khz, modo:String(s.mode||'').toUpperCase(), lugar:[s.reference, s.locationDesc].filter(Boolean).join(' · '), dr:distRumbo(parseFloat(s.latitude), parseFloat(s.longitude)), min:minutosDesde(s.spotTime), info:s.name||''});
+		});
+		return l;
+	}
+	function bandaActual(){ return khzActual ? bandaDe(khzActual) : null; }
+
+	function render(){
+		var l=todas(), banda=bandaActual();
+		if(window.RauRx && window.RauRx.ponerSpots) window.RauRx.ponerSpots(l);
+		// Conteo por banda: dónde hay movimiento ahora
+		var cuenta={}; l.forEach(function(s){ var b=bandaDe(s.khz); if(b) cuenta[b]=(cuenta[b]||0)+1; });
+		var maximo=Math.max.apply(null, enConteo.map(function(b){ return cuenta[b]||0; }).concat([1]));
+		document.getElementById('consola-banda-conteo').innerHTML=enConteo.map(function(b){
+			var n=cuenta[b]||0, alto=Math.max(8, Math.round(100*n/maximo)), activa=b===banda;
+			return '<button type="button" class="rau-banda-conteo flex flex-col items-center gap-0.5 rounded-md border px-0.5 py-1 font-mono text-[10px] '+(activa?'border-amber-400/70 text-amber-400':'border-border/60 text-muted-foreground hover:border-primary/40')+'" data-banda="'+b+'" aria-label="'+b+': '+n+' estaciones. Sintonizar">'
+				+'<span class="flex h-6 w-full items-end"><span class="w-full rounded-sm '+(activa?'bg-amber-400':'bg-primary/60')+'" style="height:'+alto+'%"></span></span>'+b+'<span>'+n+'</span></button>';
+		}).join('');
+		document.getElementById('consola-banda-nombre').textContent = filtro==='banda' && banda ? banda : 'todas las bandas';
+		var vis=l.filter(function(s){ return filtro==='todas' || !banda || bandaDe(s.khz)===banda; })
+			.sort(function(a,b){ return (a.min==null?999:a.min)-(b.min==null?999:b.min); }).slice(0,40);
+		if(!vis.length){
+			lista.innerHTML='<p class="py-2 text-muted-foreground">'+(l.length ? 'Nadie reportado en '+(banda||'esta banda')+' en este momento. Puede estar abierta y desierta: buen momento para llamar CQ. Mira el conteo de arriba para ver dónde hay movimiento.' : 'Sin estaciones reportadas ahora mismo.')+'</p>';
+			return;
+		}
+		lista.innerHTML=vis.map(function(s){
+			var color=s.fuente==='pota'?'text-emerald-400':'text-amber-400';
+			var lugar=[s.lugar, s.dr ? s.dr.km.toLocaleString('es-CO')+' km · '+s.dr.az+'°' : '', s.min!=null ? (s.min<1?'ahora':'hace '+s.min+' min') : ''].filter(Boolean).join(' · ');
+			var mhz=(s.khz/1000).toFixed(3);
+			return '<div class="flex items-center gap-2 border-b border-border/30 py-1 last:border-0">'
+				+'<span class="'+color+'" aria-hidden="true">▼</span>'
+				+'<div class="min-w-0 flex-1"><div class="flex items-baseline gap-2"><span class="font-bold text-foreground">'+esc(s.dx)+'</span><span class="text-primary">'+mhz+'</span>'+(s.modo?'<span class="text-[10px] text-muted-foreground">'+esc(s.modo)+'</span>':'')+'</div>'
+				+'<div class="truncate text-[10px] text-muted-foreground" title="'+esc(s.info)+'">'+esc(lugar)+'</div></div>'
+				+'<button type="button" class="rau-escuchar shrink-0 rounded px-1.5 py-1 hover:bg-primary/15" data-khz="'+s.khz+'" data-modo="'+esc(s.modo)+'" title="Sintonizar en el receptor" aria-label="Escuchar '+esc(s.dx)+' en '+mhz+' MHz">🎧</button>'
+				+'<button type="button" class="rau-anotar shrink-0 rounded px-1.5 py-1 hover:bg-primary/15" data-dx="'+esc(s.dx)+'" data-mhz="'+mhz+'" data-modo="'+esc(s.modo)+'" title="Pasar a la bitácora" aria-label="Anotar '+esc(s.dx)+' en la bitácora">📝</button>'
+				+'<button type="button" class="rau-ubicar shrink-0 rounded px-1.5 py-1 hover:bg-primary/15" data-dx="'+esc(s.dx)+'" title="Ubicar en el mapa" aria-label="Ubicar '+esc(s.dx)+' en el mapa">📏</button>'
+				+'</div>';
+		}).join('');
+	}
+
+	lista.addEventListener('click', function(e){
+		var b=e.target.closest('button'); if(!b) return;
+		if(b.classList.contains('rau-anotar')){
+			var ind=document.getElementById('bitacora-indicativo'), fr=document.getElementById('bitacora-freq'), mo=document.getElementById('bitacora-modo');
+			if(ind) ind.value=b.dataset.dx;
+			if(fr){ fr.value=b.dataset.mhz; fr.dataset.auto='0'; }
+			if(mo && b.dataset.modo){
+				var m=b.dataset.modo==='USB'||b.dataset.modo==='LSB' ? 'SSB' : b.dataset.modo;
+				if([].some.call(mo.options, function(o){ return o.value===m; })){ mo.value=m; mo.dataset.auto='0'; }
+			}
+			if(typeof window.rauIrPestana==='function') window.rauIrPestana('operar');
+			var rst=document.getElementById('bitacora-rst'); if(rst) rst.focus({preventScroll:true});
+			var conf=document.getElementById('bitacora-confirmacion');
+			if(conf){ conf.textContent='✏️ '+b.dataset.dx+' listo en la bitácora: completa el RST y registra.'; conf.classList.remove('hidden'); setTimeout(function(){ conf.classList.add('hidden'); }, 4000); }
+		} else if(b.classList.contains('rau-ubicar')){
+			if(typeof window.rauIrAIndicativo==='function'){
+				window.rauIrAIndicativo(b.dataset.dx);
+				var mapa=document.getElementById('consola-mapa-bloque'); if(mapa) mapa.scrollIntoView({behavior:'smooth', block:'center'});
+			}
+		}
+	});
+	document.getElementById('consola-banda-conteo').addEventListener('click', function(e){
+		var b=e.target.closest('.rau-banda-conteo'); if(!b) return;
+		filtro='banda'; marcarFiltro();
+		if(window.RauRx) window.RauRx.sintonizar(inicioBanda[b.dataset.banda]); else { khzActual=inicioBanda[b.dataset.banda]; render(); }
+	});
+	function marcarFiltro(){ document.querySelectorAll('.rau-banda-filtro').forEach(function(x){ x.classList.toggle('is-active', x.dataset.filtro===filtro); x.setAttribute('aria-pressed', x.dataset.filtro===filtro); }); }
+	document.querySelectorAll('.rau-banda-filtro').forEach(function(x){ x.addEventListener('click', function(){ filtro=x.dataset.filtro; marcarFiltro(); render(); }); });
+	['consola-banda-dx','consola-banda-pota'].forEach(function(id){ document.getElementById(id).addEventListener('change', render); });
+	document.addEventListener('rau:frecuencia', function(ev){ var b0=bandaActual(); khzActual=ev.detail.khz; if(bandaActual()!==b0) render(); });
+	document.addEventListener('rau:estacion', render);
+	marcarFiltro();
+
+	function cargarDx(){
 		var controlador=new AbortController();
 		var tiempoAgotado=setTimeout(function(){ controlador.abort(); }, 15000);
-		fetch('<?php echo esc_js( admin_url('admin-ajax.php') ); ?>?action=rau_dx_spots', {cache:'no-store', signal: controlador.signal})
+		fetch(ajaxUrl+'?action=rau_dx_spots', {cache:'no-store', signal: controlador.signal})
 			.then(function(r){ clearTimeout(tiempoAgotado); return r.json(); })
 			.then(function(json){
+				datos.dx = ( json.success && json.data ) ? json.data : [];
+				window.rauUltimosDxSpots = datos.dx;
 				var rnDxEl=document.getElementById('rn-dx');
-				window.rauUltimosDxSpots = ( json.success && json.data ) ? json.data : [];
-				if(!json.success || !json.data || !json.data.length){
-					el.innerHTML='<p class="text-muted-foreground">Sin spots disponibles ahora mismo.</p>';
-					if(rnDxEl) rnDxEl.textContent='🌎 DX: sin spots';
-					return;
-				}
-				var ultimos=json.data.slice(0,5);
-				function entidadDe(indicativo){
-					// La guarda anterior era typeof PFX_GEO==='undefined', que devolvía null en
-					// silencio: un prefijo ausente y una tabla no cargada se veían igual desde fuera.
-					// La tabla ahora se declara al principio del script, así que siempre está lista.
-					if(!indicativo) return null;
-					var raw=indicativo.toUpperCase();
-					for(var l=4; l>=1; l--){
-						var probar=raw.slice(0,l);
-						if(PFX_GEO[probar]){
-							var partes=PFX_GEO[probar].split('|');
-							return partes[0] ? partes[0].replace(/^[^\s]+\s/, '') : null; // quita la bandera emoji, deja el nombre
-						}
-					}
-					return null;
-				}
-				function antiguedadDe(horaSpot){
-					if(!horaSpot || !/^\d{2}:\d{2}$/.test(horaSpot)) return null;
-					var ahora=new Date();
-					var partes=horaSpot.split(':');
-					var minutosSpot=parseInt(partes[0],10)*60+parseInt(partes[1],10);
-					var minutosAhora=ahora.getUTCHours()*60+ahora.getUTCMinutes();
-					var diff=minutosAhora-minutosSpot;
-					if(diff<0) diff+=1440; // cruzó medianoche UTC
-					if(diff>180) return null; // spot demasiado viejo, probablemente de ayer — no mostrar un número engañoso
-					return diff<1 ? 'ahora' : 'hace '+diff+' min';
-				}
-				el.innerHTML=ultimos.map(function(s){
-					var entidad=entidadDe(s.dx);
-					var antiguedad=antiguedadDe(s.t);
-					var lineaExtra=(entidad||antiguedad) ? '<div class="text-[9px] text-muted-foreground">'+[entidad,antiguedad].filter(Boolean).join(' · ')+'</div>' : '';
-					return '<div class="border-b border-border/30 pb-1 last:border-0"><div class="flex justify-between gap-2"><button type="button" class="rau-dxspot-ir text-foreground hover:text-primary hover:underline" data-dx="'+(s.dx||'')+'">'+(s.dx||'—')+'</button><button type="button" class="rau-dxspot-copiar shrink-0 text-primary hover:underline" data-freq="'+(s.freq||'')+'">'+(s.freq||'—')+'</button>'+(window.rauEscuchar && parseFloat(s.freq)>0 && parseFloat(s.freq)<30 ? '<button type="button" class="rau-escuchar shrink-0 text-primary hover:underline" data-khz="'+(parseFloat(s.freq)*1000)+'" title="Escuchar en el receptor KiwiSDR" aria-label="Escuchar '+(s.freq||'')+' en el receptor">🎧</button>' : '')+'</div>'+lineaExtra+'</div>';
-				}).join('');
-				el.querySelectorAll('.rau-dxspot-ir').forEach(function(btn){
-					btn.addEventListener('click', function(){
-						if(typeof window.rauIrAIndicativo==='function' && btn.dataset.dx){
-							window.rauIrAIndicativo(btn.dataset.dx);
-							document.getElementById('consola-mapa').scrollIntoView({ behavior:'smooth', block:'center' });
-						}
-					});
-				});
-				el.querySelectorAll('.rau-dxspot-copiar').forEach(function(btn){
-					btn.addEventListener('click', function(){
-						var freq=btn.dataset.freq;
-						if(!freq) return;
-						navigator.clipboard.writeText(freq).then(function(){
-							var original=btn.textContent;
-							btn.textContent='✅ copiado';
-							setTimeout(function(){ btn.textContent=original; }, 1200);
-						}).catch(function(e){ rauErr(e);});
-					});
-				});
-				if(rnDxEl) rnDxEl.innerHTML='🌎 DX: <span class="text-primary font-bold">'+json.data.length+' spots</span>';
+				if(rnDxEl) rnDxEl.innerHTML = datos.dx.length ? '🌎 DX: <span class="text-primary font-bold">'+datos.dx.length+' spots</span>' : '🌎 DX: sin spots';
+				render();
 			}).catch(function(e){ rauErr(e);
 				clearTimeout(tiempoAgotado);
-				el.innerHTML='<p class="text-muted-foreground">No se pudo cargar en este momento.</p>';
 				var rnDxErr=document.getElementById('rn-dx');
 				if(rnDxErr) rnDxErr.innerHTML='🌎 DX: <span class="text-rose-400">sin datos</span>';
+				render();
 			});
 	}
-	cargar();
-	setInterval(cargar, 2*60*1000);
+	function cargarPota(){
+		fetch(ajaxUrl+'?action=rau_pota_spots', {cache:'no-store'})
+			.then(function(r){ return r.json(); })
+			.then(function(json){ datos.pota = json.success && Array.isArray(json.data) ? json.data : []; render(); })
+			.catch(function(e){ rauErr(e); });
+	}
+	if(window.RauRx && window.RauRx.estado) khzActual=window.RauRx.estado().khz;
+	cargarDx(); setInterval(cargarDx, 2*60*1000);
+	rauCuandoVisible(lista, function(){ cargarPota(); setInterval(cargarPota, 3*60*1000); });
+})();
+
+/* ── CENTRO DE MANDO: TODO SIGUE LA FRECUENCIA DEL RECEPTOR ──
+   El receptor avisa cada cambio con el evento rau:frecuencia. La bitácora toma la frecuencia y el
+   modo (mientras la persona no los haya escrito a mano), las bandas del mapa marcan la actual y el
+   banco «Construir antena» calcula para esa frecuencia. Tocar una banda del mapa sintoniza el receptor. */
+(function(){
+	var inicioBanda={'80m':3573,'40m':7074,'30m':10136,'20m':14074,'17m':18100,'15m':21074,'12m':24915,'10m':28074};
+	var bandas=[['80m',3500,4000],['40m',7000,7300],['30m',10100,10150],['20m',14000,14350],['17m',18068,18168],['15m',21000,21450],['12m',24890,24990],['10m',28000,29700]];
+	var aBitacora={usb:'SSB', lsb:'SSB', cw:'CW', nbfm:'FM'};
+	var fr=document.getElementById('bitacora-freq'), mo=document.getElementById('bitacora-modo'), banco=document.getElementById('banco-freq');
+	if(fr){ fr.dataset.auto='1'; fr.addEventListener('input', function(){ fr.dataset.auto = fr.value ? '0' : '1'; }); }
+	if(mo){ mo.dataset.auto='1'; mo.addEventListener('change', function(){ mo.dataset.auto='0'; }); }
+	var guardar=document.getElementById('bitacora-guardar');
+	if(guardar) guardar.addEventListener('click', function(){ setTimeout(function(){ if(fr){ fr.dataset.auto='1'; aplicar(window.RauRx && window.RauRx.estado()); } if(mo) mo.dataset.auto='1'; }, 0); });
+
+	function aplicar(d){
+		if(!d) return;
+		if(fr && fr.dataset.auto==='1' && document.activeElement!==fr) fr.value=(d.khz/1000).toFixed(3);
+		if(mo && mo.dataset.auto==='1' && aBitacora[d.modo]) mo.value=aBitacora[d.modo];
+		if(banco && document.activeElement!==banco && d.khz>=1800){ banco.value=(d.khz/1000).toFixed(3); banco.dispatchEvent(new Event('input')); }
+		var b=null; bandas.forEach(function(x){ if(d.khz>=x[1] && d.khz<=x[2]) b=x[0]; });
+		document.querySelectorAll('.rau-banda-tile').forEach(function(t){ t.classList.toggle('rau-banda-actual', t.dataset.banda===b); });
+	}
+	document.addEventListener('rau:frecuencia', function(ev){ aplicar(ev.detail); });
+	document.querySelectorAll('.rau-banda-tile').forEach(function(t){
+		function sintonizar(){ if(window.RauRx && inicioBanda[t.dataset.banda]) window.RauRx.sintonizar(inicioBanda[t.dataset.banda], 'usb'); }
+		t.addEventListener('click', sintonizar);
+		t.addEventListener('keydown', function(e){ if(e.key==='Enter' || e.key===' ') sintonizar(); });
+		t.setAttribute('aria-label', 'Banda '+t.dataset.banda+': ver por qué tiene este estado y sintonizarla en el receptor');
+	});
+	if(window.RauRx && window.RauRx.estado) aplicar(window.RauRx.estado());
+})();
+
+/* ── CENTRO DE MANDO: MI ESTACIÓN ──
+   Indicativo, locator, potencia y antena, una sola vez y solo en este navegador. El locator se
+   guarda también como Mi QTH (rau_mi_qth), que es lo que ya leen el mapa, «Ahora mismo» y las
+   distancias. El indicativo llena los campos «mi indicativo» de la QSL, el certificado, PSK
+   Reporter y RBN cuando están vacíos. */
+(function(){
+	var card=document.getElementById('consola-estacion');
+	if(!card) return;
+	var campos=['indicativo','locator','potencia','antena'];
+	function leer(){ try { return JSON.parse(localStorage.getItem('rau_estacion')||'{}')||{}; } catch(e){ return {}; } }
+	function gridACoord(g){
+		g=String(g||'').trim(); var A='ABCDEFGHIJKLMNOPQR', a='abcdefghijklmnopqr';
+		if(!/^[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2})?$/.test(g)) return null;
+		var lng=A.indexOf(g[0].toUpperCase())*20-180+parseInt(g[2],10)*2, lat=A.indexOf(g[1].toUpperCase())*10-90+parseInt(g[3],10);
+		if(g.length>=6){ lng+=a.indexOf(g[4].toLowerCase())*(2/24)+(1/24); lat+=a.indexOf(g[5].toLowerCase())*(1/24)+(1/48); } else { lng+=1; lat+=0.5; }
+		return {lat:lat, lng:lng};
+	}
+	function resumen(){
+		var e=leer(), r=document.getElementById('estacion-resumen'), chip=document.getElementById('consola-estacion-chip');
+		if(!e.indicativo && !e.locator){ return; }
+		r.innerHTML='<span class="font-bold text-foreground">'+String(e.indicativo||'—').replace(/[<>&"]/g,'')+'</span> · '+[e.locator, e.potencia?e.potencia+' W':'', e.antena].filter(Boolean).join(' · ').replace(/[<>&"]/g,'');
+		if(chip) chip.textContent='⚙ '+(e.indicativo||'Mi estación');
+	}
+	function prellenar(){
+		var e=leer(); if(!e.indicativo) return;
+		['qsl-de','cert-indicativo','psk-indicativo','rbn-indicativo'].forEach(function(id){
+			var el=document.getElementById(id);
+			if(el && !el.value){ el.value=e.indicativo; el.dispatchEvent(new Event('input', {bubbles:true})); }
+		});
+	}
+	function abrir(on){
+		var f=document.getElementById('estacion-form'), b=document.getElementById('estacion-editar');
+		f.classList.toggle('hidden', !on); b.setAttribute('aria-expanded', on); b.textContent=on?'Cerrar':'Configurar';
+		if(on){ var e=leer(); campos.forEach(function(c){ document.getElementById('estacion-'+c).value=e[c]||''; }); }
+	}
+	document.getElementById('estacion-editar').addEventListener('click', function(){ abrir(document.getElementById('estacion-form').classList.contains('hidden')); });
+	document.getElementById('estacion-guardar').addEventListener('click', function(){
+		var e={}, estado=document.getElementById('estacion-estado');
+		campos.forEach(function(c){ e[c]=(document.getElementById('estacion-'+c).value||'').trim(); });
+		e.indicativo=e.indicativo.toUpperCase(); e.locator=e.locator ? e.locator.slice(0,2).toUpperCase()+e.locator.slice(2,4)+e.locator.slice(4).toLowerCase() : '';
+		var coords=null;
+		if(e.locator){ coords=gridACoord(e.locator); if(!coords){ estado.textContent='Locator inválido: usa el formato FJ26 o FJ26ff.'; return; } }
+		var antes=leer();
+		try { localStorage.setItem('rau_estacion', JSON.stringify(e)); if(coords) localStorage.setItem('rau_mi_qth', JSON.stringify(coords)); } catch(err){ estado.textContent='Este navegador no permite guardar datos.'; return; }
+		resumen(); prellenar(); abrir(false);
+		document.dispatchEvent(new CustomEvent('rau:estacion', {detail:e}));
+		var r=document.getElementById('estacion-resumen');
+		if(coords && antes.locator!==e.locator){
+			// El mapa y los satélites leen el QTH al cargar: se recarga, salvo que el receptor esté sonando
+			if(window.RauRx && window.RauRx.encendido()) r.insertAdjacentHTML('beforeend', '<br><span class="text-amber-400">El mapa usará tu locator la próxima vez que abras la página.</span>');
+			else { r.insertAdjacentHTML('beforeend', '<br><span class="text-primary">Guardado. Recargando el mapa…</span>'); setTimeout(function(){ location.reload(); }, 900); }
+		}
+	});
+	var chip=document.getElementById('consola-estacion-chip');
+	if(chip) chip.addEventListener('click', function(){
+		if(typeof window.rauIrPestana==='function') window.rauIrPestana('operar');
+		abrir(true); card.scrollIntoView({block:'center', behavior:'smooth'});
+	});
+	resumen(); prellenar();
+})();
+
+/* ── CENTRO DE MANDO: PESTAÑAS EN CELULAR Y ESTADO DEL RECEPTOR EN LA FRANJA SUPERIOR ── */
+(function(){
+	var cols=document.getElementById('consola-columnas'), nav=document.getElementById('consola-pestanas');
+	if(!cols || !nav) return;
+	function ir(p){
+		if(p==='explorar'){
+			var cat=document.querySelector('.consola-modo-btn[data-modo="catalogo"]'); if(cat) cat.click();
+			var ex=document.getElementById('rau-explorar'); if(ex) ex.scrollIntoView({block:'start', behavior:'smooth'});
+			return;
+		}
+		var cambia=cols.dataset.pestana!==p;
+		cols.dataset.pestana=p;
+		nav.querySelectorAll('button').forEach(function(b){ b.classList.toggle('is-active', b.dataset.ir===p); b.setAttribute('aria-pressed', b.dataset.ir===p); });
+		// Solo en pantallas angostas las columnas son pestañas; en computador no hace falta moverse
+		if(cambia && window.matchMedia('(max-width: 1023px)').matches) cols.scrollIntoView({block:'start', behavior:'smooth'});
+	}
+	window.rauIrPestana=ir;
+	nav.addEventListener('click', function(e){ var b=e.target.closest('button'); if(b) ir(b.dataset.ir); });
+	nav.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.ir===cols.dataset.pestana); });
+
+	var chip=document.getElementById('consola-rx-chip');
+	function pintar(d){
+		if(!chip) return;
+		if(d===undefined) return;
+		chip.textContent = d===null ? '🎧 Receptor: fuera de línea' : d.libres===0 ? '🎧 Receptor: muy ocupado' : '🎧 Receptor: '+d.libres+' libres';
+		chip.classList.toggle('text-emerald-400', !!(d && d.libres>0));
+		chip.classList.toggle('text-amber-400', !!(d && d.libres===0));
+		chip.classList.toggle('text-rose-400', d===null);
+	}
+	pintar(window.rauRxEstado);
+	document.addEventListener('rau:sdr-estado', function(ev){ pintar(ev.detail); });
+	if(chip) chip.addEventListener('click', function(){
+		if(document.getElementById('rau-tools').classList.contains('rau-vista-herramienta') && typeof window.rauVolverConsola==='function') window.rauVolverConsola();
+		ir('escuchar');
+		var app=document.getElementById('rx-app'); if(app) setTimeout(function(){ app.scrollIntoView({block:'start', behavior:'smooth'}); }, 50);
+	});
 })();
 
 /* Última línea del archivo. Si esta marca no se pone, es que la ejecución se detuvo antes: un

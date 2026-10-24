@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.45.0
+Version: 19.46.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -683,3 +683,52 @@ html.rau-splash-active body {
 .h-2\.5{height:0.625rem}
 .bg-border\/40{background-color:hsl(var(--border) / 0.4)}
 .border-primary\/60{border-color:hsl(var(--primary) / .6)}
+/* ── Centro de mando de Herramientas (19.46.0) ── */
+.border-amber-400\/70 { border-color: rgb(251 191 36 / .7); }
+.gap-x-4 { column-gap: 1rem; }
+.grid-cols-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.h-\[18px\] { height: 18px; }
+.hover\:bg-primary\/15:hover { background-color: hsl(var(--primary) / .15); }
+.max-h-96 { max-height: 24rem; }
+.px-0\.5 { padding-left: .125rem; padding-right: .125rem; }
+.top-\[150px\] { top: 150px; }
+@media (min-width: 640px) { .sm\:h-\[26rem\] { height: 26rem; } }
+
+/* Al abrir una herramienta la consola se pliega: la herramienta ocupa el centro */
+#rau-tools.rau-vista-herramienta .rau-solo-consola { display: none !important; }
+/* El encabezado fijo tapaba el comienzo de lo que se desplazaba a la vista */
+.rau-panel, #rau-cat-dashboard, #rau-consola, #consola-columnas, #rau-explorar, #rx-app, #consola-estacion { scroll-margin-top: 5rem; }
+/* En la consola el receptor va compacto: su estado por horas está en la herramienta completa */
+.rx-en-consola .rx-estado-bloque, .rx-en-consola .rx-ayuda-teclado { display: none; }
+.rx-ajustes-btn { display: none; }
+.rx-en-consola .rx-ajustes-btn { display: inline-flex; }
+.rx-en-consola .rx-avanzado:not(.abierto) { display: none; }
+.rau-banda-actual { outline: 2px solid #fbbf24; outline-offset: 1px; }
+.rau-banda-filtro { color: hsl(var(--muted-foreground)); }
+.rau-banda-filtro.is-active { background-color: hsl(var(--primary) / .15); color: hsl(var(--primary)); font-weight: 700; }
+
+/* Pestañas del centro de mando: solo en pantallas angostas */
+/* overflow:hidden convierte la consola en contenedor de desplazamiento y anula el sticky de las
+   pestañas; clip recorta igual sin ese efecto */
+#rau-consola { overflow: clip; }
+#consola-pestanas { display: none; }
+@media (max-width: 1023px) {
+	#consola-columnas[data-pestana] > .rau-col { display: none; }
+	#consola-columnas[data-pestana="escuchar"] > [data-col="escuchar"],
+	#consola-columnas[data-pestana="mirar"] > [data-col="mirar"],
+	#consola-columnas[data-pestana="operar"] > [data-col="operar"] { display: block; }
+	#consola-pestanas {
+		display: grid; grid-template-columns: repeat(4, 1fr); position: sticky; bottom: 0; z-index: 30;
+		border-top: 1px solid hsl(var(--primary) / .3); background: rgb(5 9 20 / .96);
+		padding-bottom: env(safe-area-inset-bottom); backdrop-filter: blur(6px);
+	}
+	#consola-pestanas button {
+		display: flex; flex-direction: column; align-items: center; gap: 2px; padding: .55rem 0 .5rem;
+		font-family: ui-monospace, monospace; font-size: 11px; color: hsl(var(--muted-foreground));
+	}
+	#consola-pestanas button span { font-size: 18px; line-height: 1; }
+	#consola-pestanas button.is-active { color: hsl(var(--primary)); box-shadow: inset 0 2px 0 hsl(var(--primary)); }
+	/* Que el botón del chat y la mini barra del receptor no tapen las pestañas */
+	.page-template-page-herramientas #rau-bot-toggle { bottom: 4.75rem; }
+	.page-template-page-herramientas #rx-mini { bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important; }
+}

@@ -40,6 +40,7 @@ function rau_receptor_kiwi( $args = array() ) {
 	$btn   = 'rounded-md border border-border bg-background px-3 py-2 font-mono text-xs hover:border-primary/50';
 	$sel   = 'rounded-md border border-border bg-background px-2 py-2 font-mono text-xs';
 	?>
+	<div id="rx-componente">
 	<?php if ( $relay ) : ?>
 	<div id="rx-app" tabindex="0" class="rounded-2xl border border-primary/30 bg-card p-4 outline-none sm:p-6" aria-label="Receptor KiwiSDR: usa las flechas para sintonizar">
 		<div class="flex flex-wrap items-center justify-between gap-4">
@@ -50,6 +51,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			<div class="min-w-[12rem] flex-1 sm:max-w-xs">
 				<div class="flex items-center justify-between font-mono text-[11px] text-muted-foreground"><span>Señal</span><span id="rx-s">—</span></div>
 				<div class="relative mt-1 h-2 overflow-hidden rounded-full bg-background"><div id="rx-smeter" class="h-full w-0 rounded-full bg-primary transition-all duration-150"></div><div id="rx-sq-marca" class="absolute inset-y-0 hidden w-0.5 bg-accent"></div></div>
+				<p id="rx-libres" class="mt-1 font-mono text-[11px] text-muted-foreground"></p>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				<button id="rx-power" type="button" class="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90">▶ Escuchar</button>
@@ -61,12 +63,13 @@ function rau_receptor_kiwi( $args = array() ) {
 
 		<div id="rx-pantalla" class="relative mt-5 touch-none select-none overflow-hidden rounded-xl border border-border/60 bg-background" style="cursor:crosshair">
 			<canvas id="rx-plan" class="block h-[20px] w-full" aria-hidden="true"></canvas>
+			<canvas id="rx-spots" class="block h-[18px] w-full" aria-label="Estaciones reportadas en esta parte de la banda: toca una para sintonizarla"></canvas>
 			<canvas id="rx-esp" class="block h-[80px] w-full" aria-hidden="true"></canvas>
 			<canvas id="rx-wf" width="1024" height="200" class="block h-[200px] w-full" aria-label="Cascada de frecuencias: toca para sintonizar, arrastra para recorrer la banda, usa la rueda para ajustar"></canvas>
 			<canvas id="rx-esc" class="block h-[22px] w-full" aria-hidden="true"></canvas>
-			<div id="rx-filtro" class="pointer-events-none absolute bg-white/10" style="top:20px;height:280px;left:50%;width:0"></div>
-			<div id="rx-marca" class="pointer-events-none absolute w-px bg-accent" style="top:20px;height:280px;left:50%"></div>
-			<p id="rx-ayuda" class="pointer-events-none absolute inset-x-0 top-[140px] text-center font-mono text-xs text-muted-foreground">Pulsa «Escuchar». Luego toca la cascada para sintonizar.</p>
+			<div id="rx-filtro" class="pointer-events-none absolute bg-white/10" style="top:38px;height:280px;left:50%;width:0"></div>
+			<div id="rx-marca" class="pointer-events-none absolute w-px bg-accent" style="top:38px;height:280px;left:50%"></div>
+			<p id="rx-ayuda" class="pointer-events-none absolute inset-x-0 top-[150px] text-center font-mono text-xs text-muted-foreground">Pulsa «Escuchar». Luego toca la cascada para sintonizar.</p>
 		</div>
 
 		<div class="mt-5">
@@ -99,6 +102,8 @@ function rau_receptor_kiwi( $args = array() ) {
 			</div>
 		</div>
 
+		<button type="button" id="rx-ajustes" class="rx-ajustes-btn mt-5 items-center gap-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs hover:border-primary/50" aria-expanded="false" aria-controls="rx-avanzado">⚙ Ajustes: colores, contraste, silenciador, volumen y favoritos</button>
+		<div id="rx-avanzado" class="rx-avanzado">
 		<div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<label class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Colores de la cascada
 				<select id="rx-paleta" class="<?php echo esc_attr( $sel ); ?> mt-2 block w-full normal-case tracking-normal">
@@ -121,15 +126,17 @@ function rau_receptor_kiwi( $args = array() ) {
 			<div class="mb-2 flex items-center justify-between gap-3"><p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Favoritos</p><button type="button" id="rx-fav-add" class="font-mono text-xs text-primary hover:underline">★ Guardar esta frecuencia</button></div>
 			<div id="rx-favs" class="flex flex-wrap gap-2"><p class="text-xs text-muted-foreground">Guarda aquí las frecuencias que más escuchas. Quedan en este navegador.</p></div>
 		</div>
+		</div>
 
 		<p id="rx-msg" class="mt-4 font-mono text-xs text-muted-foreground" role="status" aria-live="polite">Pulsa «Escuchar» para conectarte. Usarás uno de los canales del receptor mientras escuchas.</p>
+		<button type="button" id="rx-avisar" class="mt-2 hidden rounded-md border border-primary/40 bg-primary/10 px-3 py-2 font-mono text-xs font-bold text-primary hover:bg-primary/20">🔔 Avísame cuando haya canal</button>
 	</div>
 	<div id="rx-mini" style="bottom:calc(1rem + env(safe-area-inset-bottom));left:1rem" class="fixed z-50 hidden items-center gap-2 rounded-full border border-primary/40 bg-card px-3 py-2 font-mono text-xs shadow-lg" role="region" aria-label="Receptor sonando">
 		<span class="text-primary">🎧 <span id="rx-mini-f">—</span></span>
 		<button type="button" id="rx-mini-ver" class="rounded-full border border-border px-2 py-1 hover:border-primary/50">Ver</button>
 		<button type="button" id="rx-mini-stop" class="rounded-full border border-border px-2 py-1 hover:border-primary/50" aria-label="Detener el receptor">■</button>
 	</div>
-	<p class="mt-3 text-xs text-muted-foreground">En computador: flechas ← → para sintonizar un paso, ↑ ↓ para diez. ¿Necesitas decodificadores o «acampar» cuando está lleno? Usa la <a href="<?php echo esc_url( $relay . '/' ); ?>" target="_blank" rel="noopener" class="text-primary hover:underline">interfaz completa del KiwiSDR</a>.</p>
+	<p class="rx-ayuda-teclado mt-3 text-xs text-muted-foreground">En computador: flechas ← → para sintonizar un paso, ↑ ↓ para diez. ¿Necesitas decodificadores o «acampar» cuando está lleno? Usa la <a href="<?php echo esc_url( $relay . '/' ); ?>" target="_blank" rel="noopener" class="text-primary hover:underline">interfaz completa del KiwiSDR</a>.</p>
 	<?php else : ?>
 	<div class="rounded-2xl border border-border/70 bg-card p-6">
 		<h2 class="font-display text-xl font-bold">Escúchalo en la interfaz del KiwiSDR</h2>
@@ -139,7 +146,7 @@ function rau_receptor_kiwi( $args = array() ) {
 	<?php endif; ?>
 
 	<?php if ( $args['estado'] ) : ?>
-	<div class="mt-8 grid gap-4 lg:grid-cols-[2fr_1fr]">
+	<div class="rx-estado-bloque mt-8 grid gap-4 lg:grid-cols-[2fr_1fr]">
 		<div class="rounded-2xl border border-border/70 bg-card p-5 sm:p-6">
 			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Cuándo entrar</p>
 			<h2 class="font-display text-lg font-bold">Canales libres por hora</h2>
@@ -164,12 +171,16 @@ function rau_receptor_kiwi( $args = array() ) {
 	<script>
 	(function(){
 		var AJAX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+		var mejoresHoras='';
 		function uptime(s){ if(s==null) return '—'; var d=Math.floor(s/86400), h=Math.floor(s%86400/3600); return d ? d+' d '+h+' h' : h+' h '+Math.floor(s%3600/60)+' min'; }
 		function estado(){
 			fetch(AJAX+'?action=rau_sdr_status', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
 				var el=document.getElementById('rx-estado');
-				if(!j.success){ el.innerHTML='<span class="text-rose-400">Fuera de línea</span>'; return; }
+				if(!j.success){ el.innerHTML='<span class="text-rose-400">Fuera de línea</span>'; var lib0=document.getElementById('rx-libres'); if(lib0) lib0.textContent='El receptor no responde en este momento.'; document.dispatchEvent(new CustomEvent('rau:sdr-estado', {detail:null})); return; }
 				var d=j.data;
+				window.rauRxEstado=d; document.dispatchEvent(new CustomEvent('rau:sdr-estado', {detail:d}));
+				var lib=document.getElementById('rx-libres');
+				if(lib) lib.textContent=(d.libres===0 ? 'Muy ocupado ahora: prueba igual' : d.libres+' de '+d.max+' canales libres')+(mejoresHoras ? ' · mejores horas: '+mejoresHoras : '');
 				el.innerHTML=d.libres===0 ? '<span class="text-amber-400">Muy ocupado: prueba igual</span>' : '<span class="text-emerald-400">'+d.libres+' de '+d.max+' libres</span>';
 				document.getElementById('rx-d-users').textContent=d.users==null?'—':d.users+' de '+d.max;
 				document.getElementById('rx-d-pre').textContent=d.preempt;
@@ -193,17 +204,20 @@ function rau_receptor_kiwi( $args = array() ) {
 				if(hs.every(function(h){ return !h.libres; })){ nota.textContent='Estos días el receptor ha estado casi siempre en su máximo: los decodificadores automáticos ocupan los canales. Aun así a veces se consigue uno.'; return; }
 				var mejores=hs.filter(function(h){ return h.libres!=null; }).sort(function(a,b){ return b.libres-a.libres; }).slice(0,3).map(function(h){ return h.hora+' h'; });
 				nota.textContent='Mejores horas para conseguir canal: '+mejores.join(', ')+'. La barra resaltada es la hora actual.';
+				mejoresHoras=mejores.join(', '); estado();
 			}).catch(function(e){ rauErr(e); });
 		}
-		estado(); horas(); setInterval(estado, 60000);
+		horas(); estado(); setInterval(estado, 60000);
 	})();
 	</script>
 	<?php endif; ?>
+	</div>
 
 	<?php if ( $relay ) : ?>
 	<script>
 	(function(){
 		var RELAY=<?php echo wp_json_encode( preg_replace( '#^http(s?)://#', 'ws$1://', $relay ) ); ?>;
+		var AJAX_RX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 		var PAGINA=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>;
 		var PLAN=<?php echo wp_json_encode( rau_receptor_plan() ); ?>;
 		var BANDAS=[
@@ -234,7 +248,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		var $=function(id){ return document.getElementById(id); };
 		var st={freq:7150, modo:'lsb', filtro:1, paso:1, zoom:7, zoomMax:14, fft:1024, bw:30000000, on:false, snd:null, wf:null, ctx:null, gain:null,
 			t:0, dec:{i:0,p:0}, rate:12000, rpos:0, rprev:0, ka:null, ts:0, paleta:'ambar', contraste:30, sq:0, agc:true, mute:false, sqAbierto:true, sqHasta:0,
-			grab:null, esp:[], wfStart:0, wfSpan:0, piso:null, lut:null, ultXbin:-1, ultZoom:-1};
+			grab:null, esp:[], wfStart:0, wfSpan:0, piso:null, lut:null, ultXbin:-1, ultZoom:-1, spots:[], golpes:[], vigia:null};
 		try {
 			var g=JSON.parse(localStorage.getItem('rau_rx')||'null');
 			if(g){ if(g.freq) st.freq=g.freq; if(MODOS[g.modo]) st.modo=g.modo; if(g.zoom!=null) st.zoom=g.zoom|0; if(PALETAS.hasOwnProperty(g.paleta)) st.paleta=g.paleta;
@@ -296,7 +310,8 @@ function rau_receptor_kiwi( $args = array() ) {
 				if(PLAN.novicio.some(function(s){ return s[0]<b[1] && s[1]>b[0]; })) return;
 				c.fillStyle='#94a3b8'; var xi=Math.max(x0,0)+4*d, libre=Math.min(x1,w)-xi;
 				[b[2]+' · Primera y Avanzada', b[2]].some(function(tx){ if(libre>c.measureText(tx).width){ c.fillText(tx, xi, h/2); return true; } }); });
-			PLAN.marcas.forEach(function(m){ var x=xDe(m[0],w); if(x<0||x>w) return; c.fillStyle='#fbbf24'; c.fillRect(x-d/2,0,d,h); c.fillText(m[1], x+3*d, h/2); });
+			PLAN.marcas.forEach(function(m){ var x=xDe(m[0],w); if(x<0||x>w) return; var tw=c.measureText(m[1]).width;
+				c.fillStyle='rgba(8,12,24,.9)'; c.fillRect(x+d, 2*d, tw+4*d, h-4*d); c.fillStyle='#fbbf24'; c.fillRect(x-d/2,0,d,h); c.fillText(m[1], x+3*d, h/2); });
 		}
 		function dibujarEscala(){
 			var cv=$('rx-esc'), d=ajustar(cv), c=cv.getContext('2d'), w=cv.width, h=cv.height;
@@ -341,7 +356,31 @@ function rau_receptor_kiwi( $args = array() ) {
 			$('rx-marca').style.left=Math.max(0,Math.min(pant,x))+'px';
 			$('rx-filtro').style.left=Math.max(0,a)+'px'; $('rx-filtro').style.width=Math.max(1,Math.min(pant,b)-Math.max(0,a))+'px';
 		}
-		function redibujarFijos(){ dibujarPlan(); dibujarEscala(); dibujarEspectro(); marcas(); }
+		/* Estaciones reportadas (cluster DX, POTA) sobre la cascada. Las pone la consola de
+		   Herramientas con RauRx.ponerSpots(); tocar una la sintoniza. */
+		function dibujarSpots(){
+			var cv=$('rx-spots'), d=ajustar(cv), c=cv.getContext('2d'), w=cv.width, h=cv.height;
+			c.clearRect(0,0,w,h); st.golpes=[]; if(!st.wfSpan || !st.spots.length) return;
+			c.font='bold '+(10*d)+'px ui-monospace,monospace'; c.textBaseline='middle';
+			var fin=-1, vis=st.spots.filter(function(s){ var x=xDe(s.khz,w); return x>=0 && x<=w; }).sort(function(a,b){ return a.khz-b.khz; });
+			vis.forEach(function(s){
+				var x=xDe(s.khz,w), col=s.fuente==='pota'?'#34d399':'#fbbf24';
+				c.fillStyle=col; c.beginPath(); c.moveTo(x-3*d,0); c.lineTo(x+3*d,0); c.lineTo(x,5*d); c.closePath(); c.fill();
+				var tx=s.dx||'', ancho=c.measureText(tx).width;
+				if(x+2*d>fin){ c.fillText(tx, x+2*d, h*0.62); fin=x+2*d+ancho+6*d; }
+				st.golpes.push({x:x/d, s:s});
+			});
+		}
+		/* Sin conexión (o sin cascada) la pantalla igual muestra la banda: plan, escala y spots
+		   alrededor de la frecuencia, con el mismo ancho que tendría la cascada a este zoom. */
+		function vistaLocal(forzar){
+			if(st.on && st.wf && st.ultXbin>=0) return;
+			var span=st.bw/Math.pow(2,st.zoom), f=st.freq*1000;
+			if(!forzar && st.wfSpan===span && f>st.wfStart+span*0.1 && f<st.wfStart+span*0.9) return;
+			st.wfSpan=span; st.wfStart=Math.max(0, Math.min(st.bw-span, f-span/2));
+			dibujarPlan(); dibujarEscala(); dibujarSpots(); marcas();
+		}
+		function redibujarFijos(){ dibujarPlan(); dibujarEscala(); dibujarEspectro(); dibujarSpots(); marcas(); }
 
 		/* ── Sintonía ─────────────────────────────────────────────────────── */
 		function pintarFreq(){
@@ -354,10 +393,12 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.freq=Math.min(30000, Math.max(10, Math.round(f*100)/100));
 			if(modo && MODOS[modo]) st.modo=modo;
 			enviarModo();
-			if(recentrar!==false) zoomA(st.zoom);
+			if(recentrar!==false) zoomA(st.zoom); else vistaLocal();
 			pintarFreq(); guardar(); marcas();
+			// La consola de Herramientas sigue la frecuencia: bitácora, lista de spots, banda del mapa
+			document.dispatchEvent(new CustomEvent('rau:frecuencia', {detail:{khz:st.freq, modo:st.modo}}));
 		}
-		function zoomA(z){ st.zoom=Math.max(0, Math.min(st.zoomMax, z)); send(st.wf, 'SET zoom='+st.zoom+' cf='+st.freq.toFixed(3)); $('rx-zoom').textContent=st.zoom; }
+		function zoomA(z){ st.zoom=Math.max(0, Math.min(st.zoomMax, z)); send(st.wf, 'SET zoom='+st.zoom+' cf='+st.freq.toFixed(3)); $('rx-zoom').textContent=st.zoom; vistaLocal(true); }
 		function redondear(f){ return Math.round(f/st.paso)*st.paso; }
 
 		/* ── Audio ────────────────────────────────────────────────────────── */
@@ -424,7 +465,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		function avisoMsg(o, stream){
 			// El HK4RAU tiene 8 canales de audio y solo 3 con cascada: si esos están ocupados se sigue escuchando.
 			if('too_busy' in o && stream==='W/F'){ $('rx-ayuda').textContent='Cascada no disponible: sus canales están ocupados. El audio sigue.'; $('rx-ayuda').classList.remove('hidden'); try{ st.wf.onclose=null; st.wf.close(); }catch(e){} st.wf=null; return true; }
-			if('too_busy' in o){ msg('Los '+o.too_busy+' canales del receptor están ocupados en este momento. Mira abajo a qué horas suele haber canal libre.'); apagar(true); return true; }
+			if('too_busy' in o){ msg('Los '+o.too_busy+' canales del receptor están ocupados en este momento.'); apagar(true); $('rx-avisar').classList.remove('hidden'); return true; }
 			if('badp' in o && o.badp!=='0'){ msg('El receptor no aceptó la conexión: todos los canales libres requieren clave.'); apagar(true); return true; }
 			if('down' in o){ msg('El receptor está en mantenimiento. Intenta más tarde.'); apagar(true); return true; }
 			if('inactivity_timeout' in o || 'tlimit_exp' in o){ msg('El receptor cerró la sesión por tiempo. Pulsa «Escuchar» para volver.'); apagar(true); return true; }
@@ -450,7 +491,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.ctx=st.ctx||new (window.AudioContext||window.webkitAudioContext)(); st.ctx.resume();
 			if(!st.gain){ st.gain=st.ctx.createGain(); st.gain.connect(st.ctx.destination); }
 			st.on=true; st.t=0; st.dec={i:0,p:0}; st.rpos=0; st.rprev=0; st.ts=Date.now(); st.esp=[]; st.sqAbierto=st.sq===0; volumen();
-			$('rx-power').textContent='■ Detener'; $('rx-ayuda').classList.add('hidden');
+			$('rx-power').textContent='■ Detener'; $('rx-ayuda').classList.add('hidden'); $('rx-avisar').classList.add('hidden');
 			msg('Conectando con el receptor…');
 			st.snd=abrir('SND', function(o){
 				if(o.audio_rate) send(st.snd, 'SET AR OK in='+o.audio_rate+' out='+Math.round(st.ctx.sampleRate));
@@ -480,7 +521,7 @@ function rau_receptor_kiwi( $args = array() ) {
 				if(tag!=='W/F') return;
 				var dv=new DataView(buf), xbin=dv.getUint32(4,true), z=dv.getUint32(8,true)&0xffff, datos=new Uint8Array(buf,16);
 				st.wfStart=xbin/(st.fft*Math.pow(2,st.zoomMax))*st.bw; st.wfSpan=st.bw/Math.pow(2,z);
-				if(xbin!==st.ultXbin || z!==st.ultZoom){ st.ultXbin=xbin; st.ultZoom=z; limpiarCascada(); st.esp=[]; st.piso=null; dibujarPlan(); dibujarEscala(); marcas(); }
+				if(xbin!==st.ultXbin || z!==st.ultZoom){ st.ultXbin=xbin; st.ultZoom=z; limpiarCascada(); st.esp=[]; st.piso=null; dibujarPlan(); dibujarEscala(); dibujarSpots(); marcas(); }
 				var lin=new Float32Array(datos.length); for(var i=0;i<datos.length;i++) lin[i]=datos[i]-255;
 				st.esp.push(lin); if(st.esp.length>10) st.esp.shift();
 				lineaCascada(datos);
@@ -506,6 +547,27 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.snd=st.wf=null; st.ultXbin=-1;
 			$('rx-power').textContent='▶ Escuchar'; $('rx-s').textContent='—'; $('rx-smeter').style.width='0';
 			if(!silencioso) msg('Desconectado. El canal quedó libre para otra persona.');
+			limpiarCascada(); st.esp=[]; dibujarEspectro(); vistaLocal(true);
+		}
+		/* «Avísame cuando haya canal»: consulta el estado cada 30 s y avisa con un tono, una
+		   notificación del navegador si la persona la permitió, y el título de la pestaña. */
+		function vigilarCanal(){
+			if(st.vigia) return;
+			$('rx-avisar').textContent='⏳ Te aviso apenas haya canal…'; $('rx-avisar').disabled=true;
+			if(window.Notification && Notification.permission==='default') Notification.requestPermission().catch(function(){});
+			var titulo=document.title;
+			function revisar(){
+				fetch(AJAX_RX+'?action=rau_sdr_status', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+					if(!j.success || !(j.data.libres>0)) return;
+					clearInterval(st.vigia); st.vigia=null;
+					$('rx-avisar').classList.add('hidden'); $('rx-avisar').disabled=false; $('rx-avisar').textContent='🔔 Avísame cuando haya canal';
+					msg('¡Hay canal libre! Pulsa «Escuchar».');
+					try { var ctx=st.ctx||new (window.AudioContext||window.webkitAudioContext)(); st.ctx=ctx; var o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=880; g.gain.value=0.15; o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.35); } catch(e){}
+					if(window.Notification && Notification.permission==='granted'){ try { new Notification('KiwiSDR HK4RAU', {body:'Hay un canal libre. Vuelve a la pestaña y pulsa Escuchar.'}); } catch(e){} }
+					document.title='🔔 Canal libre · '+titulo; setTimeout(function(){ document.title=titulo; }, 60000);
+				}).catch(function(e){ rauErr(e); });
+			}
+			st.vigia=setInterval(revisar, 30000); revisar();
 		}
 
 		/* ── Controles ────────────────────────────────────────────────────── */
@@ -518,7 +580,9 @@ function rau_receptor_kiwi( $args = array() ) {
 		document.body.appendChild($('rx-mini')); // fuera del panel, que Herramientas oculta al cambiar de herramienta
 		$('rx-mini-stop').addEventListener('click', function(){ apagar(); });
 		$('rx-mini-ver').addEventListener('click', function(){
-			if(typeof window.rauAbrirHerramienta==='function') window.rauAbrirHerramienta('receptor');
+			// En la consola el receptor solo quedó fuera de la vista: basta con desplazarse
+			if(typeof window.rauIrPestana==='function') window.rauIrPestana('escuchar');
+			if($('rx-app').offsetParent===null && typeof window.rauAbrirHerramienta==='function') window.rauAbrirHerramienta('receptor');
 			$('rx-app').scrollIntoView({block:'start', behavior:'smooth'}); mini();
 		});
 		$('rx-zoom-mas').addEventListener('click', function(){ zoomA(st.zoom+1); guardar(); });
@@ -549,6 +613,9 @@ function rau_receptor_kiwi( $args = array() ) {
 			(navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function(){ msg('Enlace copiado: '+url); }, function(){ prompt('Copia este enlace:', url); });
 		});
 		$('rx-power').addEventListener('click', function(){ st.on ? apagar() : encender(); });
+		$('rx-avisar').addEventListener('click', vigilarCanal);
+		// En la consola los ajustes avanzados van plegados para que la lista de estaciones quede cerca
+		$('rx-ajustes').addEventListener('click', function(){ var ab=$('rx-avanzado').classList.toggle('abierto'); this.setAttribute('aria-expanded', ab); });
 
 		/* Pantalla: tocar sintoniza, arrastrar recorre la banda, la rueda mueve un paso */
 		var pant=$('rx-pantalla'), arr=null;
@@ -560,8 +627,13 @@ function rau_receptor_kiwi( $args = array() ) {
 		});
 		pant.addEventListener('pointerup', function(e){
 			if(!arr) return; var a=arr; arr=null;
-			if(a.movido) sintonizar(redondear(st.freq));
-			else { var f=freqEn(e.clientX); sintonizar(st.modo==='am'||st.modo==='nbfm' ? Math.round(f) : redondear(f), null, false); }
+			if(a.movido){ sintonizar(redondear(st.freq)); return; }
+			var cerca=null, r=pant.getBoundingClientRect(), xr=e.clientX-r.left;
+			// Con setPointerCapture el destino del evento es la pantalla entera: se mira la altura
+			var rs=$('rx-spots').getBoundingClientRect();
+			if(e.clientY>=rs.top-4 && e.clientY<=rs.bottom+4) st.golpes.forEach(function(g){ var dd=Math.abs(g.x-xr); if(dd<14 && (!cerca || dd<cerca.d)) cerca={d:dd, s:g.s}; });
+			if(cerca){ sintonizar(cerca.s.khz, modoPara(cerca.s.khz, cerca.s.modo)); msg('Sintonizado '+cerca.s.dx+' en '+cerca.s.khz.toFixed(2)+' kHz'+(st.on?'.':'. Pulsa «Escuchar» para oírlo.')); return; }
+			{ var f=freqEn(e.clientX); sintonizar(st.modo==='am'||st.modo==='nbfm' ? Math.round(f) : redondear(f), null, false); }
 		});
 		pant.addEventListener('wheel', function(e){ if(!st.on) return; e.preventDefault(); sintonizar(redondear(st.freq)+(e.deltaY<0?1:-1)*st.paso, null, false); }, {passive:false});
 		$('rx-app').addEventListener('keydown', function(e){
@@ -589,16 +661,20 @@ function rau_receptor_kiwi( $args = array() ) {
 		/* También al mostrarse el panel en Herramientas (antes medía 0 px de ancho) */
 		if(window.ResizeObserver) new ResizeObserver(function(){ redibujarFijos(); }).observe($('rx-pantalla')); else window.addEventListener('resize', function(){ redibujarFijos(); });
 		window.addEventListener('pagehide', function(){ if(st.on) apagar(true); });
-		construirLut(); limpiarCascada(); pintarFreq(); pintarFavs(); redibujarFijos();
+		construirLut(); limpiarCascada(); pintarFreq(); pintarFavs(); vistaLocal(true); redibujarFijos();
 
 		/* API para otras herramientas: abrir el receptor en una frecuencia */
-		window.RauRx={ sintonizar:function(f,m){ sintonizar(f, m||modoPara(f,'')); }, encender:encender, modoPara:modoPara, encendido:function(){ return st.on; } };
+		window.RauRx={ sintonizar:function(f,m){ sintonizar(f, m||modoPara(f,'')); }, encender:encender, modoPara:modoPara, encendido:function(){ return st.on; },
+			estado:function(){ return {khz:st.freq, modo:st.modo, on:st.on}; },
+			ponerSpots:function(l){ st.spots=(l||[]).filter(function(s){ return s.khz>0 && s.khz<30000; }); dibujarSpots(); } };
 		window.rauEscuchar=function(fk, pista){
 			fk=+fk; if(!(fk>0)) return;
 			var m=modoPara(fk, pista);
-			if(typeof window.rauAbrirHerramienta==='function') window.rauAbrirHerramienta('receptor');
+			// En la consola el receptor ya está a la vista: se sintoniza ahí mismo, sin cambiar de página
+			if(typeof window.rauIrPestana==='function') window.rauIrPestana('escuchar');
+			if($('rx-app').offsetParent===null && typeof window.rauAbrirHerramienta==='function') window.rauAbrirHerramienta('receptor');
 			sintonizar(fk, m); if(!st.on) encender();
-			setTimeout(function(){ $('rx-app').scrollIntoView({block:'start', behavior:'smooth'}); }, 50);
+			setTimeout(function(){ $('rx-app').scrollIntoView({block:'nearest', behavior:'smooth'}); }, 50);
 		};
 	})();
 	</script>
