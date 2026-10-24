@@ -37,8 +37,6 @@ function rau_receptor_plan() {
 function rau_receptor_kiwi( $args = array() ) {
 	$args  = wp_parse_args( $args, array( 'estado' => true ) );
 	$relay = get_option( 'rau_kiwi_relay', '' );
-	$btn   = 'rx-tecla';
-	$sel   = 'rounded-md border border-border bg-background px-2 py-2 font-mono text-xs';
 	?>
 	<div id="rx-componente">
 	<?php if ( $relay ) : ?>
@@ -86,102 +84,102 @@ function rau_receptor_kiwi( $args = array() ) {
 		</div>
 		<p class="rx-ayuda-digitos"><span class="rx-solo-raton">Haz clic arriba o abajo de un dígito para subirlo o bajarlo, gira la perilla o usa la rueda sobre ellos.</span><span class="rx-solo-tactil">Toca ▲ o ▼ sobre un dígito para cambiarlo, o gira la perilla con el dedo.</span></p>
 
-		<div id="rx-pantalla" class="relative mt-5 touch-none select-none overflow-hidden rounded-xl border border-border/60 bg-background" style="cursor:crosshair">
-			<canvas id="rx-plan" class="block h-[20px] w-full" aria-hidden="true"></canvas>
-			<canvas id="rx-spots" class="block h-[18px] w-full" aria-label="Estaciones reportadas en esta parte de la banda: toca una para sintonizarla"></canvas>
-			<canvas id="rx-esp" class="block h-[80px] w-full" aria-hidden="true"></canvas>
-			<canvas id="rx-wf" width="1024" height="200" class="block h-[200px] w-full" aria-label="Cascada de frecuencias: toca para sintonizar, arrastra para recorrer la banda, usa la rueda para ajustar"></canvas>
-			<canvas id="rx-esc" class="block h-[22px] w-full" aria-hidden="true"></canvas>
-			<div id="rx-filtro" class="pointer-events-none absolute bg-white/10" style="top:38px;height:280px;left:50%;width:0"></div>
-			<div id="rx-marca" class="pointer-events-none absolute w-px bg-accent" style="top:38px;height:280px;left:50%"></div>
-			<p id="rx-ayuda" class="pointer-events-none absolute inset-x-0 top-[150px] text-center font-mono text-xs text-muted-foreground">Pulsa «Escuchar». Luego toca una señal en la cascada para sintonizarla.</p>
+		<div class="rx-estado-linea">
+			<span class="rx-estado-led" aria-hidden="true"></span>
+			<p id="rx-msg" role="status" aria-live="polite">Pulsa «Escuchar» para conectarte. Usarás uno de los canales del receptor mientras escuchas.</p>
+			<button type="button" id="rx-avisar" class="rx-tecla hidden">🔔 Avísame cuando haya canal</button>
 		</div>
-		<div id="rx-cw" class="mt-3 hidden rounded-xl border border-border/60 bg-background p-3">
-			<div class="mb-1 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-				<span>🔤 Decodificador de CW</span><span id="rx-cw-info" class="normal-case tracking-normal">Esperando una señal…</span>
+
+		<div class="rx-pan">
+			<div class="rx-pan-cab">
+				<span class="rx-serigrafia">Panorámico</span>
+				<span id="rx-donde" class="rx-pan-donde" aria-live="polite"></span>
+				<div class="rx-span" role="group" aria-label="Ancho visible de la cascada">
+					<span class="rx-serigrafia">Span</span>
+					<button type="button" id="rx-zoom-menos" class="rx-tecla rx-tecla-mini" aria-label="Ver más banda (alejar)">−</button>
+					<span class="rx-span-v"><span id="rx-ancho">234 kHz</span><span id="rx-zoom" class="hidden">7</span></span>
+					<button type="button" id="rx-zoom-mas" class="rx-tecla rx-tecla-mini" aria-label="Ver menos banda (acercar)">+</button>
+				</div>
 			</div>
-			<p id="rx-cw-texto" class="min-h-[2.5rem] break-words font-mono text-base text-foreground" aria-live="polite"></p>
-			<div class="mt-1 flex items-center justify-between gap-2">
-				<span class="text-[10px] text-muted-foreground">Funciona mejor con una sola señal clara: tócala en la cascada para centrarla en el filtro y usa el filtro «Angosto».</span>
-				<button type="button" id="rx-cw-borrar" class="shrink-0 font-mono text-[10px] text-primary hover:underline">Borrar</button>
+			<div id="rx-pantalla" class="relative touch-none select-none overflow-hidden" style="cursor:crosshair">
+				<canvas id="rx-plan" class="block h-[20px] w-full" aria-hidden="true"></canvas>
+				<canvas id="rx-spots" class="block h-[18px] w-full" aria-label="Estaciones reportadas en esta parte de la banda: toca una para sintonizarla"></canvas>
+				<canvas id="rx-esp" class="block h-[80px] w-full" aria-hidden="true"></canvas>
+				<canvas id="rx-wf" width="1024" height="200" class="block h-[200px] w-full" aria-label="Cascada de frecuencias: toca para sintonizar, arrastra para recorrer la banda, usa la rueda para ajustar"></canvas>
+				<canvas id="rx-esc" class="block h-[22px] w-full" aria-hidden="true"></canvas>
+				<div id="rx-filtro" class="pointer-events-none absolute bg-white/10" style="top:38px;height:280px;left:50%;width:0"></div>
+				<div id="rx-marca" class="pointer-events-none absolute w-px bg-accent" style="top:38px;height:280px;left:50%"></div>
+				<p id="rx-ayuda" class="pointer-events-none absolute inset-x-0 top-[150px] text-center font-mono text-xs text-muted-foreground">Pulsa «Escuchar». Luego toca una señal en la cascada para sintonizarla.</p>
 			</div>
 		</div>
 
-		<div class="mt-5">
-			<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Banda</p>
-				<p id="rx-donde" class="font-mono text-[11px] text-primary" aria-live="polite"></p>
+		<div id="rx-cw" class="rx-cw hidden">
+			<div class="rx-cw-cab">
+				<span class="rx-serigrafia">Decodificador CW</span><span id="rx-cw-info">Esperando una señal…</span>
+				<button type="button" id="rx-cw-borrar" class="rx-tecla rx-tecla-mini">Borrar</button>
 			</div>
-			<div id="rx-bandas" class="rx-fila flex flex-wrap gap-1.5"></div>
-			<div id="rx-segmentos" class="mt-2 flex flex-wrap items-center gap-1.5"></div>
+			<p id="rx-cw-texto" class="rx-cw-texto" aria-live="polite"></p>
+			<p class="rx-cw-nota">Funciona mejor con una sola señal clara: tócala en la cascada para centrarla en el filtro y usa el filtro «Angosto».</p>
 		</div>
 
-		<div class="mt-5 flex flex-wrap items-end gap-x-6 gap-y-4">
-			<div>
-				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Modo</p>
-				<div id="rx-modos" class="flex flex-wrap gap-1.5"></div>
+		<div class="rx-mesa">
+			<div class="rx-grupo rx-grupo-banda" role="group" aria-label="Banda">
+				<span class="rx-serigrafia">Banda</span>
+				<div id="rx-bandas" class="rx-fila rx-teclas"></div>
+				<div id="rx-segmentos" class="rx-teclas rx-segmentos"></div>
 			</div>
-			<label class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Filtro<br>
-				<select id="rx-filtro-sel" class="<?php echo esc_attr( $sel ); ?> mt-2 normal-case tracking-normal"><option value="0">Angosto</option><option value="1" selected>Normal</option><option value="2">Ancho</option></select>
-			</label>
-			<div>
-				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Paso</p>
-				<div id="rx-pasos" class="flex flex-wrap gap-1.5" role="group" aria-label="Paso de sintonía">
+			<div class="rx-grupo" role="group" aria-label="Modo">
+				<span class="rx-serigrafia">Modo</span>
+				<div id="rx-modos" class="rx-teclas"></div>
+			</div>
+			<div class="rx-grupo" role="group" aria-label="Filtro">
+				<span class="rx-serigrafia">Filtro</span>
+				<div id="rx-filtros" class="rx-teclas rx-teclas-iguales">
+					<button type="button" data-v="0" class="rx-filtro-op rx-tecla rx-tecla-doble">Angosto <span class="rx-tecla-sub"></span></button><button type="button" data-v="1" class="rx-filtro-op rx-tecla rx-tecla-doble">Normal <span class="rx-tecla-sub"></span></button><button type="button" data-v="2" class="rx-filtro-op rx-tecla rx-tecla-doble">Ancho <span class="rx-tecla-sub"></span></button>
+				</div>
+			</div>
+			<div class="rx-grupo" role="group" aria-label="Sintonía">
+				<span class="rx-serigrafia">Sintonía · paso</span>
+				<div id="rx-pasos" class="rx-teclas" role="group" aria-label="Paso de sintonía">
 					<button type="button" data-v="0.01" class="rx-paso-op rx-tecla">10 Hz</button><button type="button" data-v="0.1" class="rx-paso-op rx-tecla">100 Hz</button><button type="button" data-v="1" class="rx-paso-op rx-tecla">1 kHz</button><button type="button" data-v="5" class="rx-paso-op rx-tecla">5 kHz</button>
 				</div>
-			</div>
-			<div>
-				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Ir a</p>
-				<div class="flex flex-wrap items-center gap-1">
-					<button type="button" data-pasos="-1" class="rx-paso <?php echo esc_attr( $btn ); ?>" aria-label="Bajar un paso">◀ <span class="rx-paso-txt">1 kHz</span></button>
+				<div class="rx-teclas rx-ir">
+					<button type="button" data-pasos="-1" class="rx-paso rx-tecla rx-tecla-sin-led" aria-label="Bajar un paso">◀</button>
 					<label class="sr-only" for="rx-input">Frecuencia en kHz o MHz</label>
-					<input id="rx-input" type="text" inputmode="decimal" class="w-28 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm" placeholder="kHz o MHz" title="Escribe 7074 (kHz) o 7.074 (MHz) y pulsa Enter">
-					<button type="button" data-pasos="1" class="rx-paso <?php echo esc_attr( $btn ); ?>" aria-label="Subir un paso"><span class="rx-paso-txt">1 kHz</span> ▶</button>
+					<input id="rx-input" type="text" inputmode="decimal" class="rx-entrada" placeholder="kHz o MHz" title="Escribe 7074 (kHz) o 7.074 (MHz) y pulsa Enter">
+					<button type="button" data-pasos="1" class="rx-paso rx-tecla rx-tecla-sin-led" aria-label="Subir un paso">▶</button>
 				</div>
 			</div>
-			<div>
-				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Ancho visible</p>
-				<div class="flex items-center gap-1">
-					<button type="button" id="rx-zoom-menos" class="<?php echo esc_attr( $btn ); ?>" aria-label="Ver más banda (alejar)">−</button>
-					<span class="min-w-[4.5rem] px-1 text-center font-mono text-xs text-muted-foreground"><span id="rx-ancho">234 kHz</span><span id="rx-zoom" class="hidden">7</span></span>
-					<button type="button" id="rx-zoom-mas" class="<?php echo esc_attr( $btn ); ?>" aria-label="Ver menos banda (acercar)">+</button>
-				</div>
+			<div class="rx-grupo" role="group" aria-label="Audio">
+				<span class="rx-serigrafia">Audio</span>
+				<label class="rx-fader"><span class="rx-fader-n">Vol</span><input id="rx-vol" type="range" min="0" max="100" value="60" aria-label="Volumen"><span id="rx-vol-v" class="rx-fader-v">60</span></label>
+				<label class="rx-fader"><span class="rx-fader-n" title="Silenciador: corta el ruido entre transmisiones">SQL</span><input id="rx-sq" type="range" min="0" max="9" value="0" aria-label="Silenciador"><span id="rx-sq-v" class="rx-fader-v">off</span></label>
+				<button type="button" id="rx-agc" class="rx-tecla" aria-pressed="true" title="Control automático de ganancia: iguala el volumen de señales fuertes y débiles">AGC automático</button>
 			</div>
 		</div>
 
-		<button type="button" id="rx-ajustes" class="rx-ajustes-btn mt-5 items-center gap-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs hover:border-primary/50" aria-expanded="false" aria-controls="rx-avanzado">⚙ Ajustes: colores, contraste, silenciador, volumen y favoritos</button>
-		<div id="rx-avanzado" class="rx-avanzado">
-		<div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<label class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Colores de la cascada
-				<select id="rx-paleta" class="<?php echo esc_attr( $sel ); ?> mt-2 block w-full normal-case tracking-normal">
-					<option value="ambar">Ámbar (trazas amarillas)</option><option value="rau">Cian RAU</option><option value="clasica">Clásica KiwiSDR</option><option value="turbo">Turbo</option><option value="fosforo">Fósforo verde</option><option value="grises">Grises</option>
-				</select>
-			</label>
-			<label class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Contraste <span id="rx-contraste-v" class="normal-case tracking-normal">30 dB</span>
-				<input id="rx-contraste" type="range" min="15" max="60" value="30" class="mt-3 block w-full accent-primary">
-			</label>
-			<label class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Silenciador <span id="rx-sq-v" class="normal-case tracking-normal">apagado</span>
-				<input id="rx-sq" type="range" min="0" max="9" value="0" class="mt-3 block w-full accent-primary">
-			</label>
-			<div class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Volumen
-				<div class="mt-2 flex items-center gap-3"><input id="rx-vol" type="range" min="0" max="100" value="60" class="w-full accent-primary" aria-label="Volumen">
-				<label class="flex shrink-0 items-center gap-1 whitespace-nowrap normal-case tracking-normal"><input id="rx-agc" type="checkbox" checked class="accent-primary"> AGC</label></div>
+		<button type="button" id="rx-ajustes" class="rx-ajustes-btn rx-tecla" aria-expanded="false" aria-controls="rx-avanzado">☰ Menú: cascada y memorias</button>
+		<div id="rx-avanzado" class="rx-avanzado rx-mesa">
+			<div class="rx-grupo" role="group" aria-label="Cascada">
+				<span class="rx-serigrafia">Cascada</span>
+				<label class="rx-fader"><span class="rx-fader-n">Color</span>
+					<select id="rx-paleta" class="rx-entrada">
+						<option value="ambar">Ámbar</option><option value="rau">Cian RAU</option><option value="clasica">Clásica KiwiSDR</option><option value="turbo">Turbo</option><option value="fosforo">Fósforo verde</option><option value="grises">Grises</option>
+					</select>
+				</label>
+				<label class="rx-fader"><span class="rx-fader-n">Contr.</span><input id="rx-contraste" type="range" min="15" max="60" value="30" aria-label="Contraste de la cascada"><span id="rx-contraste-v" class="rx-fader-v">30 dB</span></label>
+			</div>
+			<div class="rx-grupo rx-grupo-mem" role="group" aria-label="Memorias">
+				<span class="rx-serigrafia">Memorias</span>
+				<div id="rx-favs" class="rx-teclas"></div>
+				<button type="button" id="rx-fav-add" class="rx-tecla">M+ Guardar esta frecuencia</button>
 			</div>
 		</div>
-
-		<div class="mt-5">
-			<div class="mb-2 flex items-center justify-between gap-3"><p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Favoritos</p><button type="button" id="rx-fav-add" class="font-mono text-xs text-primary hover:underline">★ Guardar esta frecuencia</button></div>
-			<div id="rx-favs" class="flex flex-wrap gap-2"><p class="text-xs text-muted-foreground">Guarda aquí las frecuencias que más escuchas. Quedan en este navegador.</p></div>
-		</div>
-		</div>
-
-		<p id="rx-msg" class="mt-4 font-mono text-xs text-muted-foreground" role="status" aria-live="polite">Pulsa «Escuchar» para conectarte. Usarás uno de los canales del receptor mientras escuchas.</p>
-		<button type="button" id="rx-avisar" class="mt-2 hidden rounded-md border border-primary/40 bg-primary/10 px-3 py-2 font-mono text-xs font-bold text-primary hover:bg-primary/20">🔔 Avísame cuando haya canal</button>
 	</div>
-	<div id="rx-mini" style="bottom:calc(1rem + env(safe-area-inset-bottom));left:1rem" class="fixed z-50 hidden items-center gap-2 rounded-full border border-primary/40 bg-card px-3 py-2 font-mono text-xs shadow-lg" role="region" aria-label="Receptor sonando">
-		<span class="text-primary">🎧 <span id="rx-mini-f">—</span></span>
-		<button type="button" id="rx-mini-ver" class="rounded-full border border-border px-2 py-1 hover:border-primary/50">Ver</button>
-		<button type="button" id="rx-mini-stop" class="rounded-full border border-border px-2 py-1 hover:border-primary/50" aria-label="Detener el receptor">■</button>
+	<div id="rx-mini" style="bottom:calc(1rem + env(safe-area-inset-bottom));left:1rem" class="rx-mini fixed z-50 hidden" role="region" aria-label="Receptor sonando">
+		<span class="rx-mini-led" aria-hidden="true"></span><span id="rx-mini-f" class="rx-mini-lcd">—</span>
+		<button type="button" id="rx-mini-ver" class="rx-mini-btn">Ver</button>
+		<button type="button" id="rx-mini-stop" class="rx-mini-btn rx-mini-stop" aria-label="Detener el receptor">■</button>
 	</div>
 	<p class="rx-ayuda-teclado mt-3 text-xs text-muted-foreground">En computador: flechas ← → para sintonizar un paso, ↑ ↓ para diez. ¿Necesitas decodificadores o «acampar» cuando está lleno? Usa la <a href="<?php echo esc_url( $relay . '/' ); ?>" target="_blank" rel="noopener" class="text-primary hover:underline">interfaz completa del KiwiSDR</a>.</p>
 	<?php else : ?>
@@ -281,7 +279,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			{n:'12 m',  r:[24890,24990], s:[['CW',24900,'cw'],['FT8',24915,'usb'],['Fonía',24950,'usb']]},
 			{n:'10 m',  r:[28000,29700], s:[['CW',28030,'cw'],['FT8',28074,'usb'],['Fonía',28400,'usb']]}
 		];
-		var OTRAS=[['Onda corta 49 m',6000,'am',[5900,6200]],['Onda corta 31 m',9650,'am',[9400,9900]],['Onda corta 25 m',11800,'am',[11600,12100]],
+		var OTRAS=[['Onda corta 49 m',6000,'am',[5900,6200]],['Onda corta 31 m',9650,'am',[9400,9900]],['Onda corta 25 m',11800,'am',[11600,12100]],['Onda corta 19 m',15400,'am',[15100,15800]],['Onda corta 16 m',17700,'am',[17480,17900]],
 			['Hora WWV 5 MHz',5000,'am',[4998,5002]],['Hora WWV 10 MHz',10000,'am',[9998,10002]],['Hora WWV 15 MHz',15000,'am',[14998,15002]]];
 		function bandaDe(f){ for(var i=0;i<BANDAS.length;i++) if(f>=BANDAS[i].r[0] && f<=BANDAS[i].r[1]) return BANDAS[i]; return null; }
 		function segmentoDe(b, f){
@@ -314,13 +312,23 @@ function rau_receptor_kiwi( $args = array() ) {
 		var st={freq:7150, modo:'lsb', filtro:1, paso:1, zoom:7, zoomMax:14, fft:1024, bw:30000000, on:false, snd:null, wf:null, ctx:null, gain:null,
 			t:0, dec:{i:0,p:0}, rate:12000, rpos:0, rprev:0, ka:null, ts:0, paleta:'ambar', contraste:30, sq:0, agc:true, mute:false, sqAbierto:true, sqHasta:0,
 			grab:null, esp:[], wfStart:0, wfSpan:0, piso:null, lut:null, ultXbin:-1, ultZoom:-1, spots:[], golpes:[], vigia:null, pico:0, perilla:0};
+		var g=null;
 		try {
-			var g=JSON.parse(localStorage.getItem('rau_rx')||'null');
+			g=JSON.parse(localStorage.getItem('rau_rx')||'null');
 			if(g){ if(g.freq) st.freq=g.freq; if(MODOS[g.modo]) st.modo=g.modo; if(g.zoom!=null) st.zoom=g.zoom|0; if(PALETAS.hasOwnProperty(g.paleta)) st.paleta=g.paleta;
 				if(g.contraste) st.contraste=g.contraste; if(g.paso) st.paso=g.paso; if(g.filtro!=null) st.filtro=g.filtro; }
 		} catch(e){}
+		/* Primera visita (nada guardado ni frecuencia en el enlace): al conectar, el receptor busca en la
+		   cascada la emisora de onda corta más fuerte de ese momento y la sintoniza, para que quien llega
+		   oiga de inmediato para qué sirve. Las bandas van según la hora: de día (11 a 22 UTC, 6 a. m. a
+		   5 p. m. en Colombia) propagan las altas; de noche, las bajas. */
+		var hUtc=new Date().getUTCHours(), DIA=hUtc>=11 && hUtc<22;
+		var OC_ARRANQUE = DIA ? [[11600,12100,'25 m'],[17480,17900,'16 m'],[15100,15800,'19 m'],[9400,9900,'31 m']]
+			: [[5900,6200,'49 m'],[9400,9900,'31 m'],[11600,12100,'25 m'],[15100,15800,'19 m']];
+		var EMISORAS=[[5000,'WWV, hora oficial de EE. UU.'],[10000,'WWV, hora oficial de EE. UU.'],[15000,'WWV, hora oficial de EE. UU.']];
+		if(!g){ st.freq=(OC_ARRANQUE[0][0]+OC_ARRANQUE[0][1])/2; st.modo='am'; st.zoom=6; st.primera=true; }
 		var q=new URLSearchParams(location.search);
-		if(q.get('f') && +q.get('f')>0){ st.freq=+q.get('f'); st.modo=MODOS[q.get('m')]?q.get('m'):modoPara(st.freq,''); }
+		if(q.get('f') && +q.get('f')>0){ st.primera=false; st.freq=+q.get('f'); st.modo=MODOS[q.get('m')]?q.get('m'):modoPara(st.freq,''); }
 
 		function guardar(){ try { localStorage.setItem('rau_rx', JSON.stringify({freq:st.freq, modo:st.modo, zoom:st.zoom, paleta:st.paleta, contraste:st.contraste, paso:st.paso, filtro:st.filtro})); } catch(e){} }
 		function msg(t){ $('rx-msg').textContent=t; }
@@ -482,6 +490,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		}
 		function anchoTxt(){ var k=st.bw/Math.pow(2,st.zoom)/1000; return k>=1000 ? (k/1000).toFixed(k>=10000?0:1)+' MHz' : Math.round(k)+' kHz'; }
 		function pasoTxt(v){ return v>=1 ? v+' kHz' : Math.round(v*1000)+' Hz'; }
+		function emisoraDe(f){ var e=EMISORAS.filter(function(x){ return Math.abs(x[0]-f)<=2; })[0]; return e ? e[1] : ''; }
 		function pintarBanda(){
 			var b=bandaDe(st.freq), seg=segmentoDe(b, st.freq), otra=OTRAS.filter(function(o){ return st.freq>=o[3][0] && st.freq<=o[3][1]; })[0];
 			$('rx-ind-banda').textContent = b ? b.n : otra ? otra[0].replace('Onda corta ','OC ').replace('Hora ','') : 'GEN';
@@ -494,15 +503,18 @@ function rau_receptor_kiwi( $args = array() ) {
 			}).join('') : '';
 			var nov=PLAN.novicio.filter(function(x){ return st.freq>=x[0] && st.freq<x[1]; })[0];
 			$('rx-donde').textContent = b ? b.n+' · '+(seg==='FT8'?'segmento FT8 (digital)':seg==='CW'?'segmento de telegrafía':'segmento de fonía')+' · '+(nov?'Novicio: '+nov[2]:'solo Primera y Avanzada')
-				: otra ? otra[0] : 'Fuera de las bandas de radioaficionado';
+				: emisoraDe(st.freq) ? (otra ? otra[0].replace('Onda corta ','OC ')+' · ' : '')+emisoraDe(st.freq) : otra ? otra[0] : 'Fuera de las bandas de radioaficionado';
 		}
 		function pintarFreq(){
 			pintarDigitos(); if(document.activeElement!==$('rx-input')) $('rx-input').value=st.freq.toFixed(2);
 			$('rx-zoom').textContent=st.zoom; $('rx-ancho').textContent=anchoTxt(); $('rx-modo-txt').textContent=MODOS[st.modo].n;
 			document.querySelectorAll('.rx-paso-txt').forEach(function(x){ x.textContent=pasoTxt(st.paso); });
 			document.querySelectorAll('.rx-paso-op').forEach(function(x){ x.setAttribute('aria-pressed', +x.dataset.v===st.paso); });
-			var fb=MODOS[st.modo].f[st.filtro]; $('rx-ind-filtro').textContent=((fb[1]-fb[0])/1000).toFixed(1)+'k';
-			$('rx-ind-agc').classList.toggle('is-on', st.agc);
+			var anchoF=function(i){ var x=MODOS[st.modo].f[i]; return ((x[1]-x[0])/1000).toFixed(1)+'k'; };
+			$('rx-ind-filtro').textContent=anchoF(st.filtro);
+			document.querySelectorAll('.rx-filtro-op').forEach(function(x){ x.setAttribute('aria-pressed', +x.dataset.v===st.filtro); x.querySelector('.rx-tecla-sub').textContent=anchoF(+x.dataset.v); });
+			$('rx-ind-agc').classList.toggle('is-on', st.agc); $('rx-agc').setAttribute('aria-pressed', st.agc);
+			document.querySelectorAll('.rx-fav-ir').forEach(function(x){ x.setAttribute('aria-pressed', Math.abs(+x.dataset.f-st.freq)<0.005 && x.dataset.m===st.modo); });
 			pintarBanda();
 			$('rx-cw').classList.toggle('hidden', st.modo!=='cw');
 			document.querySelectorAll('.rx-modo').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.m===st.modo); });
@@ -648,7 +660,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.gain.gain.setTargetAtTime(v, st.ctx.currentTime, 0.03);
 		}
 		function smeter(raw){
-			var dbm=0.1*raw-127, s=dbm<=-73 ? Math.max(0,Math.round((dbm+127)/6)) : 9;
+			var dbm=0.1*raw-127; st.dbm = st.dbm==null ? dbm : st.dbm*0.9+dbm*0.1; var s=dbm<=-73 ? Math.max(0,Math.round((dbm+127)/6)) : 9;
 			$('rx-s').textContent=(dbm<=-73 ? 'S'+s : 'S9+'+Math.round(dbm+73)+' dB')+' · '+Math.round(dbm)+' dBm';
 			var pct=Math.max(0,Math.min(100,(dbm+127)/114*100));
 			$('rx-smeter').style.width=pct+'%';
@@ -720,6 +732,7 @@ function rau_receptor_kiwi( $args = array() ) {
 					sintonizar(st.freq, st.modo);
 					msg('Escuchando. Toca una señal en la cascada para sintonizarla o arrástrala para recorrer la banda.');
 					$('rx-libres').textContent='Conectado: usas uno de los canales del receptor';
+					if(st.primera){ st.primera=false; buscarEmisora(0); }
 				}
 				if(o.audio_adpcm_state){ var v=o.audio_adpcm_state.split(','); st.dec={i:+v[0]|0,p:+v[1]|0}; }
 			}, function(tag, buf, u8){
@@ -749,6 +762,31 @@ function rau_receptor_kiwi( $args = array() ) {
 			clearInterval(st.ka);
 			st.ka=setInterval(function(){ send(st.snd,'SET keepalive'); send(st.wf,'SET keepalive'); }, 3000);
 			clearInterval(st.miniT); st.miniT=setInterval(mini, 700);
+		}
+		/* La portadora más alta del rango (en kHz) sobre la mediana de la cascada, promediando las
+		   últimas líneas; null si nada sobresale 15 dB. Las emisoras de onda corta van cada 5 kHz. */
+		function portadoraMasFuerte(r){
+			var k=st.esp.length; if(k<3) return null;
+			var n=st.esp[0].length, prom=new Float32Array(n), i, mejor=null;
+			st.esp.forEach(function(l){ for(i=0;i<n;i++) prom[i]+=l[i]/k; });
+			var med=Array.from(prom).sort(function(a,b){ return a-b; })[n>>1];
+			for(i=2;i<n-2;i++){
+				var f=(st.wfStart+i/n*st.wfSpan)/1000, d=prom[i]-med;
+				if(f>=r[0] && f<=r[1] && d>15 && (!mejor || d>mejor.d)) mejor={f:Math.round(f/5)*5, d:d};
+			}
+			return mejor;
+		}
+		function buscarEmisora(i){
+			var b=OC_ARRANQUE[i]; if(!b) return msg('La onda corta está tranquila en este momento. Prueba 40 m o 20 m en BANDA, o toca cualquier señal de la cascada.');
+			var centro=(b[0]+b[1])/2;
+			sintonizar(centro, 'am'); msg('Buscando la emisora más fuerte de la banda de '+b[2]+'…');
+			setTimeout(function(){
+				// Si la persona ya movió el dial, se respeta
+				if(!st.on || Math.abs(st.freq-centro)>0.01) return;
+				var e=portadoraMasFuerte(b); if(!e) return buscarEmisora(i+1);
+				sintonizar(e.f, 'am');
+				msg('Suena la emisora de onda corta más fuerte de este momento: '+e.f+' kHz AM, banda de '+b[2]+'. Para oír radioaficionados elige 40 m o 20 m en BANDA.');
+			}, 3000);
 		}
 		/* Mini barra flotante: en Herramientas el panel se guarda al cambiar de herramienta y el audio
 		   sigue; sin esto quedaba sonando sin forma visible de pararlo. */
@@ -849,18 +887,18 @@ function rau_receptor_kiwi( $args = array() ) {
 		});
 		$('rx-zoom-mas').addEventListener('click', function(){ zoomA(st.zoom+1); guardar(); });
 		$('rx-zoom-menos').addEventListener('click', function(){ zoomA(st.zoom-1); guardar(); });
-		$('rx-filtro-sel').value=st.filtro; $('rx-filtro-sel').addEventListener('change', function(){ st.filtro=+this.value; enviarModo(); marcas(); guardar(); pintarFreq(); });
+		$('rx-filtros').addEventListener('click', function(e){ var x=e.target.closest('.rx-filtro-op'); if(!x) return; st.filtro=+x.dataset.v; enviarModo(); marcas(); guardar(); pintarFreq(); });
 		$('rx-pasos').addEventListener('click', function(e){ var x=e.target.closest('.rx-paso-op'); if(!x) return; st.paso=+x.dataset.v; guardar(); pintarFreq(); });
 		$('rx-paleta').value=st.paleta; $('rx-paleta').addEventListener('change', function(){ st.paleta=this.value; construirLut(); limpiarCascada(); dibujarEspectro(); guardar(); });
 		$('rx-contraste').value=st.contraste; $('rx-contraste-v').textContent=st.contraste+' dB';
 		$('rx-contraste').addEventListener('input', function(){ st.contraste=+this.value; $('rx-contraste-v').textContent=st.contraste+' dB'; guardar(); });
 		$('rx-sq').addEventListener('input', function(){
-			st.sq=+this.value; $('rx-sq-v').textContent=st.sq?'S'+st.sq:'apagado';
+			st.sq=+this.value; $('rx-sq-v').textContent=st.sq?'S'+st.sq:'off';
 			$('rx-sq-marca').classList.toggle('hidden', !st.sq); $('rx-sq-marca').style.left=(6*st.sq/114*100)+'%';
 			if(!st.sq){ st.sqAbierto=true; volumen(); }
 		});
-		$('rx-vol').addEventListener('input', volumen);
-		$('rx-agc').addEventListener('change', function(){ st.agc=this.checked; agc(); pintarFreq(); });
+		$('rx-vol').addEventListener('input', function(){ $('rx-vol-v').textContent=this.value; volumen(); });
+		$('rx-agc').addEventListener('click', function(){ st.agc=!st.agc; agc(); pintarFreq(); });
 		$('rx-mute').addEventListener('click', function(){ st.mute=!st.mute; this.textContent=st.mute?'🔇':'🔊'; this.setAttribute('aria-pressed', st.mute); volumen(); });
 		$('rx-rec').addEventListener('click', function(){
 			if(st.grab){ pararGrabacion(); msg('Grabación guardada en tus descargas.'); return; }
@@ -916,10 +954,12 @@ function rau_receptor_kiwi( $args = array() ) {
 		function favs(){ try { return JSON.parse(localStorage.getItem('rau_rx_favs')||'[]'); } catch(e){ return []; } }
 		function pintarFavs(){
 			var l=favs(), el=$('rx-favs');
-			if(!l.length){ el.innerHTML='<p class="text-xs text-muted-foreground">Guarda aquí las frecuencias que más escuchas. Quedan en este navegador.</p>'; return; }
-			el.innerHTML=l.map(function(x,i){ return '<span class="inline-flex items-center gap-1 rounded-md border border-border bg-background font-mono text-xs"><button type="button" data-i="'+i+'" class="rx-fav-ir px-3 py-2 hover:text-primary">'+(x.n?x.n.replace(/[<>&"]/g,'')+' · ':'')+x.f.toFixed(2)+' '+MODOS[x.m].n+'</button><button type="button" data-i="'+i+'" class="rx-fav-x px-2 py-2 text-muted-foreground hover:text-rose-400" aria-label="Quitar">×</button></span>'; }).join('');
+			if(!l.length){ el.innerHTML='<p class="rx-mem-vacio">Guarda aquí las frecuencias que más escuchas (quedan en este navegador).</p>'; return; }
+			el.innerHTML=l.map(function(x,i){ var n=x.n?x.n.replace(/[<>&"]/g,''):'';
+				return '<span class="rx-mem"><button type="button" data-i="'+i+'" data-f="'+x.f+'" data-m="'+x.m+'" class="rx-fav-ir rx-tecla" title="'+n+'"><b>M'+(i+1)+'</b> '+(n?n+' <span class="rx-tecla-sub">':'<span class="rx-tecla-sub">')+x.f.toFixed(2)+' '+MODOS[x.m].n+'</span></button><button type="button" data-i="'+i+'" class="rx-fav-x" aria-label="Borrar la memoria M'+(i+1)+'">×</button></span>'; }).join('');
 			el.querySelectorAll('.rx-fav-ir').forEach(function(b){ b.addEventListener('click', function(){ var x=favs()[b.dataset.i]; sintonizar(x.f, x.m); }); });
 			el.querySelectorAll('.rx-fav-x').forEach(function(b){ b.addEventListener('click', function(){ var l=favs(); l.splice(b.dataset.i,1); try{ localStorage.setItem('rau_rx_favs', JSON.stringify(l)); }catch(e){} pintarFavs(); }); });
+			pintarFreq();
 		}
 		$('rx-fav-add').addEventListener('click', function(){
 			var n=prompt('Nombre para '+st.freq.toFixed(2)+' kHz (opcional):', '');
@@ -932,6 +972,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		if(window.ResizeObserver) new ResizeObserver(function(){ redibujarFijos(); }).observe($('rx-pantalla')); else window.addEventListener('resize', function(){ redibujarFijos(); });
 		window.addEventListener('pagehide', function(){ if(st.on) apagar(true); });
 		construirLut(); limpiarCascada(); pintarFreq(); pintarFavs(); vistaLocal(true); redibujarFijos();
+		if(st.primera) msg('Pulsa «Escuchar»: el receptor busca la emisora de onda corta más fuerte de este momento para que la oigas de inmediato.');
 
 		/* API para otras herramientas: abrir el receptor en una frecuencia */
 		window.RauRx={ sintonizar:function(f,m){ sintonizar(f, m||modoPara(f,'')); }, encender:encender, modoPara:modoPara, encendido:function(){ return st.on; },

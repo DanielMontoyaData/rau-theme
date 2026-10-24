@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.50.1
+Version: 19.51.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -874,7 +874,6 @@ html.rau-splash-active body {
 /* Panorámico y controles sobre el chasis */
 #rx-app #rx-pantalla { border-color: #090c12; background: #04060a; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 1px 0 rgba(255,255,255,.05); }
 #rx-app select, #rx-app input[type="text"] { background: #0c1018; border-color: #344055; color: #e2e8f0; }
-#rx-app #rx-cw { background: #0c1018; border-color: #2a3446; }
 .rx-ayuda-digitos { margin-top: .5rem; font-family: ui-monospace, monospace; font-size: 10px; color: #6b778a; }
 
 /* Receptor con el dedo (19.50.1): flechas visibles sobre cada dígito, teclas de 44 px y ayuda legible */
@@ -890,3 +889,99 @@ html.rau-splash-active body {
 	#rx-app .rx-tecla { min-height: 2.75rem; }
 	.rx-ayuda-digitos { font-size: 12px; }
 }
+
+/* ══ Todo el receptor como un solo equipo (19.51.0) ═══════════════════════════════════════
+   Debajo del frente: línea de estado ámbar, panorámico con bisel y su SPAN, decodificador CW en
+   una segunda pantalla, y los mandos en bloques serigrafiados (BANDA, MODO, FILTRO · AGC,
+   SINTONÍA, AUDIO; CASCADA y MEMORIAS en el menú). Faders en vez de controles del navegador. */
+.rx-serigrafia { font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #7c8799; }
+.rx-estado-linea { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin-top: .9rem; padding: .5rem .75rem; border-radius: .5rem;
+	background: #0b0905; border: 1px solid #090c12; box-shadow: inset 0 2px 6px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.05); }
+.rx-estado-linea #rx-msg { flex: 1 1 14rem; margin: 0; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.45; color: rgba(255,181,71,.9); }
+.rx-estado-led { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #3a4354; }
+#rx-app:has(#rx-ind-rx.is-on) .rx-estado-led { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+#rx-app #rx-avisar { color: #ffd58a; border-color: rgba(255,181,71,.55); }
+#rx-app #rx-avisar.hidden { display: none; }
+
+.rx-pan { margin-top: .9rem; overflow: hidden; border-radius: .75rem; border: 2px solid #090c12; background: #04060a;
+	box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 1px 0 rgba(255,255,255,.06); }
+.rx-pan-cab { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; padding: .4rem .6rem .4rem .75rem; background: linear-gradient(180deg, #161c27, #0d1119); border-bottom: 1px solid #1f2735; }
+.rx-pan-donde { flex: 1 1 10rem; min-width: 0; font-family: ui-monospace, monospace; font-size: 11px; color: rgba(255,181,71,.85); }
+.rx-span { display: flex; align-items: center; gap: .35rem; }
+.rx-span-v { min-width: 4.2rem; text-align: center; font-family: ui-monospace, monospace; font-size: 11px; color: #ffd58a; }
+#rx-app #rx-pantalla { border: 0; border-radius: 0; background: #04060a; box-shadow: none; }
+#rx-app .rx-tecla-mini { min-height: 1.75rem; padding: .15rem .55rem; font-size: 12px; }
+#rx-app .rx-tecla-mini::before, #rx-app .rx-tecla-sin-led::before { display: none; }
+#rx-app .rx-tecla-sin-led { padding-left: .8rem; }
+.rx-teclas-iguales { flex-wrap: nowrap; }
+.rx-teclas-iguales > * { flex: 1 1 0; min-width: 0; }
+#rx-app .rx-tecla-doble { flex-direction: column; gap: 0; line-height: 1.2; padding-top: .35rem; padding-bottom: .35rem; }
+#rx-app .rx-tecla-doble::before { top: .55rem; margin-top: 0; }
+#rx-app #rx-agc { align-self: flex-start; }
+
+/* Decodificador de CW: segunda pantalla */
+#rx-app .rx-cw { margin-top: .9rem; padding: .6rem .85rem .7rem; border-radius: .7rem; color: var(--rx-ambar);
+	background: radial-gradient(120% 160% at 30% 0%, #1f1808 0%, #0e0b05 60%, #070503 100%); border: 2px solid #090c12;
+	box-shadow: inset 0 0 0 1px rgba(255,181,71,.08), inset 0 8px 20px rgba(0,0,0,.6); }
+#rx-app .rx-cw.hidden { display: none; }
+.rx-cw-cab { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; font-family: ui-monospace, monospace; font-size: 11px; color: rgba(255,181,71,.65); }
+.rx-cw-cab .rx-serigrafia { color: rgba(255,181,71,.7); }
+.rx-cw-cab #rx-cw-info { flex: 1; }
+.rx-cw-texto { min-height: 2.6rem; margin: .4rem 0 .2rem; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: 1.05rem; letter-spacing: .06em; color: var(--rx-ambar); text-shadow: 0 0 8px rgba(255,181,71,.45); }
+.rx-cw-nota { font-size: 11px; color: rgba(255,181,71,.45); }
+
+/* Bloques de mandos */
+.rx-mesa { display: grid; gap: .75rem; margin-top: .9rem; grid-template-columns: minmax(0, 1fr); }
+@container radio (min-width: 560px) { .rx-mesa { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container radio (min-width: 980px) { .rx-mesa { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.rx-grupo { display: flex; flex-direction: column; gap: .55rem; min-width: 0; padding: .6rem .7rem .75rem; border-radius: .65rem;
+	border: 1px solid #2c3647; background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(0,0,0,.08)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.rx-grupo-banda { grid-column: 1 / -1; }
+@container radio (min-width: 980px) { .rx-grupo-mem { grid-column: span 3; } }
+.rx-teclas { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.rx-segmentos:empty { display: none; }
+/* En celular las bandas siguen siendo una fila que se desliza (la regla de 19.48.0, con más peso que .rx-teclas) */
+@media (max-width: 639px) { .rx-teclas.rx-fila { flex-wrap: nowrap; } }
+.rx-ir { flex-wrap: nowrap; }
+#rx-app .rx-entrada { min-width: 0; flex: 1; height: 2.25rem; padding: 0 .6rem; border-radius: .45rem; border: 1px solid #090c12; background: #0b0905; color: var(--rx-ambar);
+	font-family: ui-monospace, monospace; font-size: 13px; box-shadow: inset 0 2px 5px rgba(0,0,0,.6); }
+#rx-app .rx-entrada::placeholder { color: rgba(255,181,71,.35); }
+#rx-app .rx-entrada:focus { outline: 1px solid rgba(255,181,71,.6); }
+#rx-app select.rx-entrada { appearance: auto; }
+
+/* Faders */
+.rx-fader { display: flex; align-items: center; gap: .6rem; }
+.rx-fader-n { width: 3.1rem; flex-shrink: 0; font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #8a96a8; }
+.rx-fader-v { width: 3.3rem; flex-shrink: 0; text-align: right; font-family: ui-monospace, monospace; font-size: 11px; color: #ffd58a; }
+#rx-app input[type="range"] { flex: 1; min-width: 0; height: 2rem; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+#rx-app input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: #07090e; box-shadow: inset 0 1px 2px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06); }
+#rx-app input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: #07090e; box-shadow: inset 0 1px 2px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06); }
+#rx-app input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 24px; margin-top: -9px; border-radius: 3px; border: 1px solid #0a0e15;
+	background: linear-gradient(90deg, #3d4759, #7b879c 45%, #ffb547 46%, #ffb547 54%, #7b879c 55%, #3d4759); box-shadow: 0 2px 4px rgba(0,0,0,.6); }
+#rx-app input[type="range"]::-moz-range-thumb { width: 14px; height: 24px; border-radius: 3px; border: 1px solid #0a0e15;
+	background: linear-gradient(90deg, #3d4759, #7b879c 45%, #ffb547 46%, #ffb547 54%, #7b879c 55%, #3d4759); box-shadow: 0 2px 4px rgba(0,0,0,.6); }
+#rx-app input[type="range"]:focus-visible { outline: 2px solid var(--rx-ambar); outline-offset: 2px; border-radius: 4px; }
+
+/* Memorias */
+.rx-mem { display: inline-flex; align-items: stretch; }
+#rx-app .rx-mem .rx-fav-ir { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#rx-app .rx-mem .rx-fav-ir b { color: #ffd58a; }
+.rx-fav-x { width: 2rem; border: 1px solid #344055; border-left: 0; border-radius: 0 .5rem .5rem 0; background: #161b25; color: #6b778a; font-size: 14px; }
+.rx-fav-x:hover { color: #f87171; }
+.rx-mem-vacio { font-size: 12px; color: #6b778a; }
+#rx-app #rx-fav-add { align-self: flex-start; }
+
+/* Tecla del menú (consola) */
+#rx-app .rx-ajustes-btn { display: none; margin-top: .9rem; }
+.rx-en-consola #rx-app .rx-ajustes-btn { display: inline-flex; }
+#rx-app .rx-ajustes-btn[aria-expanded="true"] { color: #ffd58a; border-color: rgba(255,181,71,.55); }
+
+/* Mini barra: un pequeño visor ámbar */
+.rx-mini { align-items: center; gap: .5rem; padding: .35rem .4rem .35rem .75rem; border-radius: .75rem; border: 1px solid #2f3a4d;
+	background: linear-gradient(180deg, #252e3d, #121722); box-shadow: 0 10px 24px rgba(0,0,0,.6); font-family: ui-monospace, monospace; font-size: 12px; }
+.rx-mini-led { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.rx-mini-lcd { padding: .3rem .55rem; border-radius: .4rem; background: #0b0905; color: #ffb547; text-shadow: 0 0 6px rgba(255,181,71,.45); box-shadow: inset 0 2px 5px rgba(0,0,0,.6); }
+.rx-mini-btn { min-width: 2.25rem; min-height: 2rem; padding: 0 .6rem; border-radius: .45rem; border: 1px solid #344055; background: linear-gradient(180deg, #2b3446, #1c2330); color: #cbd5e1; }
+.rx-mini-btn:hover { border-color: #4d5c77; color: #fff; }
+.rx-mini-stop { color: #fff; border-color: #991b1b; background: linear-gradient(180deg, #f87171, #b91c1c); }
+@media (pointer: coarse) { .rx-mini-btn { min-height: 2.75rem; min-width: 2.75rem; } }

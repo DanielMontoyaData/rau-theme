@@ -264,6 +264,37 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.51.0 — todo el receptor como un solo equipo, y arranca sonando
+
+**Arranque con algo que oír.** Quien llega por primera vez (sin frecuencia guardada ni enlace)
+ya no cae en 40 m, donde a muchas horas no hay nadie. Al pulsar «Escuchar», el receptor revisa la
+cascada de la banda de onda corta adecuada para la hora y sintoniza la portadora más fuerte en AM.
+- De día (11 a 22 UTC) prueba 25, 16, 19 y 31 m; de noche, 49, 31, 25 y 19 m.
+- Una portadora cuenta si sobresale 15 dB sobre la mediana de la cascada; si en una banda no hay
+  ninguna, pasa a la siguiente.
+- Si la persona mueve el dial mientras tanto, no se toca nada.
+- No se usó una lista fija de emisoras ni el S-metro. Con el Kiwi real, a las 10 h de Colombia, la
+  banda de 49 m solo tenía ruido local a −75 dBm, igual que la «emisora» de una lista, mientras que
+  en 25 m había portadoras de +30 dB. Ese día se sintonizó 11930 kHz.
+- Las teclas de BANDA suman OC 19 m y OC 16 m. El panorámico muestra el nombre de WWV en 5, 10 y 15 MHz.
+
+**Debajo del frente, el mismo radio:**
+- Línea de estado ámbar con luz de conexión, justo bajo la pantalla.
+- Panorámico con bisel, la banda y su SPAN (− 469 kHz +) en la cabecera.
+- Decodificador de CW en una segunda pantalla ámbar.
+- Mandos en bloques serigrafiados: BANDA, MODO, FILTRO, SINTONÍA · PASO y AUDIO.
+  - FILTRO tiene tres teclas con su ancho real según el modo (p. ej. «Angosto 5.0k»). Antes era una lista desplegable.
+  - AUDIO reúne VOL, SQL y la tecla AGC. Antes, en la consola, el volumen quedaba escondido en Ajustes.
+- Faders propios en vez de los controles del navegador.
+- CASCADA (color, contraste) y MEMORIAS: los favoritos son ahora teclas M1, M2… que se encienden si
+  estás en esa frecuencia, y «M+ Guardar». En la consola van tras la tecla «☰ Menú».
+- La mini barra flotante es un pequeño visor ámbar con Ver y ■.
+
+Probado con el Kiwi real en computador, en la consola y en celular, sin errores de JavaScript ni
+desbordes horizontales.
+
+---
+
 ## 19.50.1 — receptor más fácil con el dedo
 
 Revisión de uso con el receptor real, midiendo en un celular (Pixel 7):
