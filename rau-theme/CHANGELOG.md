@@ -264,6 +264,29 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.46.1 — orden del centro de mando
+
+Ajustes tras revisar la versión publicada.
+
+- **Radio Now, fuera.** Repetía lo que ya está en la consola: la mejor banda (franja superior), el
+  estado de HK4RAU (Estado de la red), la ISS (Satélites) y los spots (conteo por banda). En celular,
+  además, dejaba el receptor fuera de la primera pantalla. «Mejor banda ahora» se puede tocar y
+  sintoniza el receptor en esa banda.
+- **Columnas equilibradas.** El mapa estaba en la columna central, que medía 2.170 px frente a
+  980 px de la derecha, y dejaba un hueco de 1.200 px. Ahora el mapa ocupa todo el ancho debajo de
+  las tres columnas, más alto (30rem); en celular está en la pestaña «Mirar».
+- **Redes digitales.** DMR, WSPR y D-STAR pasan al final de la derecha, y las tres columnas quedan
+  casi a la misma altura.
+- **Estado de la red** pasa a «Comunidad RAU», junto a concursos y racha.
+- **Encabezado y bienvenida más cortos.** El subtítulo describe el centro de mando, no solo
+  «calculadoras».
+- **Vista de una herramienta.** Se ocultan los accesos rápidos y las favoritas, que quedaban entre la
+  consola y la herramienta. El buscador sigue a la vista.
+- **Plan de bandas.** El rótulo de novicio se corre a la derecha cuando una marca FT8 o WWV cae
+  encima.
+
+---
+
 ## 19.46.0 — Herramientas como centro de mando
 
 La consola de `/herramientas/` se reorganizó alrededor del receptor del club, en tres columnas:

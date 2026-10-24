@@ -304,7 +304,10 @@ function rau_receptor_kiwi( $args = array() ) {
 				c.fillStyle='rgba(148,163,184,.12)'; c.fillRect(x0,0,x1-x0,h); });
 			PLAN.novicio.forEach(function(s){ var x0=xDe(s[0],w), x1=xDe(s[1],w); if(x1<0||x0>w) return;
 				var cw=s[2]==='CW'; c.fillStyle=cw?'rgba(59,130,246,.28)':'rgba(16,185,129,.25)'; c.fillRect(x0,0,x1-x0,h);
-				c.fillStyle=cw?'#93c5fd':'#6ee7b7'; var tx='Novicio: '+s[2], xi=Math.max(x0,0)+4*d; if(Math.min(x1,w)-xi>c.measureText(tx).width) c.fillText(tx, xi, h/2); });
+				c.fillStyle=cw?'#93c5fd':'#6ee7b7'; var tx='Novicio: '+s[2], xi=Math.max(x0,0)+4*d, tw=c.measureText(tx).width;
+				// Si una marca (FT8, WWV) cae encima del rótulo, el rótulo se corre a su derecha
+				PLAN.marcas.forEach(function(m){ var xm=xDe(m[0],w); if(xm>=xi-2*d && xm<=xi+tw) xi=xm+c.measureText(m[1]).width+10*d; });
+				if(Math.min(x1,w)-xi>tw) c.fillText(tx, xi, h/2); });
 			// Bandas sin segmento de novicio (30 m, 20 m, 17 m…): el rótulo va sobre la propia banda
 			PLAN.ham.forEach(function(b){ var x0=xDe(b[0],w), x1=xDe(b[1],w); if(x1<0||x0>w) return;
 				if(PLAN.novicio.some(function(s){ return s[0]<b[1] && s[1]>b[0]; })) return;

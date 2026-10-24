@@ -6866,6 +6866,15 @@ rauCuandoVisible('consola-wspr-lista', function(){
 		t.addEventListener('keydown', function(e){ if(e.key==='Enter' || e.key===' ') sintonizar(); });
 		t.setAttribute('aria-label', 'Banda '+t.dataset.banda+': ver por qué tiene este estado y sintonizarla en el receptor');
 	});
+	// «Mejor banda ahora» de la franja superior: un clic la sintoniza
+	var mejorBtn=document.getElementById('consola-mejor-banda-btn');
+	if(mejorBtn) mejorBtn.addEventListener('click', function(){
+		var b=(document.getElementById('consola-mejor-banda').textContent||'').split(' / ')[0].trim();
+		if(!window.RauRx || !inicioBanda[b]) return;
+		if(typeof window.rauIrPestana==='function') window.rauIrPestana('escuchar');
+		window.RauRx.sintonizar(inicioBanda[b], 'usb');
+		var app=document.getElementById('rx-app'); if(app) app.scrollIntoView({block:'start', behavior:'smooth'});
+	});
 	if(window.RauRx && window.RauRx.estado) aplicar(window.RauRx.estado());
 })();
 
