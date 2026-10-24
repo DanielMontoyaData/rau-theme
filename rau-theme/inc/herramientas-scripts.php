@@ -1101,6 +1101,9 @@ function rauFaseLunar(frac){
 
 	cargarLeaflet(function(){
 		var map=L.map('consola-mapa', { scrollWheelZoom:false, worldCopyJump:true }).setView([15,-60], 2);
+		// En celular el mapa está en la pestaña «Mirar», oculta al cargar: Leaflet lo midió en 0 px y
+		// lo dejaba gris. Se vuelve a medir cada vez que cambia de tamaño (al mostrarse la pestaña).
+		if(window.ResizeObserver) new ResizeObserver(function(){ map.invalidateSize(); }).observe(mapaEl);
 		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'&copy; OpenStreetMap' }).addTo(map);
 
 		L.circleMarker([RAU_QTH_MAPA.lat, RAU_QTH_MAPA.lng], { radius:7, color:'#fff', weight:2, fillColor:'#1fd5f9', fillOpacity:1 })

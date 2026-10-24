@@ -264,6 +264,14 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.46.2 — mapa gris en celular
+
+En celular, el mapa de la pestaña «Mirar» salía gris. Leaflet lo creaba mientras la pestaña estaba
+oculta, lo medía en 0 px y no pedía las imágenes. Ahora un ResizeObserver lo vuelve a medir
+(`invalidateSize`) cuando la pestaña se muestra.
+
+---
+
 ## 19.46.1 — orden del centro de mando
 
 Ajustes tras revisar la versión publicada.
