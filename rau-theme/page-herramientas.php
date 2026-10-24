@@ -763,15 +763,11 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 							<span class="font-mono text-[10px] text-muted-foreground">…</span>
 						</span>
 					</div>
-					<svg viewBox="0 0 400 60" xmlns="http://www.w3.org/2000/svg" class="w-full rounded-lg border border-border/50 bg-background" preserveAspectRatio="none">
-						<line x1="0" y1="20" x2="400" y2="20" stroke="hsl(var(--border)/.3)" stroke-width="0.5"/>
-						<line x1="0" y1="40" x2="400" y2="40" stroke="hsl(var(--border)/.3)" stroke-width="0.5"/>
-						<polyline points="0,52 20,48 40,42 60,50 80,45 100,30 120,35 140,48 160,50 180,40 200,28 220,25 240,32 260,45 280,50 300,42 320,35 340,48 360,50 380,52 400,52"
-							fill="none" stroke="hsl(var(--primary)/.7)" stroke-width="1.5"/>
-						<polyline points="0,60 0,52 20,48 40,42 60,50 80,45 100,30 120,35 140,48 160,50 180,40 200,28 220,25 240,32 260,45 280,50 300,42 320,35 340,48 360,50 380,52 400,52 400,60"
-							fill="hsl(var(--primary)/.1)"/>
-					</svg>
-					<a href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>" class="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 font-mono text-xs font-bold text-primary-foreground hover:bg-primary/90">Escuchar en vivo →</a>
+					<div id="dash-sdr-info" class="rounded-lg border border-border/50 bg-background p-3 font-mono text-[11px] text-muted-foreground">
+						<p>Receptor de 0 a 30 MHz en Medellín, antena dipolo.</p>
+						<p id="dash-sdr-detalle" class="mt-1">Consultando canales…</p>
+					</div>
+					<a href="<?php echo esc_url( home_url( '/herramientas/receptor/' ) ); ?>" id="dash-sdr-ir" class="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 font-mono text-xs font-bold text-primary-foreground hover:bg-primary/90">Escuchar en vivo →</a>
 				</div>
 
 				<!-- CONDICIONES POR BANDA -->
@@ -1444,6 +1440,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<p class="font-mono text-[11px] uppercase tracking-wider opacity-70">Mejor apuesta ahora</p>
 						<p id="ahora-banda" class="mt-1 font-mono text-4xl font-bold">—</p>
 						<p id="ahora-razon" class="mt-2 text-sm"></p>
+						<button type="button" id="ahora-escuchar" class="rau-escuchar mt-3 hidden rounded-md border border-current px-3 py-2 font-mono text-xs hover:bg-white/10" data-modo="USB">🎧 Compruébalo en el receptor del club</button>
 					</div>
 
 					<div class="grid gap-3 sm:grid-cols-3">
@@ -2103,6 +2100,16 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 
 
 
+
+		<!-- RECEPTOR KIWISDR -->
+		<div id="panel-receptor" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'receptor' ) ); ?>" class="rau-panel" style="display:none">
+			<div class="mb-4">
+				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Receptor SDR · Medellín</p>
+				<h2 class="font-display text-2xl font-bold">KiwiSDR HK4RAU</h2>
+				<p class="mt-1 text-sm text-muted-foreground">Escucha de 0 a 30 MHz desde el receptor del club. Los botones «Escuchar» de los spots DX, POTA y «Ahora mismo» lo sintonizan aquí.</p>
+			</div>
+			<?php require_once get_template_directory() . '/inc/receptor-kiwi.php'; rau_receptor_kiwi(); ?>
+		</div>
 
 		<!-- RECORDATORIO DE LICENCIA -->
 		<div id="panel-licencia" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'licencia' ) ); ?>" class="rau-panel" style="display:none">

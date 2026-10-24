@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.44.1' );
+define( 'RAU_THEME_VERSION', '19.45.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -811,6 +811,7 @@ function rau_get_herramientas_tabs() {
 		['id'=>'aprs',       'label'=>'Mapa APRS Colombia',        'cat'=>'Localizar'],
 		['id'=>'smith',      'label'=>'Smith Chart',               'cat'=>'Calcular'],
 		['id'=>'tarjeta',    'label'=>'Tarjeta de Campo (imprimir)', 'cat'=>'Aprender'],
+		['id'=>'receptor',   'label'=>'Receptor KiwiSDR',          'cat'=>'Escuchar'],
 		['id'=>'brandmeister','label'=>'BrandMeister Last Heard',  'cat'=>'Escuchar'],
 		['id'=>'planbandas',  'label'=>'Plan de Bandas (visual)',  'cat'=>'Aprender'],
 		['id'=>'examen',     'label'=>'Examen RABCA',              'cat'=>'Aprender'],

@@ -2135,6 +2135,17 @@ function rauFaseLunar(frac){
 		if(panel && !opts.skipScroll) panel.scrollIntoView({block:'start', behavior:'smooth'});
 		return true;
 	}
+	/* El receptor KiwiSDR (inc/receptor-kiwi.php) abre su panel con esto desde rauEscuchar() */
+	window.rauAbrirHerramienta = openTool;
+	/* Botones «Escuchar» de spots DX, POTA y «Ahora mismo»: data-khz y, si se sabe, data-modo */
+	document.addEventListener('click', function(ev){
+		var b = ev.target.closest ? ev.target.closest('.rau-escuchar') : null;
+		if(!b || typeof window.rauEscuchar !== 'function') return;
+		ev.preventDefault();
+		window.rauEscuchar(parseFloat(b.dataset.khz), b.dataset.modo || '');
+	});
+	var irSdr = document.getElementById('dash-sdr-ir');
+	if(irSdr) irSdr.addEventListener('click', function(ev){ if(TOOLS_BY_ID.receptor){ ev.preventDefault(); openTool('receptor'); } });
 
 	/* Clics: encabezado de categoría (abre todo), etiqueta de herramienta (acceso directo), accesos rápidos, volver */
 	document.querySelectorAll('.rau-cat-open-btn').forEach(function(btn){
@@ -3705,6 +3716,13 @@ rauOn('gain-dbd','input',function(){
 			if(!isNaN(k) && k>=5) razon+=' Ojo: con K='+k+' las rutas hacia el norte pueden estar cerradas aunque la banda figure abierta.';
 			razonEl.textContent=razon;
 		}
+		var FT8_AHORA={'80m-40m':7074,'40m-30m':10136,'30m-20m':14074,'17m-15m':21074,'12m-10m':28074,'10m-6m':28074};
+		var escAhora=document.getElementById('ahora-escuchar');
+		if(escAhora){
+			var fk=mejor && FT8_AHORA[mejor.banda];
+			escAhora.classList.toggle('hidden', !(fk && window.rauEscuchar));
+			if(fk){ escAhora.dataset.khz=fk; escAhora.textContent='🎧 Compruébalo en el receptor del club ('+(fk/1000).toFixed(3)+' MHz, FT8)'; }
+		}
 
 		var gl=document.getElementById('ahora-grayline');
 		if(ev && enGrayline){
@@ -5096,8 +5114,11 @@ rauOn('az-calc','click',function(){
 			.then(function(json){
 				if(json.success){
 					badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="font-mono text-[10px] text-emerald-400">'+(json.data.libres===0?'Muy ocupado':'En línea'+(json.data.libres!=null?' · '+json.data.libres+' libres':''))+'</span>';
+					var det=document.getElementById('dash-sdr-detalle');
+					if(det) det.textContent = json.data.libres===0 ? 'Todos los canales en uso; a veces igual se consigue uno.' : (json.data.libres+' de '+json.data.max+' canales libres'+(json.data.snr_hf?' · SNR en HF '+json.data.snr_hf+' dB':''));
 				} else {
 					badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span><span class="font-mono text-[10px] text-rose-400">Sin conexión</span>';
+					var det=document.getElementById('dash-sdr-detalle'); if(det) det.textContent='El receptor no responde en este momento.';
 				}
 			}).catch(function(e){ rauErr(e);
 				badge.innerHTML='<span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span><span class="font-mono text-[10px] text-rose-400">Sin conexión</span>';
@@ -5370,7 +5391,9 @@ var CODIGOS_Q=[
 					+'<div><p class="font-mono font-bold text-primary">'+s.activator+'</p>'
 					+'<p class="text-sm text-muted-foreground">'+(s.reference||'')+' · '+(s.name||'')+'</p></div>'
 					+'<div class="text-right"><p class="font-mono text-sm font-bold">'+s.frequency+' kHz</p>'
-					+'<p class="font-mono text-xs text-muted-foreground">'+(s.mode||'')+'</p></div></div>'
+					+'<p class="font-mono text-xs text-muted-foreground">'+(s.mode||'')+'</p>'
+					+(window.rauEscuchar && +s.frequency>0 && +s.frequency<30000 ? '<button type="button" class="rau-escuchar mt-1 font-mono text-xs text-primary hover:underline" data-khz="'+(+s.frequency)+'" data-modo="'+String(s.mode||'').replace(/[^A-Za-z0-9]/g,'')+'">🎧 Escuchar</button>' : '')
+					+'</div></div>'
 					+(s.comments?'<p class="mt-2 text-xs text-muted-foreground">'+s.comments+'</p>':'');
 				list.appendChild(d);
 			});
@@ -6650,7 +6673,7 @@ setTimeout(function(){
 					var entidad=entidadDe(s.dx);
 					var antiguedad=antiguedadDe(s.t);
 					var lineaExtra=(entidad||antiguedad) ? '<div class="text-[9px] text-muted-foreground">'+[entidad,antiguedad].filter(Boolean).join(' · ')+'</div>' : '';
-					return '<div class="border-b border-border/30 pb-1 last:border-0"><div class="flex justify-between gap-2"><button type="button" class="rau-dxspot-ir text-foreground hover:text-primary hover:underline" data-dx="'+(s.dx||'')+'">'+(s.dx||'—')+'</button><button type="button" class="rau-dxspot-copiar shrink-0 text-primary hover:underline" data-freq="'+(s.freq||'')+'">'+(s.freq||'—')+'</button></div>'+lineaExtra+'</div>';
+					return '<div class="border-b border-border/30 pb-1 last:border-0"><div class="flex justify-between gap-2"><button type="button" class="rau-dxspot-ir text-foreground hover:text-primary hover:underline" data-dx="'+(s.dx||'')+'">'+(s.dx||'—')+'</button><button type="button" class="rau-dxspot-copiar shrink-0 text-primary hover:underline" data-freq="'+(s.freq||'')+'">'+(s.freq||'—')+'</button>'+(window.rauEscuchar && parseFloat(s.freq)>0 && parseFloat(s.freq)<30 ? '<button type="button" class="rau-escuchar shrink-0 text-primary hover:underline" data-khz="'+(parseFloat(s.freq)*1000)+'" title="Escuchar en el receptor KiwiSDR" aria-label="Escuchar '+(s.freq||'')+' en el receptor">🎧</button>' : '')+'</div>'+lineaExtra+'</div>';
 				}).join('');
 				el.querySelectorAll('.rau-dxspot-ir').forEach(function(btn){
 					btn.addEventListener('click', function(){

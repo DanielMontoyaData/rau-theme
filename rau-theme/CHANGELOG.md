@@ -264,6 +264,48 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.45.0 — receptor rediseñado y dentro de Herramientas
+
+El receptor pasó a `inc/receptor-kiwi.php`. Lo usan `/receptor/` y la nueva herramienta
+`/herramientas/receptor/` (categoría Escuchar).
+
+**Diseño.** La cascada trae seis paletas. La predeterminada es Ámbar, con las trazas amarillas.
+Las otras son Cian RAU, Clásica KiwiSDR, Turbo, Fósforo verde y Grises. El contraste se ajusta con
+un deslizador. El piso de ruido sale de la mediana de cada línea, así que la cascada se ve igual en
+40 m de noche que en 10 m de día.
+
+La pantalla también tiene:
+- un espectro con el promedio de las últimas líneas;
+- una escala de frecuencias que se adapta al zoom;
+- el ancho del filtro marcado;
+- una franja con el plan de bandas colombiano: segmentos de novicio (CW o CW y fonía, Decreto 1078
+  art. 2.2.5.6.5), bandas de Primera y Avanzada, y marcas FT8 y WWV.
+
+Antes, las primeras líneas tras conectar o cambiar de banda salían saturadas, porque el piso
+arrancaba en −110 dBm. Ahora lo fija la primera línea.
+
+**Sintonía.** Se sintoniza tocando la cascada, arrastrándola para recorrer la banda, con la rueda o
+con las flechas del teclado. El paso se elige entre 10 Hz, 100 Hz, 1 kHz y 5 kHz. «Compartir» genera
+un enlace `/receptor/?f=7074&m=usb` que abre el receptor en esa frecuencia y ese modo.
+
+**Audio.**
+- Filtro Angosto, Normal o Ancho.
+- Silenciador con su marca en el S-metro.
+- AGC que se puede apagar y botón de silenciar.
+- Grabación a WAV de hasta 10 minutos.
+- Favoritos guardados en el navegador.
+
+**Herramientas.** Los spots DX, los spots POTA y «Ahora mismo» tienen botón «🎧 Escuchar». El botón
+abre el receptor en esa frecuencia, con el modo que le corresponde. El mosaico del tablero mostraba
+un espectro falso dibujado a mano. Ahora muestra los canales libres reales y abre la herramienta.
+Al cambiar de herramienta mientras suena, aparece una mini barra flotante con la frecuencia y la
+señal, y botones para volver o detener. Sin ella, el audio seguía sin forma visible de pararlo.
+
+Se probó con un KiwiSDR simulado (escritorio, móvil y Herramientas) y con el HK4RAU real: 40 m dio
+S7 y WWV dio S6, con cascada en ámbar y en Turbo.
+
+---
+
 ## 19.44.1 — "7 de 7" no es "lleno"
 
 Con el receptor integrado en vivo, el estado decía "Todos los canales ocupados" y la conexión se
