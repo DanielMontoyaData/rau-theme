@@ -2240,6 +2240,8 @@ function rauFaseLunar(frac){
 		opts = opts || {};
 		var t = TOOLS_BY_ID[id];
 		if(!t) return false;
+		// «Dashboard en Vivo» quedó dentro del centro de mando: su dirección lleva a la consola
+		if(id==='dashboard'){ volverConsola(); return true; }
 		activateCategory(t.cat, {skipScroll:true, skipHash:true, solo:id});
 		// URL propia real (/herramientas/{id}/) — no un ancla. pushState para que
 		// atrás/adelante del navegador funcione como si fueran páginas distintas.
@@ -6570,6 +6572,8 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 			// Conexión Frecuencia → Log: pre-llenar la Bitácora Rápida, sin obligar a escribirla a mano
 			var bitacoraFreq=document.getElementById('bitacora-freq');
 			if(bitacoraFreq) bitacoraFreq.value=freq;
+			// En HF, además, el receptor del club va a esa frecuencia (VHF queda fuera de su alcance)
+			if(parseFloat(freq)<30 && window.RauRx) window.RauRx.sintonizar(parseFloat(freq)*1000);
 		});
 	});
 })();
@@ -6890,6 +6894,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 			.then(function(json){
 				datos.dx = ( json.success && json.data ) ? json.data : [];
 				window.rauUltimosDxSpots = datos.dx;
+				document.dispatchEvent(new CustomEvent('rau:spots'));
 				var rnDxEl=document.getElementById('rn-dx');
 				if(rnDxEl) rnDxEl.innerHTML = datos.dx.length ? '🌎 DX: <span class="text-primary font-bold">'+datos.dx.length+' spots</span>' : '🌎 DX: sin spots';
 				render();
@@ -6903,7 +6908,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	function cargarPota(){
 		fetch(ajaxUrl+'?action=rau_pota_spots', {cache:'no-store'})
 			.then(function(r){ return r.json(); })
-			.then(function(json){ datos.pota = json.success && Array.isArray(json.data) ? json.data : []; render(); })
+			.then(function(json){ datos.pota = json.success && Array.isArray(json.data) ? json.data : []; window.rauUltimosPota=datos.pota; render(); document.dispatchEvent(new CustomEvent('rau:spots')); })
 			.catch(function(e){ rauErr(e); });
 	}
 	if(window.RauRx && window.RauRx.estado) khzActual=window.RauRx.estado().khz;
@@ -7018,6 +7023,82 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	function arrancar(){ if(arrancado) return; arrancado=true; cargar(); setInterval(cargar, 5*60*1000); cargarAperturas(); }
 	if(tarjeta) rauCuandoVisible('consola-columnas', arrancar);
 	if(tabla) rauCuandoVisible(tabla, arrancar);
+})();
+
+/* ── CENTRO DE MANDO: AVÍSAME SI APARECE ──
+   Una lista de indicativos, prefijos o bandas que la persona quiere atrapar. Cada vez que llegan
+   spots del cluster, de POTA o lo que oye el receptor, se revisa; lo nuevo se avisa una sola vez
+   por sesión con un tono y una notificación del navegador. Una banda («10m») avisa cuando el
+   receptor del club empieza a oír estaciones en ella, como máximo una vez por hora. */
+(function(){
+	var card=document.getElementById('consola-avisos');
+	if(!card) return;
+	var bandas=[['160m',1800,2000],['80m',3500,4000],['40m',7000,7300],['30m',10100,10150],['20m',14000,14350],['17m',18068,18168],['15m',21000,21450],['12m',24890,24990],['10m',28000,29700],['6m',50000,54000]];
+	function bandaDe(k){ var b=null; bandas.forEach(function(x){ if(k>=x[1] && k<=x[2]) b=x[0]; }); return b; }
+	function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+	function leer(){ try { var l=JSON.parse(localStorage.getItem('rau_avisos')||'[]'); return Array.isArray(l)?l:[]; } catch(e){ return []; } }
+	function guardar(l){ try { localStorage.setItem('rau_avisos', JSON.stringify(l)); } catch(e){} }
+	var vistos={}; try { vistos=JSON.parse(sessionStorage.getItem('rau_avisos_vistos')||'{}')||{}; } catch(e){}
+	var hallados=[];
+
+	function pintarLista(){
+		var l=leer(), el=document.getElementById('avisos-lista');
+		el.innerHTML = l.length ? l.map(function(t, i){ return '<span class="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 font-mono text-[11px]">'+esc(t)+'<button type="button" class="avisos-quitar text-muted-foreground hover:text-rose-400" data-i="'+i+'" aria-label="Dejar de vigilar '+esc(t)+'">×</button></span>'; }).join('')
+			: '<span class="text-[10px] text-muted-foreground">Nada en vigilancia todavía.</span>';
+	}
+	function pintarHallados(){
+		document.getElementById('avisos-hallados').innerHTML=hallados.map(function(h){
+			return '<div class="flex items-center justify-between gap-2 rounded-md border border-amber-400/30 bg-amber-400/5 px-2 py-1"><span><span class="font-bold text-amber-400">'+esc(h.titulo)+'</span> <span class="text-muted-foreground">'+esc(h.detalle)+'</span></span>'
+				+(h.khz?'<button type="button" class="rau-escuchar shrink-0 rounded px-1 hover:bg-primary/15" data-khz="'+h.khz+'" aria-label="Escuchar '+esc(h.titulo)+'">🎧</button>':'')+'</div>';
+		}).join('');
+	}
+	function estaciones(){
+		var l=[];
+		(window.rauUltimosDxSpots||[]).forEach(function(s){ var k=parseFloat(s.freq)*1000; if(s.dx && k>0) l.push({dx:String(s.dx).toUpperCase(), khz:k, fuente:'cluster DX'}); });
+		(window.rauUltimosPota||[]).forEach(function(s){ var k=parseFloat(s.frequency); if(s.activator && k>0) l.push({dx:String(s.activator).toUpperCase(), khz:k, fuente:'POTA '+(s.reference||'')}); });
+		((window.rauOido&&window.rauOido.reportes)||[]).forEach(function(s){ l.push({dx:s.c, khz:s.f, fuente:'oído en HK4RAU '+s.snr+' dB'}); });
+		return l;
+	}
+	function avisar(nuevos){
+		try { var ctx=new (window.AudioContext||window.webkitAudioContext)(), o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=988; g.gain.value=0.12; o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.25); } catch(e){}
+		if(window.Notification && Notification.permission==='granted'){
+			try { new Notification('RAU · '+(nuevos.length===1 ? nuevos[0].titulo : nuevos.length+' avisos'), {body: nuevos.map(function(n){ return n.titulo+' '+n.detalle; }).slice(0,4).join('\n')}); } catch(e){}
+		}
+	}
+	function revisar(){
+		var l=leer(); if(!l.length) return;
+		var nuevos=[], hora=new Date().toISOString().slice(0,13);
+		l.forEach(function(t){
+			if(/^\d+M$/.test(t)){
+				var b=t.toLowerCase(), m=window.rauOido && window.rauOido.bandas[b], clave='banda|'+b+'|'+hora;
+				if(m && m.n>0 && !vistos[clave]){ vistos[clave]=1; nuevos.push({titulo:b+' abierta', detalle:'el receptor oye '+m.n+' estaciones (la más lejana, '+m.lejos.c+')', khz:0}); }
+				return;
+			}
+			estaciones().forEach(function(e){
+				if(e.dx.indexOf(t)!==0) return;
+				var clave=t+'|'+e.dx+'|'+bandaDe(e.khz);
+				if(vistos[clave]) return;
+				vistos[clave]=1; nuevos.push({titulo:e.dx, detalle:(e.khz/1000).toFixed(3)+' MHz · '+e.fuente, khz:e.khz});
+			});
+		});
+		try { sessionStorage.setItem('rau_avisos_vistos', JSON.stringify(vistos)); } catch(e){}
+		if(!nuevos.length) return;
+		hallados=nuevos.concat(hallados).slice(0,8); pintarHallados(); avisar(nuevos);
+	}
+	function agregar(){
+		var inp=document.getElementById('avisos-nuevo'), t=String(inp.value||'').toUpperCase().replace(/[^A-Z0-9\/]/g,'');
+		if(!t) return;
+		var l=leer(); if(l.indexOf(t)<0){ l.push(t); guardar(l.slice(0,20)); }
+		inp.value=''; pintarLista();
+		if(window.Notification && Notification.permission==='default') Notification.requestPermission().catch(function(){});
+		revisar();
+	}
+	document.getElementById('avisos-agregar').addEventListener('click', agregar);
+	document.getElementById('avisos-nuevo').addEventListener('keydown', function(e){ if(e.key==='Enter') agregar(); });
+	document.getElementById('avisos-lista').addEventListener('click', function(e){ var b=e.target.closest('.avisos-quitar'); if(!b) return; var l=leer(); l.splice(+b.dataset.i,1); guardar(l); pintarLista(); });
+	document.addEventListener('rau:spots', revisar);
+	document.addEventListener('rau:oido', revisar);
+	pintarLista();
 })();
 
 /* ── CENTRO DE MANDO: TODO SIGUE LA FRECUENCIA DEL RECEPTOR ──

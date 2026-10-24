@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.47.1' );
+define( 'RAU_THEME_VERSION', '19.48.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -757,7 +757,7 @@ function rau_get_concursos() {
 function rau_get_herramientas_tabs() {
 	return [
 		['id'=>'ahora',      'label'=>'Ahora mismo, ¿qué trabajo?', 'cat'=>'Operar'],
-		['id'=>'dashboard',  'label'=>'Dashboard en Vivo',         'cat'=>'Operar'],
+		['id'=>'dashboard',  'label'=>'Dashboard en Vivo',         'cat'=>'Operar', 'oculta'=>true, 'redirige'=>'consola'], // quedó dentro del centro de mando
 		['id'=>'utc',        'label'=>'Reloj UTC',                 'cat'=>'Explorar'],
 		['id'=>'prop',       'label'=>'Condiciones HF',         'cat'=>'Explorar', 'incluye'=>['bandalert','sfihist','ciclosolar','apagon']],
 		['id'=>'bandalert',  'label'=>'Alertas de Banda',          'cat'=>'Explorar', 'oculta'=>true],
@@ -780,15 +780,15 @@ function rau_get_herramientas_tabs() {
 		['id'=>'coords',     'label'=>'Conversor de Coordenadas',  'cat'=>'Localizar'],
 		['id'=>'prefijos',   'label'=>'Prefijos',                  'cat'=>'Localizar'],
 		['id'=>'indicativo', 'label'=>'Localizador DX',            'cat'=>'Localizar', 'oculta'=>true],
-		['id'=>'bandas',     'label'=>'Bandas Colombia',           'cat'=>'Aprender'],
-		['id'=>'warc',       'label'=>'Bandas WARC',               'cat'=>'Aprender'],
+		['id'=>'bandas',     'label'=>'Bandas Colombia',           'cat'=>'Aprender', 'oculta'=>true],
+		['id'=>'warc',       'label'=>'Bandas WARC',               'cat'=>'Aprender', 'oculta'=>true],
 		['id'=>'ics213',     'label'=>'Mensaje formal (ICS-213)',  'cat'=>'Emergencias'],
 		['id'=>'frecemerg',  'label'=>'Frecuencias de Emergencia', 'cat'=>'Emergencias'],
 		['id'=>'emergencia', 'label'=>'Emergencia',                'cat'=>'Emergencias'],
 		['id'=>'ctcss',      'label'=>'CTCSS / DCS',               'cat'=>'Aprender'],
-		['id'=>'rst',        'label'=>'Reportes RST',              'cat'=>'Aprender'],
-		['id'=>'codigosq',   'label'=>'Código Q',                  'cat'=>'Aprender'],
-		['id'=>'fonetico',   'label'=>'Alfabeto Fonético',         'cat'=>'Aprender'],
+		['id'=>'rst',        'label'=>'Reportes RST',              'cat'=>'Aprender', 'oculta'=>true],
+		['id'=>'codigosq',   'label'=>'Código Q, RST y fonético',  'cat'=>'Aprender', 'incluye'=>['rst','fonetico']],
+		['id'=>'fonetico',   'label'=>'Alfabeto Fonético',         'cat'=>'Aprender', 'oculta'=>true],
 		['id'=>'glosario',   'label'=>'Glosario de Términos',      'cat'=>'Aprender'],
 		['id'=>'cw',         'label'=>'Telegrafía CW',             'cat'=>'Aprender'],
 		['id'=>'modos',      'label'=>'Modos Digitales',           'cat'=>'Aprender'],
@@ -799,22 +799,22 @@ function rau_get_herramientas_tabs() {
 		['id'=>'dx',         'label'=>'Actividad en las bandas',                  'cat'=>'Explorar', 'incluye'=>['pskreporter','rbn']],
 		['id'=>'concursos',  'label'=>'Calendario de Concursos',   'cat'=>'Operar'],
 		['id'=>'cabrillo',   'label'=>'Validador de Log Cabrillo', 'cat'=>'Operar'],
-		['id'=>'radiofaros', 'label'=>'Radiofaros NCDXF/IARU',     'cat'=>'Explorar'],
 		['id'=>'ciclosolar', 'label'=>'Ciclo Solar',               'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'apagon',     'label'=>'Predictor de Apagón HF',    'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'radiales',   'label'=>'Radiales de Tierra',        'cat'=>'Calcular'],
 		['id'=>'split',      'label'=>'Ayudante de Split (DX)',    'cat'=>'Operar'],
 		['id'=>'qsorate',    'label'=>'Contador de Tasa de QSO',   'cat'=>'Operar'],
-		['id'=>'dxcc',       'label'=>'Rastreador DXCC/WAS',       'cat'=>'Explorar'],
+		['id'=>'dxcc',       'label'=>'Rastreador DXCC/WAS',       'cat'=>'Operar'],
 		['id'=>'pskreporter','label'=>'PSK Reporter — ¿quién me oye?', 'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'rbn',        'label'=>'Reverse Beacon Network',    'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'aprs',       'label'=>'Mapa APRS Colombia',        'cat'=>'Localizar'],
 		['id'=>'smith',      'label'=>'Smith Chart',               'cat'=>'Calcular'],
 		['id'=>'tarjeta',    'label'=>'Tarjeta de Campo (imprimir)', 'cat'=>'Aprender'],
 		['id'=>'receptor',   'label'=>'Receptor KiwiSDR',          'cat'=>'Escuchar'],
-		['id'=>'aperturas',  'label'=>'Aperturas desde Colombia',  'cat'=>'Explorar'],
+		['id'=>'aperturas',  'label'=>'Aperturas desde Colombia',  'cat'=>'Escuchar'],
+		['id'=>'radiofaros', 'label'=>'Radiofaros NCDXF/IARU',     'cat'=>'Escuchar'],
 		['id'=>'brandmeister','label'=>'BrandMeister Last Heard',  'cat'=>'Escuchar'],
-		['id'=>'planbandas',  'label'=>'Plan de Bandas (visual)',  'cat'=>'Aprender'],
+		['id'=>'planbandas',  'label'=>'Plan de bandas Colombia',  'cat'=>'Aprender', 'incluye'=>['bandas','warc']],
 		['id'=>'examen',     'label'=>'Examen RABCA',              'cat'=>'Aprender'],
 		['id'=>'licencia',   'label'=>'Recordatorio de Licencia',  'cat'=>'Aprender'],
 		['id'=>'diplomas',   'label'=>'Verificador de Diplomas',   'cat'=>'Aprender'],
@@ -2603,7 +2603,7 @@ function rau_digest_html_body() {
 			<p style="margin:0 0 8px;font-size:13px;"><strong><?php the_title(); ?></strong><br><span style="color:#94a3b8;"><?php echo esc_html( $start ); ?></span></p>
 		<?php endwhile; wp_reset_postdata(); endif; ?>
 
-		<p style="margin-top:24px;"><a href="<?php echo esc_url( home_url( '/herramientas/dashboard/' ) ); ?>" style="color:#1fd5f9;">Ver el Dashboard en Vivo →</a></p>
+		<p style="margin-top:24px;"><a href="<?php echo esc_url( home_url( '/herramientas/' ) ); ?>" style="color:#1fd5f9;">Abrir el centro de mando →</a></p>
 		<p style="margin-top:20px;font-size:11px;color:#64748b;">Recibes esto porque tu correo está registrado como socio de RAU. <a href="{{unsub_link}}" style="color:#64748b;">Darme de baja de este correo</a>.</p>
 	</div>
 	<?php

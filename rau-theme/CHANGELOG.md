@@ -264,6 +264,53 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.48.0 — catálogo ordenado, consola armónica y sintonía más intuitiva
+
+**Sintonía.**
+- **Dígitos de la frecuencia.** Cada dígito de la frecuencia grande es un control. Tocar su mitad de
+  arriba lo sube y la de abajo lo baja. También responde a la rueda y, en pantalla táctil, a
+  deslizar el dedo arriba o abajo sobre él.
+- **Banda y segmento.** Los 13 botones sueltos pasan a ser la banda (160 a 10 m) más sus segmentos:
+  CW, FT8 y fonía, con su frecuencia y el modo correcto. Elegir una banda lleva a fonía (a CW en
+  30 m, que no tiene fonía). Aparte quedan onda corta 49, 31 y 25 m, y WWV en 5, 10 y 15 MHz.
+- **Dónde estás.** Una línea indica la banda, el segmento y si la frecuencia es para Novicio
+  (Decreto 1078) o solo para Primera y Avanzada.
+- **Tocar una señal la centra.** Si el toque cae a menos de 12 px de una señal que sobresale 10 dB
+  del ruido, el receptor se pone sobre ella. En USB y LSB la deja dentro del filtro de voz y en CW
+  en el centro del filtro. En el segmento FT8 no lo hace.
+- **Otros controles.**
+  - El paso es un selector a la vista (10 Hz, 100 Hz, 1 kHz y 5 kHz) y los botones ◀ ▶ muestran
+    cuánto mueven.
+  - «Ir a» acepta kHz (7074) o MHz (7.074 o 7,074).
+  - El zoom dice cuánto se ve («234 kHz») en lugar de «Zoom 7».
+- **Celular.** Las bandas ocupan una sola fila que se desliza, con la banda activa a la vista.
+
+**Catálogo** (de 52 a 47 herramientas visibles, sin perder ninguna dirección).
+- **Retirada.** «Dashboard en Vivo» quedó dentro del centro de mando y su URL lleva a él. Las
+  herramientas con `'redirige'` no necesitan grupo; el verificador (3b) lo acepta.
+- **Unidas.**
+  - «Plan de bandas Colombia» reúne Bandas Colombia, Bandas WARC y el plan visual.
+  - «Código Q, RST y fonético» reúne esas tres.
+- **Escuchar va primero** y tiene receptor, aperturas, radiofaros (movido desde Explorar) y
+  BrandMeister.
+- **Movida.** Rastreador DXCC/WAS pasa a Operar.
+- **Accesos rápidos.** Ahora son Receptor, Aperturas, QSL y Cobertura.
+
+**Lo que faltaba.**
+- **Avísame si aparece.** Una lista de indicativos, prefijos o bandas. Revisa el cluster, POTA y lo
+  que oye el receptor, y avisa una vez con un tono y una notificación. Una banda («10m») avisa
+  cuando el receptor empieza a oír estaciones en ella.
+- **Radiofaros con receptor.** Tienen botones para escucharlos en 14.100, 18.110, 21.150, 24.930
+  y 28.200.
+- **Frecuencias rápidas.** En HF sintonizan el receptor; las de VHF se siguen copiando.
+
+**Armonía de la consola.**
+- Todos los bloques llevan el título fuera de la tarjeta, con el mismo estilo; antes Mi estación,
+  Bitácora, Frecuencias, Notas y Satélites lo tenían adentro.
+- Nada queda por debajo de 10 px y todas las tarjetas tienen el mismo relleno.
+
+---
+
 ## 19.47.1 — concurso en curso y redacción
 
 Ajustes tras revisar la 19.47.0 publicada.

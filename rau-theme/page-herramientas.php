@@ -16,8 +16,9 @@ foreach ( $tabs as $t ) {
 	if ( ! empty( $t['oculta'] ) ) continue;
 	$tabs_by_cat_sin_orden[ $t['cat'] ][] = $t;
 }
-// Orden intencional (RAU Tools 2.0, sección 13): Operar, Calcular, Localizar, Explorar, Escuchar, Aprender, Emergencias
-$orden_categorias = [ 'Operar', 'Calcular', 'Localizar', 'Explorar', 'Escuchar', 'Aprender', 'Emergencias' ];
+// Orden (19.48.0): el receptor es el eje del centro de mando, así que Escuchar va primero; luego lo
+// que se usa al operar y al mirar las bandas, y al final calcular, ubicar, aprender y emergencias.
+$orden_categorias = [ 'Escuchar', 'Operar', 'Explorar', 'Calcular', 'Localizar', 'Aprender', 'Emergencias' ];
 $tabs_by_cat = [];
 foreach ( $orden_categorias as $cat ) {
 	if ( isset( $tabs_by_cat_sin_orden[ $cat ] ) ) $tabs_by_cat[ $cat ] = $tabs_by_cat_sin_orden[ $cat ];
@@ -188,11 +189,12 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 					</div>
 				</div>
 
+				<div>
+				<div class="mb-2 flex items-center justify-between">
+					<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🛰 Satélites</p>
+					<span id="sat-fuente-badge" class="hidden font-mono text-[10px] text-muted-foreground" title="De dónde vienen los datos orbitales (TLE) ahora mismo"></span>
+				</div>
 				<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<div class="mb-1.5 flex items-center justify-between">
-						<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">🛰 Satélites</p>
-						<span id="sat-fuente-badge" class="hidden font-mono text-[9px] text-muted-foreground" title="De dónde vienen los datos orbitales (TLE) ahora mismo"></span>
-					</div>
 					<div class="mb-1.5 flex items-center gap-1.5">
 						<select id="mapa-satelite-select" aria-label="Satélite a seguir en el mapa" class="w-full rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-[11px] text-muted-foreground">
 							<option value="">🛰 Sin satélite</option>
@@ -251,16 +253,18 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						</a>
 					</div>
 				</div>
+				</div>
 
 			</div>
 
 			<!-- ══ DERECHA: OPERAR ══ -->
 			<div class="rau-col space-y-4 lg:order-3 lg:col-span-3" data-col="operar">
+				<div>
+				<div class="mb-2 flex items-center justify-between gap-2">
+					<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">⚙ Mi estación</p>
+					<button type="button" id="estacion-editar" class="font-mono text-[10px] text-primary hover:underline" aria-expanded="false" aria-controls="estacion-form">Configurar</button>
+				</div>
 				<div id="consola-estacion" class="rounded-xl border border-primary/30 bg-card p-2.5">
-					<div class="mb-1.5 flex items-center justify-between gap-2">
-						<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">⚙ Mi estación</p>
-						<button type="button" id="estacion-editar" class="font-mono text-[10px] text-primary hover:underline" aria-expanded="false" aria-controls="estacion-form">Configurar</button>
-					</div>
 					<p id="estacion-resumen" class="font-mono text-[11px] text-muted-foreground">Configúrala una vez: tu indicativo y tu locator llenan la bitácora, la QSL, el certificado y las distancias a cada estación.</p>
 					<div id="estacion-form" class="mt-2 hidden">
 						<div class="grid grid-cols-2 gap-1">
@@ -273,12 +277,14 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<p id="estacion-estado" role="status" aria-live="polite" class="mt-1 font-mono text-[10px] text-muted-foreground"></p>
 					</div>
 				</div>
+				</div>
 
-					<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<div class="mb-1.5 flex items-center justify-between">
-						<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📝 Bitácora rápida</p>
-						<span class="font-mono text-[10px] text-primary">hoy: <strong id="bitacora-contador-hoy">0</strong></span>
-					</div>
+				<div>
+				<div class="mb-2 flex items-center justify-between">
+					<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📝 Bitácora rápida</p>
+					<span class="font-mono text-[10px] text-primary">hoy: <strong id="bitacora-contador-hoy">0</strong></span>
+				</div>
+				<div class="rounded-xl border border-border/70 bg-card p-2.5">
 					<div class="grid grid-cols-2 gap-1">
 						<input aria-label="Indicativo" type="text" id="bitacora-indicativo" placeholder="Indicativo" maxlength="12" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] uppercase focus:outline-none focus:ring-1 focus:ring-ring">
 						<input aria-label="MHz" type="text" id="bitacora-freq" placeholder="MHz" maxlength="10" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
@@ -292,9 +298,24 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 					<div id="bitacora-lista" class="mt-2 max-h-32 space-y-1 overflow-y-auto font-mono text-[10px] text-muted-foreground"></div>
 					<p class="mt-1.5 text-[9px] text-muted-foreground">Guardado solo en este navegador — para tu log oficial usa <a href="<?php echo esc_url( home_url( '/herramientas/log/' ) ); ?>" class="text-primary hover:underline">Log ADIF</a> <span id="consola-logadif-conteo"></span>.</p>
 				</div>
+				</div>
 
+				<div>
+				<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🔔 Avísame si aparece</p>
+				<div id="consola-avisos" class="rounded-xl border border-border/70 bg-card p-2.5">
+					<div class="flex gap-1">
+						<input aria-label="Indicativo, prefijo o banda a vigilar" type="text" id="avisos-nuevo" maxlength="12" placeholder="3Y0J, VK9 o 10m" class="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] uppercase focus:outline-none focus:ring-1 focus:ring-ring">
+						<button type="button" id="avisos-agregar" class="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 font-mono text-[11px] font-bold text-primary hover:bg-primary/20">Vigilar</button>
+					</div>
+					<div id="avisos-lista" class="mt-2 flex flex-wrap gap-1"></div>
+					<div id="avisos-hallados" class="mt-2 space-y-1 font-mono text-[11px]"></div>
+					<p class="mt-1.5 text-[10px] text-muted-foreground">Mientras esta página esté abierta, revisa el cluster DX, POTA y lo que oye el receptor. Avisa con un tono y una notificación. Una banda («10m») avisa cuando el receptor empieza a oír estaciones en ella.</p>
+				</div>
+				</div>
+
+				<div>
+				<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">📻 Frecuencias rápidas <span class="font-normal normal-case tracking-normal text-muted-foreground">· toca para sintonizar</span></p>
 				<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">📻 Frecuencias rápidas <span class="normal-case text-muted-foreground">(clic para copiar)</span></p>
 					<div class="space-y-1 font-mono text-[11px]">
 						<div class="flex justify-between"><span class="text-muted-foreground">VHF FM llamada</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="146.520">146.520</button></div>
 						<?php $rau_rep_principal = rau_get_repetidor_principal(); ?>
@@ -304,12 +325,15 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<div class="flex justify-between"><span class="text-muted-foreground">QRP CW 40m</span><button type="button" class="rau-freq-copiar text-primary hover:underline" data-freq="7.030">7.030</button></div>
 					</div>
 				</div>
+				</div>
 
 				<?php $rau_rep_red = rau_get_repetidor_principal(); ?>
+				<div>
+				<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🗒 Notas rápidas</p>
 				<div class="rounded-xl border border-border/70 bg-card p-2.5">
-					<p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">🗒 Notas rápidas</p>
 					<textarea aria-label="Recordatorios de esta sesión" id="consola-notas" rows="3" placeholder="Recordatorios de esta sesión…" class="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"></textarea>
 					<p class="mt-1 text-[9px] text-muted-foreground">Se guarda solo en este navegador, se borra si limpias el caché.</p>
+				</div>
 				</div>
 
 
@@ -669,7 +693,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 
 			<p class="rau-solo-consola mb-2 font-mono text-xs font-semibold uppercase tracking-wider text-primary">Accesos rápidos</p>
 			<div class="rau-solo-consola flex flex-wrap gap-2.5">
-				<?php foreach ( [ 'dashboard', 'qsl', 'indicativo', 'cobertura' ] as $qid ) :
+				<?php foreach ( [ 'receptor', 'aperturas', 'qsl', 'cobertura' ] as $qid ) :
 					$qt = current( array_filter( $tabs, fn( $x ) => $x['id'] === $qid ) );
 					if ( ! $qt ) continue;
 				?>
@@ -1847,6 +1871,14 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 
 				<div class="grid gap-2 sm:grid-cols-5" id="faro-bandas"></div>
+
+				<div class="mt-4 flex flex-wrap items-center gap-2">
+					<span class="font-mono text-xs text-muted-foreground">🎧 Escúchalos en el receptor del club:</span>
+					<?php foreach ( array( 14100, 18110, 21150, 24930, 28200 ) as $fk ) : ?>
+					<button type="button" class="rau-escuchar rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 font-mono text-xs text-primary hover:bg-primary/20" data-khz="<?php echo (int) $fk; ?>" data-modo="CW"><?php echo esc_html( number_format( $fk / 1000, 3 ) ); ?></button>
+					<?php endforeach; ?>
+				</div>
+				<p class="mt-2 text-xs text-muted-foreground">Cada faro dice su indicativo en CW a 100 W y luego tres rayas a 10, 1 y 0,1 W: si oyes las rayas más débiles, la banda está bien abierta hacia allá.</p>
 
 				<p class="mt-4 mb-2 font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground">Próximos en 20m (14.100 MHz)</p>
 				<div id="faro-proximos" class="space-y-1 font-mono text-sm"></div>

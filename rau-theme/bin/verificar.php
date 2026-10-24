@@ -89,7 +89,9 @@ foreach ( explode( "\n", $m[1] ?? '' ) as $linea ) {
 $todas = array(); $ocultas = array(); $incluidas = array();
 foreach ( $entradas as $e ) {
 	$todas[ $e[1] ] = true;
-	if ( strpos( $e[2], "'oculta'=>true" ) !== false ) $ocultas[ $e[1] ] = true;
+	// 'redirige' marca una herramienta retirada cuya URL lleva a otro lugar (p. ej. el Dashboard,
+	// que quedó dentro del centro de mando): está oculta a propósito y no necesita grupo.
+	if ( strpos( $e[2], "'oculta'=>true" ) !== false && strpos( $e[2], "'redirige'=>" ) === false ) $ocultas[ $e[1] ] = true;
 	if ( preg_match( "/'incluye'=>\[([^\]]*)\]/", $e[2], $inc ) ) {
 		foreach ( preg_split( "/\s*,\s*/", trim( $inc[1] ) ) as $x ) {
 			$x = trim( $x, "' " );

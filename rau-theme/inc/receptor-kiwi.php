@@ -46,7 +46,8 @@ function rau_receptor_kiwi( $args = array() ) {
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<div>
 				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Frecuencia · <span id="rx-modo-txt">LSB</span></p>
-				<p class="font-mono text-4xl font-bold tabular-nums text-primary sm:text-5xl"><span id="rx-freq">7150.00</span> <span class="text-base text-muted-foreground">kHz</span></p>
+				<p class="font-mono text-4xl font-bold tabular-nums text-primary sm:text-5xl"><span id="rx-freq" class="rx-digitos" role="group" aria-label="Frecuencia: toca la parte de arriba o de abajo de un dígito para subirlo o bajarlo">7150.00</span> <span class="text-base text-muted-foreground">kHz</span></p>
+				<p class="mt-1 font-mono text-[10px] text-muted-foreground">Toca arriba o abajo de un dígito para subirlo o bajarlo, o usa la rueda sobre él.</p>
 			</div>
 			<div class="min-w-[12rem] flex-1 sm:max-w-xs">
 				<div class="flex items-center justify-between font-mono text-[11px] text-muted-foreground"><span>Señal</span><span id="rx-s">—</span></div>
@@ -69,35 +70,47 @@ function rau_receptor_kiwi( $args = array() ) {
 			<canvas id="rx-esc" class="block h-[22px] w-full" aria-hidden="true"></canvas>
 			<div id="rx-filtro" class="pointer-events-none absolute bg-white/10" style="top:38px;height:280px;left:50%;width:0"></div>
 			<div id="rx-marca" class="pointer-events-none absolute w-px bg-accent" style="top:38px;height:280px;left:50%"></div>
-			<p id="rx-ayuda" class="pointer-events-none absolute inset-x-0 top-[150px] text-center font-mono text-xs text-muted-foreground">Pulsa «Escuchar». Luego toca la cascada para sintonizar.</p>
+			<p id="rx-ayuda" class="pointer-events-none absolute inset-x-0 top-[150px] text-center font-mono text-xs text-muted-foreground">Pulsa «Escuchar». Luego toca una señal en la cascada para sintonizarla.</p>
 		</div>
 
 		<div class="mt-5">
-			<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Bandas</p>
-			<div id="rx-bandas" class="flex flex-wrap gap-2"></div>
+			<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Banda</p>
+				<p id="rx-donde" class="font-mono text-[11px] text-primary" aria-live="polite"></p>
+			</div>
+			<div id="rx-bandas" class="rx-fila flex flex-wrap gap-1.5"></div>
+			<div id="rx-segmentos" class="mt-2 flex flex-wrap items-center gap-1.5"></div>
 		</div>
 
 		<div class="mt-5 flex flex-wrap items-end gap-x-6 gap-y-4">
 			<div>
 				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Modo</p>
-				<div id="rx-modos" class="flex flex-wrap gap-2"></div>
+				<div id="rx-modos" class="flex flex-wrap gap-1.5"></div>
 			</div>
 			<label class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Filtro<br>
 				<select id="rx-filtro-sel" class="<?php echo esc_attr( $sel ); ?> mt-2 normal-case tracking-normal"><option value="0">Angosto</option><option value="1" selected>Normal</option><option value="2">Ancho</option></select>
 			</label>
-			<label class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Paso<br>
-				<select id="rx-paso-sel" class="<?php echo esc_attr( $sel ); ?> mt-2 normal-case tracking-normal"><option value="0.01">10 Hz</option><option value="0.1">100 Hz</option><option value="1" selected>1 kHz</option><option value="5">5 kHz</option></select>
-			</label>
 			<div>
-				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Sintonía</p>
+				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Paso</p>
+				<div id="rx-pasos" class="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Paso de sintonía">
+					<button type="button" data-v="0.01" class="rx-paso-op px-2.5 py-2 font-mono text-xs">10 Hz</button><button type="button" data-v="0.1" class="rx-paso-op border-l border-border px-2.5 py-2 font-mono text-xs">100 Hz</button><button type="button" data-v="1" class="rx-paso-op border-l border-border px-2.5 py-2 font-mono text-xs">1 kHz</button><button type="button" data-v="5" class="rx-paso-op border-l border-border px-2.5 py-2 font-mono text-xs">5 kHz</button>
+				</div>
+			</div>
+			<div>
+				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Ir a</p>
 				<div class="flex flex-wrap items-center gap-1">
-					<button type="button" data-pasos="-1" class="rx-paso <?php echo esc_attr( $btn ); ?>" aria-label="Bajar un paso">◀</button>
-					<label class="sr-only" for="rx-input">Frecuencia en kHz</label>
-					<input id="rx-input" type="number" inputmode="decimal" step="0.01" min="10" max="30000" class="w-28 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm" placeholder="kHz">
-					<button type="button" data-pasos="1" class="rx-paso <?php echo esc_attr( $btn ); ?>" aria-label="Subir un paso">▶</button>
-					<button type="button" id="rx-zoom-menos" class="<?php echo esc_attr( $btn ); ?>" aria-label="Alejar cascada">−</button>
-					<span class="px-1 font-mono text-xs text-muted-foreground">Zoom <span id="rx-zoom">7</span></span>
-					<button type="button" id="rx-zoom-mas" class="<?php echo esc_attr( $btn ); ?>" aria-label="Acercar cascada">+</button>
+					<button type="button" data-pasos="-1" class="rx-paso <?php echo esc_attr( $btn ); ?>" aria-label="Bajar un paso">◀ <span class="rx-paso-txt">1 kHz</span></button>
+					<label class="sr-only" for="rx-input">Frecuencia en kHz o MHz</label>
+					<input id="rx-input" type="text" inputmode="decimal" class="w-28 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm" placeholder="kHz o MHz" title="Escribe 7074 (kHz) o 7.074 (MHz) y pulsa Enter">
+					<button type="button" data-pasos="1" class="rx-paso <?php echo esc_attr( $btn ); ?>" aria-label="Subir un paso"><span class="rx-paso-txt">1 kHz</span> ▶</button>
+				</div>
+			</div>
+			<div>
+				<p class="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Ancho visible</p>
+				<div class="flex items-center gap-1">
+					<button type="button" id="rx-zoom-menos" class="<?php echo esc_attr( $btn ); ?>" aria-label="Ver más banda (alejar)">−</button>
+					<span class="min-w-[4.5rem] px-1 text-center font-mono text-xs text-muted-foreground"><span id="rx-ancho">234 kHz</span><span id="rx-zoom" class="hidden">7</span></span>
+					<button type="button" id="rx-zoom-mas" class="<?php echo esc_attr( $btn ); ?>" aria-label="Ver menos banda (acercar)">+</button>
 				</div>
 			</div>
 		</div>
@@ -220,12 +233,29 @@ function rau_receptor_kiwi( $args = array() ) {
 		var AJAX_RX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 		var PAGINA=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>;
 		var PLAN=<?php echo wp_json_encode( rau_receptor_plan() ); ?>;
+		/* Bandas de radioaficionado con sus segmentos de uso (plan IARU Región 2) y otras escuchas.
+		   Elegir la banda lleva a fonía (a CW en 30 m, que no tiene fonía); el segmento afina. */
 		var BANDAS=[
-			{n:'160 m',f:1840,m:'lsb'},{n:'80 m',f:3700,m:'lsb'},{n:'40 m',f:7150,m:'lsb'},{n:'30 m',f:10120,m:'cw'},
-			{n:'20 m',f:14200,m:'usb'},{n:'17 m',f:18130,m:'usb'},{n:'15 m',f:21250,m:'usb'},{n:'12 m',f:24950,m:'usb'},
-			{n:'10 m',f:28500,m:'usb'},{n:'FT8 20 m',f:14074,m:'usb'},{n:'Onda corta 49 m',f:6000,m:'am'},
-			{n:'Onda corta 31 m',f:9650,m:'am'},{n:'WWV 10 MHz',f:10000,m:'am'}
+			{n:'160 m', r:[1800,2000],   s:[['CW',1830,'cw'],['FT8',1840,'usb'],['Fonía',1900,'lsb']]},
+			{n:'80 m',  r:[3500,4000],   s:[['CW',3530,'cw'],['FT8',3573,'usb'],['Fonía',3750,'lsb']]},
+			{n:'40 m',  r:[7000,7300],   s:[['CW',7030,'cw'],['FT8',7074,'usb'],['Fonía',7150,'lsb']]},
+			{n:'30 m',  r:[10100,10150], s:[['CW',10120,'cw'],['FT8',10136,'usb']]},
+			{n:'20 m',  r:[14000,14350], s:[['CW',14030,'cw'],['FT8',14074,'usb'],['Fonía',14200,'usb']]},
+			{n:'17 m',  r:[18068,18168], s:[['CW',18080,'cw'],['FT8',18100,'usb'],['Fonía',18130,'usb']]},
+			{n:'15 m',  r:[21000,21450], s:[['CW',21030,'cw'],['FT8',21074,'usb'],['Fonía',21250,'usb']]},
+			{n:'12 m',  r:[24890,24990], s:[['CW',24900,'cw'],['FT8',24915,'usb'],['Fonía',24950,'usb']]},
+			{n:'10 m',  r:[28000,29700], s:[['CW',28030,'cw'],['FT8',28074,'usb'],['Fonía',28400,'usb']]}
 		];
+		var OTRAS=[['Onda corta 49 m',6000,'am',[5900,6200]],['Onda corta 31 m',9650,'am',[9400,9900]],['Onda corta 25 m',11800,'am',[11600,12100]],
+			['Hora WWV 5 MHz',5000,'am',[4998,5002]],['Hora WWV 10 MHz',10000,'am',[9998,10002]],['Hora WWV 15 MHz',15000,'am',[14998,15002]]];
+		function bandaDe(f){ for(var i=0;i<BANDAS.length;i++) if(f>=BANDAS[i].r[0] && f<=BANDAS[i].r[1]) return BANDAS[i]; return null; }
+		function segmentoDe(b, f){
+			if(!b) return null;
+			var ft8=b.s.filter(function(x){ return x[0]==='FT8'; })[0], fonia=b.s.filter(function(x){ return x[0]==='Fonía'; })[0];
+			if(ft8 && f>=ft8[1]-1 && f<=ft8[1]+4) return 'FT8';
+			if(fonia && f>=(b.n==='40 m'?7040:b.n==='80 m'?3600:b.n==='160 m'?1843:fonia[1]-80)) return 'Fonía';
+			return f<(ft8?ft8[1]:b.r[1]) ? 'CW' : 'Fonía';
+		}
 		// Bordes del filtro en Hz por modo: angosto, normal, ancho
 		var MODOS={
 			am:  {n:'AM',  f:[[-2500,2500],[-4900,4900],[-5500,5500]]},
@@ -325,6 +355,18 @@ function rau_receptor_kiwi( $args = array() ) {
 				c.beginPath(); c.moveTo(x,0); c.lineTo(x,5*d); c.stroke(); c.fillText(p<1?f.toFixed(1):Math.round(f), x, 15*d); }
 			for(var f2=Math.ceil(st.wfStart/1000/(p/5))*(p/5); f2<(st.wfStart+st.wfSpan)/1000; f2+=p/5){ var x2=xDe(f2,w); c.beginPath(); c.moveTo(x2,0); c.lineTo(x2,2*d); c.stroke(); }
 		}
+		/* La señal más fuerte a menos de 12 px de donde se tocó, si sobresale del ruido. No en el
+		   segmento FT8, donde hay decenas de señales juntas y la frecuencia de la radio no se mueve. */
+		function picoCerca(x, ancho){
+			if(!st.on || !st.esp.length || segmentoDe(bandaDe(st.freq), st.freq)==='FT8') return null;
+			var n=st.esp[0].length, prom=new Float32Array(n);
+			st.esp.forEach(function(l){ for(var i=0;i<n;i++) prom[i]+=l[i]/st.esp.length; });
+			var c=Math.round(x/ancho*n), rad=Math.max(2, Math.round(12/ancho*n)), mejor=-1, valor=-999;
+			for(var i=Math.max(0,c-rad); i<=Math.min(n-1,c+rad); i++) if(prom[i]>valor){ valor=prom[i]; mejor=i; }
+			var orden=Array.prototype.slice.call(prom).sort(function(a,b){ return a-b; });
+			if(mejor<0 || valor<orden[n>>1]+10) return null;
+			return (st.wfStart+(mejor+0.5)/n*st.wfSpan)/1000;
+		}
 		function dibujarEspectro(){
 			var cv=$('rx-esp'), d=ajustar(cv), c=cv.getContext('2d'), w=cv.width, h=cv.height;
 			c.clearRect(0,0,w,h); if(!st.esp.length) return;
@@ -386,9 +428,39 @@ function rau_receptor_kiwi( $args = array() ) {
 		function redibujarFijos(){ dibujarPlan(); dibujarEscala(); dibujarEspectro(); dibujarSpots(); marcas(); }
 
 		/* ── Sintonía ─────────────────────────────────────────────────────── */
+		/* La frecuencia grande es un sintonizador: cada dígito sube o baja su propio valor */
+		var VALORES=[10000,1000,100,10,1,null,0.1,0.01];
+		function pintarDigitos(){
+			var t=st.freq.toFixed(2); while(t.length<8) t=' '+t;
+			$('rx-freq').innerHTML=t.split('').map(function(ch, i){
+				var v=VALORES[i];
+				if(v===null) return '<span>.</span>';
+				if(ch===' ') return '<span class="rx-dig rx-dig-vacio" data-v="'+v+'" aria-hidden="true">0</span>';
+				var nombre=v>=1 ? (v>=1000 ? v/1000+' MHz' : v+' kHz') : Math.round(v*1000)+' Hz';
+				return '<span class="rx-dig" data-v="'+v+'" role="button" tabindex="-1" aria-label="Dígito de '+nombre+': '+ch+'">'+ch+'</span>';
+			}).join('');
+		}
+		function anchoTxt(){ var k=st.bw/Math.pow(2,st.zoom)/1000; return k>=1000 ? (k/1000).toFixed(k>=10000?0:1)+' MHz' : Math.round(k)+' kHz'; }
+		function pasoTxt(v){ return v>=1 ? v+' kHz' : Math.round(v*1000)+' Hz'; }
+		function pintarBanda(){
+			var b=bandaDe(st.freq), seg=segmentoDe(b, st.freq), otra=OTRAS.filter(function(o){ return st.freq>=o[3][0] && st.freq<=o[3][1]; })[0];
+			document.querySelectorAll('.rx-banda').forEach(function(x){ var on=(b && x.dataset.b===b.n) || (otra && x.dataset.o===otra[0]); x.classList.toggle('bg-primary',!!on); x.classList.toggle('text-primary-foreground',!!on); x.setAttribute('aria-pressed', !!on);
+				// En celular la fila se desliza: que la banda activa quede a la vista sin mover la página
+				if(on && $('rx-bandas').scrollWidth>$('rx-bandas').clientWidth) $('rx-bandas').scrollLeft=Math.max(0, x.offsetLeft-$('rx-bandas').offsetLeft-24); });
+			$('rx-segmentos').innerHTML = b ? '<span class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">'+b.n+':</span>'+b.s.map(function(x){
+				var on=seg===x[0];
+				return '<button type="button" data-f="'+x[1]+'" data-m="'+x[2]+'" class="rx-seg rounded-md border px-2.5 py-1.5 font-mono text-xs '+(on?'border-primary/60 bg-primary/15 text-primary':'border-border bg-background hover:border-primary/50')+'" aria-pressed="'+on+'">'+x[0]+' <span class="text-muted-foreground">'+(x[1]/1000).toFixed(3)+'</span></button>';
+			}).join('') : '';
+			var nov=PLAN.novicio.filter(function(x){ return st.freq>=x[0] && st.freq<x[1]; })[0];
+			$('rx-donde').textContent = b ? b.n+' · '+(seg==='FT8'?'segmento FT8 (digital)':seg==='CW'?'segmento de telegrafía':'segmento de fonía')+' · '+(nov?'Novicio: '+nov[2]:'solo Primera y Avanzada')
+				: otra ? otra[0] : 'Fuera de las bandas de radioaficionado';
+		}
 		function pintarFreq(){
-			$('rx-freq').textContent=st.freq.toFixed(2); if(document.activeElement!==$('rx-input')) $('rx-input').value=st.freq.toFixed(2);
-			$('rx-zoom').textContent=st.zoom; $('rx-modo-txt').textContent=MODOS[st.modo].n;
+			pintarDigitos(); if(document.activeElement!==$('rx-input')) $('rx-input').value=st.freq.toFixed(2);
+			$('rx-zoom').textContent=st.zoom; $('rx-ancho').textContent=anchoTxt(); $('rx-modo-txt').textContent=MODOS[st.modo].n;
+			document.querySelectorAll('.rx-paso-txt').forEach(function(x){ x.textContent=pasoTxt(st.paso); });
+			document.querySelectorAll('.rx-paso-op').forEach(function(x){ var on=+x.dataset.v===st.paso; x.classList.toggle('bg-primary/15',on); x.classList.toggle('text-primary',on); x.setAttribute('aria-pressed',on); });
+			pintarBanda();
 			document.querySelectorAll('.rx-modo').forEach(function(b){ var on=b.dataset.m===st.modo; b.classList.toggle('bg-primary',on); b.classList.toggle('text-primary-foreground',on); });
 		}
 		function enviarModo(){ var f=MODOS[st.modo].f[st.filtro]; send(st.snd, 'SET mod='+st.modo+' low_cut='+f[0]+' high_cut='+f[1]+' freq='+st.freq.toFixed(3)); }
@@ -401,7 +473,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			// La consola de Herramientas sigue la frecuencia: bitácora, lista de spots, banda del mapa
 			document.dispatchEvent(new CustomEvent('rau:frecuencia', {detail:{khz:st.freq, modo:st.modo}}));
 		}
-		function zoomA(z){ st.zoom=Math.max(0, Math.min(st.zoomMax, z)); send(st.wf, 'SET zoom='+st.zoom+' cf='+st.freq.toFixed(3)); $('rx-zoom').textContent=st.zoom; vistaLocal(true); }
+		function zoomA(z){ st.zoom=Math.max(0, Math.min(st.zoomMax, z)); send(st.wf, 'SET zoom='+st.zoom+' cf='+st.freq.toFixed(3)); $('rx-zoom').textContent=st.zoom; $('rx-ancho').textContent=anchoTxt(); vistaLocal(true); }
 		function redondear(f){ return Math.round(f/st.paso)*st.paso; }
 
 		/* ── Audio ────────────────────────────────────────────────────────── */
@@ -574,12 +646,41 @@ function rau_receptor_kiwi( $args = array() ) {
 		}
 
 		/* ── Controles ────────────────────────────────────────────────────── */
-		$('rx-bandas').innerHTML=BANDAS.map(function(b,i){ return '<button type="button" data-i="'+i+'" class="rx-banda rounded-md border border-border bg-background px-3 py-2 font-mono text-xs hover:border-primary/50">'+b.n+'</button>'; }).join('');
+		var chip='rx-banda rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs hover:border-primary/50';
+		$('rx-bandas').innerHTML=BANDAS.map(function(b){ return '<button type="button" data-b="'+b.n+'" class="'+chip+'">'+b.n+'</button>'; }).join('')
+			+'<span class="mx-1 w-px self-stretch bg-border" aria-hidden="true"></span>'
+			+OTRAS.map(function(o){ return '<button type="button" data-o="'+o[0]+'" class="'+chip+'">'+o[0].replace('Onda corta ','OC ').replace('Hora WWV ','WWV ')+'</button>'; }).join('');
 		$('rx-modos').innerHTML=Object.keys(MODOS).map(function(k){ return '<button type="button" data-m="'+k+'" class="rx-modo rounded-md border border-border bg-background px-3 py-2 font-mono text-xs">'+MODOS[k].n+'</button>'; }).join('');
-		document.querySelectorAll('.rx-banda').forEach(function(b){ b.addEventListener('click', function(){ var x=BANDAS[b.dataset.i]; sintonizar(x.f, x.m); }); });
+		$('rx-bandas').addEventListener('click', function(e){
+			var x=e.target.closest('.rx-banda'); if(!x) return;
+			if(x.dataset.b){ var b=BANDAS.filter(function(y){ return y.n===x.dataset.b; })[0], s=b.s.filter(function(y){ return y[0]==='Fonía'; })[0]||b.s[0]; sintonizar(s[1], s[2]); }
+			else { var o=OTRAS.filter(function(y){ return y[0]===x.dataset.o; })[0]; sintonizar(o[1], o[2]); }
+		});
+		$('rx-segmentos').addEventListener('click', function(e){ var x=e.target.closest('.rx-seg'); if(x) sintonizar(+x.dataset.f, x.dataset.m); });
+
+		/* Dígitos: tocar la mitad de arriba sube, la de abajo baja; rueda encima; en pantalla táctil,
+		   deslizar el dedo hacia arriba o abajo sobre el dígito. */
+		var dig=null;
+		function cambiarDigito(v, signo){ sintonizar(Math.round((st.freq+signo*v)*100)/100, null, false); }
+		$('rx-freq').addEventListener('pointerdown', function(e){
+			var d=e.target.closest('.rx-dig'); if(!d) return;
+			e.preventDefault(); dig={el:d, v:+d.dataset.v, y:e.clientY, paso:0};
+			try { $('rx-freq').setPointerCapture(e.pointerId); } catch(err){}
+		});
+		$('rx-freq').addEventListener('pointermove', function(e){
+			if(!dig) return; var n=Math.trunc((dig.y-e.clientY)/18);
+			if(n!==dig.paso){ cambiarDigito(dig.v, n-dig.paso); dig.paso=n; }
+		});
+		$('rx-freq').addEventListener('pointerup', function(e){
+			if(!dig) return; var d=dig; dig=null;
+			if(d.paso!==0) return;
+			var r=d.el.getBoundingClientRect(); cambiarDigito(d.v, e.clientY<r.top+r.height/2 ? 1 : -1);
+		});
+		$('rx-freq').addEventListener('wheel', function(e){ var d=e.target.closest('.rx-dig'); if(!d) return; e.preventDefault(); cambiarDigito(+d.dataset.v, e.deltaY<0?1:-1); }, {passive:false});
 		document.querySelectorAll('.rx-modo').forEach(function(b){ b.addEventListener('click', function(){ sintonizar(st.freq, b.dataset.m, false); }); });
 		document.querySelectorAll('.rx-paso').forEach(function(b){ b.addEventListener('click', function(){ sintonizar(redondear(st.freq)+st.paso*(+b.dataset.pasos), null, false); }); });
-		$('rx-input').addEventListener('change', function(){ var f=parseFloat(this.value); if(f>0) sintonizar(f); });
+		// Acepta kHz (7074) o MHz (7.074 o 7,074): por debajo de 31 se entiende MHz
+		$('rx-input').addEventListener('change', function(){ var f=parseFloat(String(this.value).replace(',', '.')); if(!(f>0)) return; if(f<31) f*=1000; sintonizar(f, modoPara(f,'')); });
 		document.body.appendChild($('rx-mini')); // fuera del panel, que Herramientas oculta al cambiar de herramienta
 		$('rx-mini-stop').addEventListener('click', function(){ apagar(); });
 		$('rx-mini-ver').addEventListener('click', function(){
@@ -591,7 +692,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		$('rx-zoom-mas').addEventListener('click', function(){ zoomA(st.zoom+1); guardar(); });
 		$('rx-zoom-menos').addEventListener('click', function(){ zoomA(st.zoom-1); guardar(); });
 		$('rx-filtro-sel').value=st.filtro; $('rx-filtro-sel').addEventListener('change', function(){ st.filtro=+this.value; enviarModo(); marcas(); guardar(); });
-		$('rx-paso-sel').value=st.paso; $('rx-paso-sel').addEventListener('change', function(){ st.paso=+this.value; guardar(); });
+		$('rx-pasos').addEventListener('click', function(e){ var x=e.target.closest('.rx-paso-op'); if(!x) return; st.paso=+x.dataset.v; guardar(); pintarFreq(); });
 		$('rx-paleta').value=st.paleta; $('rx-paleta').addEventListener('change', function(){ st.paleta=this.value; construirLut(); limpiarCascada(); dibujarEspectro(); guardar(); });
 		$('rx-contraste').value=st.contraste; $('rx-contraste-v').textContent=st.contraste+' dB';
 		$('rx-contraste').addEventListener('input', function(){ st.contraste=+this.value; $('rx-contraste-v').textContent=st.contraste+' dB'; guardar(); });
@@ -636,7 +737,14 @@ function rau_receptor_kiwi( $args = array() ) {
 			var rs=$('rx-spots').getBoundingClientRect();
 			if(e.clientY>=rs.top-4 && e.clientY<=rs.bottom+4) st.golpes.forEach(function(g){ var dd=Math.abs(g.x-xr); if(dd<14 && (!cerca || dd<cerca.d)) cerca={d:dd, s:g.s}; });
 			if(cerca){ sintonizar(cerca.s.khz, modoPara(cerca.s.khz, cerca.s.modo)); msg('Sintonizado '+cerca.s.dx+' en '+cerca.s.khz.toFixed(2)+' kHz'+(st.on?'.':'. Pulsa «Escuchar» para oírlo.')); return; }
-			{ var f=freqEn(e.clientX); sintonizar(st.modo==='am'||st.modo==='nbfm' ? Math.round(f) : redondear(f), null, false); }
+			var f=freqEn(e.clientX), pico=picoCerca(e.clientX-r.left, r.width);
+			if(pico){
+				// La señal queda dentro del filtro: en USB la voz va ~0,3–2,7 kHz encima de la portadora
+				var ajuste={usb:-1.2, lsb:1.2, cw:-0.5}[st.modo]||0;
+				sintonizar(Math.round((pico+ajuste)*100)/100, null, false); msg('Sintonizado en la señal más cercana ('+pico.toFixed(2)+' kHz).');
+				return;
+			}
+			sintonizar(st.modo==='am'||st.modo==='nbfm' ? Math.round(f) : redondear(f), null, false);
 		});
 		pant.addEventListener('wheel', function(e){ if(!st.on) return; e.preventDefault(); sintonizar(redondear(st.freq)+(e.deltaY<0?1:-1)*st.paso, null, false); }, {passive:false});
 		$('rx-app').addEventListener('keydown', function(e){
