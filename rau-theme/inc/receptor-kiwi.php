@@ -367,7 +367,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			c.font='bold '+(10*d)+'px ui-monospace,monospace'; c.textBaseline='middle';
 			var fin=-1, vis=st.spots.filter(function(s){ var x=xDe(s.khz,w); return x>=0 && x<=w; }).sort(function(a,b){ return a.khz-b.khz; });
 			vis.forEach(function(s){
-				var x=xDe(s.khz,w), col=s.fuente==='pota'?'#34d399':'#fbbf24';
+				var x=xDe(s.khz,w), col=s.fuente==='pota'?'#34d399':s.fuente==='oido'?'#38bdf8':'#fbbf24';
 				c.fillStyle=col; c.beginPath(); c.moveTo(x-3*d,0); c.lineTo(x+3*d,0); c.lineTo(x,5*d); c.closePath(); c.fill();
 				var tx=s.dx||'', ancho=c.measureText(tx).width;
 				if(x+2*d>fin){ c.fillText(tx, x+2*d, h*0.62); fin=x+2*d+ancho+6*d; }

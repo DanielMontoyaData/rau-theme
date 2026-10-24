@@ -220,10 +220,10 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 					<div>
 						<div class="mb-2 flex items-center gap-2">
 							<svg class="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2M4 12a8 8 0 0 1 8-8M12 4V2M20 12h2M12 20v2M4.93 4.93l1.41 1.41M17.66 6.34l1.41-1.41M6.34 17.66l-1.41 1.41M17.66 17.66l1.41 1.41M12 12a4 4 0 0 1 0-8M8 12a4 4 0 0 0 8 0"/><circle cx="12" cy="12" r="2"/></svg>
-							<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Receptor SDR · Medellín</p>
+							<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Receptor SDR · <?php echo esc_html( rau_sdr_lugar() ); ?></p>
 						</div>
 						<h2 class="font-display text-2xl font-bold">KiwiSDR HK4RAU</h2>
-						<p class="mt-1 text-sm text-muted-foreground">Medellín, Colombia · 0–30 MHz</p>
+						<p class="mt-1 text-sm text-muted-foreground"><?php echo esc_html( rau_sdr_lugar() ); ?>, Colombia · 0–30 MHz</p>
 					</div>
 					<!-- Indicador de estado -->
 					<div id="sdr-status-badge" class="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-1.5">

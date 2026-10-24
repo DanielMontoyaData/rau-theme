@@ -264,6 +264,43 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.47.0 — el receptor como sensor de propagación
+
+Los decodificadores automáticos del KiwiSDR (FT8 y WSPR) suben cada estación que oyen a PSK
+Reporter y a WSPRnet con el indicativo HK4RAU. El sitio no lo aprovechaba. Es propagación medida
+desde Colombia: el 24-oct-2026, en una hora, 119 estaciones de 30 países en 40 y 20 m.
+
+**Servidor.**
+- `rau_sdr_oido`: lee PSK Reporter y wspr.live con una consulta compartida cada 5 minutos, que es lo
+  que pide PSK Reporter. Si las fuentes fallan, devuelve el último dato bueno.
+- Resume por banda y región: cuántas estaciones, la más lejana y la mejor señal.
+- `rau_sdr_aperturas`: con 30 días de WSPR, calcula para cada banda, hora (de Colombia) y región en
+  qué porcentaje de los días se oyó algo. Se cachea 6 horas.
+
+**«Abierta ahora · medido».** Es la primera tarjeta de «Mirar». Muestra cada banda que vigila el
+receptor con su conteo, sus regiones y la estación más lejana, más una línea «A esta hora suele
+abrir…». El semáforo de bandas, «Mejor banda ahora» y la explicación de cada banda usan lo medido.
+El índice solar queda solo para las bandas sin medición (80, 30, 17 y 12 m).
+
+**Mapa.** La capa «Lo que oye HK4RAU» traza círculos máximos desde el receptor hasta cada estación
+oída en la banda sintonizada. La intensidad depende de la señal. Tocar una estación la sintoniza.
+
+**Lista y cascada.** Hay una tercera fuente, «Oído en HK4RAU», en azul.
+
+**Herramienta nueva: «Aperturas desde Colombia».** Un mapa de calor de banda por hora, con filtro por
+región. Hoy tiene 5 días de datos y crece solo.
+
+**Ubicación.** Según su GPS, el receptor está en el Quindío (FJ24ep), no en Medellín. El sitio toma
+el nombre del lugar de las coordenadas del GPS (OpenStreetMap, consultado desde el cron solo si el
+receptor se mueve). Se cambió en `/receptor/`, la consola, el panel, la portada y el chat.
+
+«Ahora mismo, ¿qué trabajo?» suma las estaciones que el receptor oyó en la banda recomendada.
+
+Se probó contra datos reales: en 30 minutos se oyeron 52 estaciones en 40 m y 17 en 20 m. La más
+lejana fue VK3QN, a 14.511 km.
+
+---
+
 ## 19.46.2 — mapa gris en celular
 
 En celular, el mapa de la pestaña «Mirar» salía gris. Leaflet lo creaba mientras la pestaña estaba

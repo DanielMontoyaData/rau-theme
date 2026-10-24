@@ -737,7 +737,8 @@ function rauFaseLunar(frac){
 				else if(sfiNum<130) mejorBanda='20m / 17m / 15m';
 				else mejorBanda='15m / 12m / 10m';
 			}
-			document.getElementById('consola-mejor-banda').textContent=mejorBanda;
+			// Si el receptor ya midió una banda abierta, esa manda sobre la regla del índice solar
+			if(!window.rauMejorMedida) document.getElementById('consola-mejor-banda').textContent=mejorBanda;
 			var rnBandaEl=document.getElementById('rn-banda');
 			if(rnBandaEl) rnBandaEl.innerHTML='📡 Banda: <span class="text-primary font-bold">'+mejorBanda+'</span>';
 			var quehacerEl=document.getElementById('consola-que-hacer');
@@ -786,6 +787,7 @@ function rauFaseLunar(frac){
 					else if(sfiNum>=umbrales[banda].v){ semaforo='🟢'; }
 					else if(sfiNum>=umbrales[banda].v-20){ semaforo='🟡'; }
 					else { semaforo='🔴'; }
+					if(window.rauOidoSemaforo && window.rauOidoSemaforo[banda]) semaforo=window.rauOidoSemaforo[banda];
 					el.textContent=semaforo;
 					window.rauBandaEstado = window.rauBandaEstado || {};
 					window.rauBandaEstado[banda] = { semaforo:semaforo, umbral:umbrales[banda].v, sfi:sfiNum, tormenta:tormenta, k:kNum };
@@ -826,7 +828,18 @@ function rauFaseLunar(frac){
 (function(){
 	var explEl=document.getElementById('consola-banda-explicacion');
 	if(!explEl) return;
+	var nombresRegion={NA:'Norteamérica', EU:'Europa', SA:'Sur y Centroamérica', AF:'África', AS:'Asia', OC:'Oceanía'};
 	function explicarBanda(banda){
+		// Primero lo medido por el receptor del club; la regla del SFI solo donde no hay medición
+		var o=window.rauOido;
+		if(o && o.vigiladas.indexOf(banda)>-1){
+			var m=o.bandas[banda];
+			explEl.textContent = m
+				? banda+': el receptor del club oyó '+m.n+(m.n===1?' estación':' estaciones')+' en los últimos 30 min ('+Object.keys(m.regiones).sort(function(a,b){ return m.regiones[b]-m.regiones[a]; }).map(function(r){ return nombresRegion[r]+' '+m.regiones[r]; }).join(', ')+'). La más lejana: '+m.lejos.c+' a '+m.lejos.km.toLocaleString('es-CO')+' km.'
+				: banda+' 🔴: el receptor del club vigila esta banda y no oyó ninguna estación en los últimos 30 minutos.';
+			explEl.classList.remove('hidden');
+			return;
+		}
 		var estado=window.rauBandaEstado && window.rauBandaEstado[banda];
 		if(!estado){ explEl.textContent='Datos insuficientes para explicar '+banda+' todavía.'; explEl.classList.remove('hidden'); return; }
 		var razon;
@@ -1104,6 +1117,49 @@ function rauFaseLunar(frac){
 		// En celular el mapa está en la pestaña «Mirar», oculta al cargar: Leaflet lo midió en 0 px y
 		// lo dejaba gris. Se vuelve a medir cada vez que cambia de tamaño (al mostrarse la pestaña).
 		if(window.ResizeObserver) new ResizeObserver(function(){ map.invalidateSize(); }).observe(mapaEl);
+
+		/* Lo que oye HK4RAU (19.47.0): una línea por círculo máximo desde el receptor hasta cada
+		   estación oída en la banda sintonizada; más intensa cuanto mejor la señal. Tocar una la
+		   sintoniza en el receptor. */
+		var capaOido=L.layerGroup().addTo(map), bandaOido=null;
+		var bandasOido=[['160m',1800,2000],['80m',3500,4000],['40m',7000,7300],['30m',10100,10150],['20m',14000,14350],['17m',18068,18168],['15m',21000,21450],['12m',24890,24990],['10m',28000,29700]];
+		function bandaDeKhz(k){ var b=null; bandasOido.forEach(function(x){ if(k>=x[1] && k<=x[2]) b=x[0]; }); return b; }
+		function arcoMaximo(a, b){
+			var r=Math.PI/180, f1=a[0]*r, l1=a[1]*r, f2=b[0]*r, l2=b[1]*r;
+			var d=2*Math.asin(Math.sqrt(Math.pow(Math.sin((f2-f1)/2),2)+Math.cos(f1)*Math.cos(f2)*Math.pow(Math.sin((l2-l1)/2),2)));
+			if(!d) return [a, b];
+			var pts=[], prev=null;
+			for(var i=0;i<=40;i++){
+				var t=i/40, A=Math.sin((1-t)*d)/Math.sin(d), B=Math.sin(t*d)/Math.sin(d);
+				var x=A*Math.cos(f1)*Math.cos(l1)+B*Math.cos(f2)*Math.cos(l2), y=A*Math.cos(f1)*Math.sin(l1)+B*Math.cos(f2)*Math.sin(l2), z=A*Math.sin(f1)+B*Math.sin(f2);
+				var lat=Math.atan2(z, Math.sqrt(x*x+y*y))/r, lng=Math.atan2(y, x)/r;
+				// Longitudes continuas: sin esto, una ruta que cruza el antimeridiano atraviesa todo el mapa
+				if(prev!==null){ while(lng-prev>180) lng-=360; while(prev-lng>180) lng+=360; }
+				prev=lng; pts.push([lat, lng]);
+			}
+			return pts;
+		}
+		function pintarOido(){
+			capaOido.clearLayers();
+			var o=window.rauOido, chk=document.getElementById('mapa-mostrar-oido');
+			if(!o || (chk && !chk.checked)) return;
+			var rx=[o.rx.lat, o.rx.lng];
+			o.reportes.filter(function(x){ return !bandaOido || x.b===bandaOido; }).forEach(function(x){
+				var fuerza=Math.max(0.15, Math.min(1, (x.snr+28)/26));
+				L.polyline(arcoMaximo(rx, [x.lat, x.lng]), {color:'#38bdf8', weight:1.2, opacity:0.25+0.55*fuerza, interactive:false}).addTo(capaOido);
+				L.circleMarker([x.lat, x.lng], {radius:3.5, color:'#38bdf8', weight:1, fillColor:'#38bdf8', fillOpacity:fuerza})
+					.bindTooltip(x.c+(x.pais?' · '+x.pais:'')+' · '+x.km.toLocaleString('es-CO')+' km · '+x.snr+' dB · '+x.m+' en '+x.b)
+					.on('click', function(){ if(window.RauRx) window.RauRx.sintonizar(x.f, 'usb'); })
+					.addTo(capaOido);
+			});
+			L.circleMarker(rx, {radius:6, color:'#0ea5e9', weight:2, fillColor:'#e0f2fe', fillOpacity:1}).bindTooltip('Receptor HK4RAU · '+o.rx.lugar+(bandaOido?' · mostrando '+bandaOido:'')).addTo(capaOido);
+		}
+		document.addEventListener('rau:oido', pintarOido);
+		document.addEventListener('rau:frecuencia', function(ev){ var b=bandaDeKhz(ev.detail.khz); if(b!==bandaOido){ bandaOido=b; pintarOido(); } });
+		var chkOidoMapa=document.getElementById('mapa-mostrar-oido');
+		if(chkOidoMapa) chkOidoMapa.addEventListener('change', pintarOido);
+		if(window.RauRx && window.RauRx.estado) bandaOido=bandaDeKhz(window.RauRx.estado().khz);
+		pintarOido();
 		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'&copy; OpenStreetMap' }).addTo(map);
 
 		L.circleMarker([RAU_QTH_MAPA.lat, RAU_QTH_MAPA.lng], { radius:7, color:'#fff', weight:2, fillColor:'#1fd5f9', fillOpacity:1 })
@@ -3778,6 +3834,9 @@ rauOn('gain-dbd','input',function(){
 			if(enBanda) razon+=' Además hay '+enBanda+' spot'+(enBanda===1?'':'s')+' reciente'+(enBanda===1?'':'s')+' ahí, así que no es solo teoría.';
 			else razon+=' Aún no hay spots ahí: puede estar abierta y desierta, que es cuando conviene llamar CQ.';
 			if(!isNaN(k) && k>=5) razon+=' Ojo: con K='+k+' las rutas hacia el norte pueden estar cerradas aunque la banda figure abierta.';
+			var oidoAhora=window.rauOido, oidas=0;
+			if(oidoAhora) mejor.banda.split('-').forEach(function(b){ if(oidoAhora.bandas[b]) oidas+=oidoAhora.bandas[b].n; });
+			if(oidas) razon+=' El receptor del club oyó '+oidas+' estaciones en esa banda en la última media hora.';
 			razonEl.textContent=razon;
 		}
 		var FT8_AHORA={'80m-40m':7074,'40m-30m':10136,'30m-20m':14074,'17m-15m':21074,'12m-10m':28074,'10m-6m':28074};
@@ -6736,6 +6795,11 @@ rauCuandoVisible('consola-wspr-lista', function(){
 			if(!(khz>0)) return;
 			l.push({fuente:'dx', dx:String(s.dx||'').toUpperCase(), khz:khz, modo:modoPista(s.info), lugar:g?g.nombre:'', dr:g?distRumbo(g.lat,g.lng):null, min:minutosDesde(s.t), info:s.info||''});
 		});
+		var chkOido=document.getElementById('consola-banda-oido');
+		if(chkOido && chkOido.checked && window.rauOido) window.rauOido.reportes.forEach(function(s){
+			var g=s.pais ? null : geoDe(s.c);
+			l.push({fuente:'oido', dx:s.c, khz:s.f, modo:s.m, lugar:s.pais||(g?g.nombre:''), dr:distRumbo(s.lat, s.lng), min:Math.max(0, Math.round((Date.now()/1000-s.t)/60)), info:'Oído en HK4RAU con '+s.snr+' dB a '+s.km.toLocaleString('es-CO')+' km del receptor'});
+		});
 		if(document.getElementById('consola-banda-pota').checked) datos.pota.forEach(function(s){
 			var khz=parseFloat(s.frequency);
 			if(!(khz>0)) return;
@@ -6764,7 +6828,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 			return;
 		}
 		lista.innerHTML=vis.map(function(s){
-			var color=s.fuente==='pota'?'text-emerald-400':'text-amber-400';
+			var color=s.fuente==='pota'?'text-emerald-400':s.fuente==='oido'?'text-sky-400':'text-amber-400';
 			var lugar=[s.lugar, s.dr ? s.dr.km.toLocaleString('es-CO')+' km · '+s.dr.az+'°' : '', s.min!=null ? (s.min<1?'ahora':'hace '+s.min+' min') : ''].filter(Boolean).join(' · ');
 			var mhz=(s.khz/1000).toFixed(3);
 			return '<div class="flex items-center gap-2 border-b border-border/30 py-1 last:border-0">'
@@ -6806,7 +6870,8 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	});
 	function marcarFiltro(){ document.querySelectorAll('.rau-banda-filtro').forEach(function(x){ x.classList.toggle('is-active', x.dataset.filtro===filtro); x.setAttribute('aria-pressed', x.dataset.filtro===filtro); }); }
 	document.querySelectorAll('.rau-banda-filtro').forEach(function(x){ x.addEventListener('click', function(){ filtro=x.dataset.filtro; marcarFiltro(); render(); }); });
-	['consola-banda-dx','consola-banda-pota'].forEach(function(id){ document.getElementById(id).addEventListener('change', render); });
+	['consola-banda-dx','consola-banda-pota','consola-banda-oido'].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener('change', render); });
+	document.addEventListener('rau:oido', render);
 	document.addEventListener('rau:frecuencia', function(ev){ var b0=bandaActual(); khzActual=ev.detail.khz; if(bandaActual()!==b0) render(); });
 	document.addEventListener('rau:estacion', render);
 	marcarFiltro();
@@ -6838,6 +6903,115 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	if(window.RauRx && window.RauRx.estado) khzActual=window.RauRx.estado().khz;
 	cargarDx(); setInterval(cargarDx, 2*60*1000);
 	rauCuandoVisible(lista, function(){ cargarPota(); setInterval(cargarPota, 3*60*1000); });
+})();
+
+/* ── EL RECEPTOR COMO SENSOR DE PROPAGACIÓN (19.47.0) ──
+   Lo que oyen los decodificadores FT8 y WSPR del KiwiSDR en los últimos 30 minutos (PSK Reporter +
+   wspr.live, leídos por el servidor cada 5 minutos) y, con 30 días de WSPR, a qué hora abre cada
+   banda hacia cada región. Publica window.rauOido y el evento rau:oido: lo usan el semáforo de
+   bandas, la lista de estaciones, la cascada, el mapa y «Ahora mismo». */
+(function(){
+	var tarjeta=document.getElementById('consola-oido'), tabla=document.getElementById('ap-tabla');
+	if(!tarjeta && !tabla) return;
+	var ajaxUrl='<?php echo esc_js( admin_url('admin-ajax.php') ); ?>';
+	var regiones={NA:'Norteamérica', EU:'Europa', SA:'Sur y Centroamérica', AF:'África', AS:'Asia', OC:'Oceanía'};
+	var orden=['160m','80m','60m','40m','30m','20m','17m','15m','12m','10m','6m'];
+	var inicioBanda={'160m':1840,'80m':3573,'40m':7074,'30m':10136,'20m':14074,'17m':18100,'15m':21074,'12m':24915,'10m':28074};
+	var region='todas';
+	function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+	function horaCol(){ return (new Date().getUTCHours()+19)%24; }
+
+	function semaforo(o){
+		window.rauOidoSemaforo={};
+		var mejor=null;
+		o.vigiladas.forEach(function(b){
+			var n=o.bandas[b] ? o.bandas[b].n : 0, sem=n>=5?'🟢':n>=1?'🟡':'🔴';
+			window.rauOidoSemaforo[b]=sem;
+			var el=document.querySelector('#consola-estado-bandas [data-banda="'+b+'"] span:last-child');
+			if(el){ el.textContent=sem; el.parentNode.title=b+': medido en HK4RAU ('+n+' estaciones en 30 min)'; }
+			if(n>=3 && (!mejor || orden.indexOf(b)>orden.indexOf(mejor))) mejor=b;
+		});
+		window.rauMejorMedida=mejor;
+		var mb=document.getElementById('consola-mejor-banda');
+		if(mejor && mb) mb.textContent=mejor+' (medida)';
+	}
+	function pintarTarjeta(o){
+		var el=document.getElementById('consola-oido-bandas');
+		if(!el) return;
+		var filas=o.vigiladas.slice().sort(function(a,b){ return orden.indexOf(a)-orden.indexOf(b); }).map(function(b){
+			var m=o.bandas[b], n=m?m.n:0;
+			var col=n>=5?'text-emerald-400':n>=1?'text-amber-400':'text-rose-400';
+			var regs=m ? Object.keys(m.regiones).sort(function(x,y){ return m.regiones[y]-m.regiones[x]; }).slice(0,3).map(function(r){ return regiones[r]+' '+m.regiones[r]; }).join(' · ') : 'nadie oído: cerrada o sin actividad';
+			return '<button type="button" class="rau-oido-banda flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-primary/10" data-banda="'+b+'" title="'+(m?'Más lejana: '+esc(m.lejos.c)+' a '+m.lejos.km.toLocaleString('es-CO')+' km · mejor señal '+m.mejor_snr+' dB':'')+'. Toca para sintonizar">'
+				+'<span class="w-9 shrink-0 font-bold text-foreground">'+b+'</span><span class="w-8 shrink-0 text-right '+col+'">'+n+'</span>'
+				+'<span class="min-w-0 flex-1 truncate text-[10px]">'+regs+'</span>'+(m?'<span class="shrink-0 text-[10px] text-sky-400">'+Math.round(m.lejos.km/1000)+' mil km</span>':'')+'</button>';
+		});
+		var sin=orden.filter(function(b){ return inicioBanda[b] && o.vigiladas.indexOf(b)<0 && b!=='160m'; });
+		el.innerHTML=filas.join('')+(sin.length?'<p class="px-1.5 pt-1 text-[9px] text-muted-foreground">'+sin.join(', ')+': el receptor no las vigila; ahí el semáforo usa el índice solar.</p>':'');
+		var min=Math.max(0, Math.round((Date.now()/1000-o.actualizado)/60));
+		document.getElementById('consola-oido-nota').textContent='FT8 y WSPR decodificados por el receptor · '+(o.viejo?'sin conexión con las fuentes, último dato de hace '+min+' min':'actualizado hace '+(min<1?'menos de 1':min)+' min');
+	}
+	function pintarHora(a){
+		var el=document.getElementById('consola-oido-hora');
+		if(!el || !a) return;
+		var h=horaCol(), l=[];
+		Object.keys(a.bandas).forEach(function(b){ var c=a.bandas[b][h]||{}; Object.keys(c).forEach(function(r){ if(c[r]>=50) l.push({b:b, r:r, p:c[r]}); }); });
+		l.sort(function(x,y){ return y.p-x.p; });
+		el.innerHTML = l.length
+			? '<span class="text-foreground">A esta hora ('+h+' h) suele abrir:</span> '+l.slice(0,4).map(function(x){ return x.b+' → '+regiones[x.r]+' '+x.p+' %'; }).join(' · ')+' <span class="text-muted-foreground">('+a.dias+' día'+(a.dias===1?'':'s')+' de datos)</span>'
+			: '<span class="text-foreground">A esta hora ('+h+' h)</span> ninguna banda abre más de la mitad de los días ('+a.dias+' días de datos).';
+		el.classList.remove('hidden');
+	}
+	function pintarTabla(a){
+		if(!tabla) return;
+		if(!a){ tabla.textContent='No se pudieron leer las mediciones de WSPR en este momento.'; return; }
+		var h=horaCol(), cab='<div class="grid gap-px" style="grid-template-columns:3.5rem repeat(24,minmax(0,1fr))"><span></span>';
+		for(var i=0;i<24;i++) cab+='<span class="text-center'+(i===h?' text-amber-400':'')+'">'+i+'</span>';
+		var filas=Object.keys(a.bandas).map(function(b){
+			var f='<button type="button" class="ap-banda text-left font-bold text-foreground hover:text-primary" data-banda="'+b+'" title="Escuchar '+b+' en el receptor">'+b+' 🎧</button>';
+			for(var i=0;i<24;i++){
+				var c=a.bandas[b][i]||{}, v=region==='todas' ? Math.max.apply(null, Object.keys(c).map(function(r){ return c[r]; }).concat([0])) : (c[region]||0);
+				var detalle=Object.keys(c).sort(function(x,y){ return c[y]-c[x]; }).map(function(r){ return regiones[r]+' '+c[r]+' %'; }).join(', ');
+				f+='<span class="h-7 rounded-sm'+(i===h?' ring-1 ring-amber-400':'')+'" style="background:rgb(56 189 248 / '+(v?(0.12+0.88*v/100).toFixed(2):'0.04')+')" title="'+b+' a las '+i+' h: '+(detalle||'nada oído')+'"></span>';
+			}
+			return f;
+		}).join('');
+		tabla.innerHTML=cab+filas+'</div>';
+		var desde=new Date(a.desde*1000).toLocaleDateString('es-CO',{day:'numeric', month:'long'});
+		var nota=document.getElementById('ap-nota');
+		if(nota) nota.textContent='Basado en '+a.dias+' día'+(a.dias===1?'':'s')+' de recepción WSPR de HK4RAU (desde el '+desde+'). Con más días el mapa se vuelve más confiable; se actualiza cada 6 horas. Solo aparecen las bandas que el receptor vigila.';
+	}
+	document.addEventListener('click', function(e){
+		var b=e.target.closest('.rau-oido-banda, .ap-banda, .ap-region'); if(!b) return;
+		if(b.classList.contains('ap-region')){
+			region=b.dataset.r;
+			document.querySelectorAll('.ap-region').forEach(function(x){ x.classList.toggle('is-active', x===b); x.setAttribute('aria-pressed', x===b); });
+			pintarTabla(window.rauAperturas); return;
+		}
+		var f=inicioBanda[b.dataset.banda]; if(!f) return;
+		if(b.classList.contains('ap-banda')){ if(typeof window.rauEscuchar==='function') window.rauEscuchar(f, 'FT8'); return; }
+		if(window.RauRx) window.RauRx.sintonizar(f, 'usb');
+		if(typeof window.rauIrPestana==='function') window.rauIrPestana('escuchar');
+	});
+
+	function cargar(){
+		fetch(ajaxUrl+'?action=rau_sdr_oido', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+			if(!j.success){ var el=document.getElementById('consola-oido-bandas'); if(el) el.textContent='No se pudo leer lo que oye el receptor en este momento.'; return; }
+			window.rauOido=j.data;
+			semaforo(j.data); pintarTarjeta(j.data);
+			document.dispatchEvent(new CustomEvent('rau:oido', {detail:j.data}));
+		}).catch(function(e){ rauErr(e); });
+	}
+	function cargarAperturas(){
+		fetch(ajaxUrl+'?action=rau_sdr_aperturas', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+			window.rauAperturas=j.success ? j.data : null;
+			pintarHora(window.rauAperturas); pintarTabla(window.rauAperturas);
+		}).catch(function(e){ rauErr(e); pintarTabla(null); });
+	}
+	var arrancado=false;
+	function arrancar(){ if(arrancado) return; arrancado=true; cargar(); setInterval(cargar, 5*60*1000); cargarAperturas(); }
+	if(tarjeta) rauCuandoVisible('consola-columnas', arrancar);
+	if(tabla) rauCuandoVisible(tabla, arrancar);
 })();
 
 /* ── CENTRO DE MANDO: TODO SIGUE LA FRECUENCIA DEL RECEPTOR ──
@@ -6872,7 +7046,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	// «Mejor banda ahora» de la franja superior: un clic la sintoniza
 	var mejorBtn=document.getElementById('consola-mejor-banda-btn');
 	if(mejorBtn) mejorBtn.addEventListener('click', function(){
-		var b=(document.getElementById('consola-mejor-banda').textContent||'').split(' / ')[0].trim();
+		var b=((document.getElementById('consola-mejor-banda').textContent||'').match(/\d+m/)||[''])[0];
 		if(!window.RauRx || !inicioBanda[b]) return;
 		if(typeof window.rauIrPestana==='function') window.rauIrPestana('escuchar');
 		window.RauRx.sintonizar(inicioBanda[b], 'usb');

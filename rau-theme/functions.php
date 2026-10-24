@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.46.2' );
+define( 'RAU_THEME_VERSION', '19.47.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -812,6 +812,7 @@ function rau_get_herramientas_tabs() {
 		['id'=>'smith',      'label'=>'Smith Chart',               'cat'=>'Calcular'],
 		['id'=>'tarjeta',    'label'=>'Tarjeta de Campo (imprimir)', 'cat'=>'Aprender'],
 		['id'=>'receptor',   'label'=>'Receptor KiwiSDR',          'cat'=>'Escuchar'],
+		['id'=>'aperturas',  'label'=>'Aperturas desde Colombia',  'cat'=>'Explorar'],
 		['id'=>'brandmeister','label'=>'BrandMeister Last Heard',  'cat'=>'Escuchar'],
 		['id'=>'planbandas',  'label'=>'Plan de Bandas (visual)',  'cat'=>'Aprender'],
 		['id'=>'examen',     'label'=>'Examen RABCA',              'cat'=>'Aprender'],
@@ -3467,8 +3468,15 @@ function rau_sdr_leer_estado( $forzar = false ) {
 		'antenna'  => sanitize_text_field( urldecode( $d['antenna'] ?? '' ) ),
 		'snr_hf'   => $snr[1] ?? null,
 		'uptime'   => $num( 'uptime' ),
-		'location' => sanitize_text_field( urldecode( $d['loc'] ?? '' ) ) ?: 'Medellín, Colombia',
+		'location' => rau_sdr_lugar(),
 	);
+	// Posición según el GPS del receptor ("gps=(4.64, -75.62)", "grid=FJ24ep"): es la que usan el
+	// mapa, las distancias y el nombre del lugar. Se guarda la última conocida por si deja de responder.
+	if ( isset( $d['gps'] ) && preg_match( '/\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/', $d['gps'], $g ) && ( (float) $g[1] || (float) $g[2] ) ) {
+		$pos = array( 'lat' => (float) $g[1], 'lng' => (float) $g[2], 'grid' => preg_replace( '/[^A-Za-z0-9]/', '', $d['grid'] ?? '' ) );
+		if ( get_option( 'rau_sdr_posicion' ) !== $pos ) update_option( 'rau_sdr_posicion', $pos, false );
+		$estado['lat'] = $pos['lat']; $estado['lng'] = $pos['lng']; $estado['grid'] = $pos['grid'];
+	}
 	set_transient( 'rau_sdr_status', $estado, 2 * MINUTE_IN_SECONDS );
 	return $estado;
 }
@@ -3533,6 +3541,200 @@ function rau_sdr_por_hora() {
 add_action( 'wp_ajax_rau_sdr_historial',        'rau_sdr_historial_endpoint' );
 add_action( 'wp_ajax_nopriv_rau_sdr_historial', 'rau_sdr_historial_endpoint' );
 function rau_sdr_historial_endpoint() { wp_send_json_success( rau_sdr_por_hora() ); }
+
+/* ── El receptor como sensor de propagación (19.47.0) ────────────────────────────────────
+ *
+ * Los decodificadores automáticos del KiwiSDR (FT8 y WSPR) suben cada estación que oyen a PSK
+ * Reporter y a WSPRnet con el indicativo HK4RAU. Eso es propagación medida desde Colombia, no una
+ * estimación por índice solar: el 24-oct-2026, en una hora, 119 estaciones de 30 países en 40 y
+ * 20 m. Aquí se lee (una consulta compartida cada 5 minutos, que es lo que pide PSK Reporter) y se
+ * resume por banda y por región; y con 30 días de WSPR, a qué hora suele abrir cada banda hacia
+ * cada región.
+ */
+define( 'RAU_KIWI_INDICATIVO', 'HK4RAU' );
+
+/** Posición del receptor según su GPS (última conocida). Valor inicial: la lectura del 24-oct-2026. */
+function rau_sdr_posicion() {
+	$p = get_option( 'rau_sdr_posicion' );
+	return is_array( $p ) && isset( $p['lat'] ) ? $p : array( 'lat' => 4.64, 'lng' => -75.62, 'grid' => 'FJ24ep' );
+}
+
+/**
+ * Nombre del lugar donde está el receptor, según su GPS (departamento, por OpenStreetMap). Solo se
+ * consulta desde el cron, nunca al pintar una página, y se repite únicamente si el GPS se mueve.
+ */
+function rau_sdr_lugar() {
+	$l = get_option( 'rau_sdr_lugar' );
+	return is_array( $l ) && ! empty( $l['nombre'] ) ? $l['nombre'] : 'Quindío';
+}
+function rau_sdr_actualizar_lugar() {
+	$p = rau_sdr_posicion();
+	$l = get_option( 'rau_sdr_lugar' );
+	if ( is_array( $l ) && abs( $l['lat'] - $p['lat'] ) < 0.05 && abs( $l['lng'] - $p['lng'] ) < 0.05 ) return;
+	$r = rau_remote_get( add_query_arg( array( 'lat' => $p['lat'], 'lon' => $p['lng'], 'format' => 'jsonv2', 'zoom' => 10, 'accept-language' => 'es' ), 'https://nominatim.openstreetmap.org/reverse' ),
+		array( 'timeout' => 8, 'user-agent' => 'HK4RAU/1.0 (info@hk4rau.com)' ), 60 );
+	if ( is_wp_error( $r ) || 200 !== (int) wp_remote_retrieve_response_code( $r ) ) return;
+	$j = json_decode( wp_remote_retrieve_body( $r ), true );
+	$nombre = sanitize_text_field( $j['address']['state'] ?? ( $j['address']['county'] ?? '' ) );
+	if ( $nombre ) update_option( 'rau_sdr_lugar', array( 'lat' => $p['lat'], 'lng' => $p['lng'], 'nombre' => $nombre ), false );
+}
+add_action( 'rau_sdr_muestra', 'rau_sdr_actualizar_lugar', 20 );
+
+/** Locator Maidenhead (4 o 6 caracteres) al centro de su cuadro o subcuadro. */
+function rau_locator_a_coord( $loc ) {
+	$loc = strtoupper( trim( (string) $loc ) );
+	if ( ! preg_match( '/^[A-R]{2}[0-9]{2}/', $loc ) ) return null;
+	$lng = ( ord( $loc[0] ) - 65 ) * 20 - 180 + (int) $loc[2] * 2;
+	$lat = ( ord( $loc[1] ) - 65 ) * 10 - 90 + (int) $loc[3];
+	if ( preg_match( '/^[A-X]{2}$/', substr( $loc, 4, 2 ) ) ) {
+		$lng += ( ord( $loc[4] ) - 65 ) * 2 / 24 + 1 / 24;
+		$lat += ( ord( $loc[5] ) - 65 ) / 24 + 1 / 48;
+	} else {
+		$lng += 1; $lat += 0.5;
+	}
+	return array( round( $lat, 3 ), round( $lng, 3 ) );
+}
+function rau_distancia_rumbo( $lat1, $lng1, $lat2, $lng2 ) {
+	$r = M_PI / 180; $f1 = $lat1 * $r; $f2 = $lat2 * $r; $dl = ( $lng2 - $lng1 ) * $r;
+	$km = 2 * 6371 * asin( sqrt( pow( sin( ( $f2 - $f1 ) / 2 ), 2 ) + cos( $f1 ) * cos( $f2 ) * pow( sin( $dl / 2 ), 2 ) ) );
+	$az = fmod( rad2deg( atan2( sin( $dl ) * cos( $f2 ), cos( $f1 ) * sin( $f2 ) - sin( $f1 ) * cos( $f2 ) * cos( $dl ) ) ) + 360, 360 );
+	return array( (int) round( $km ), (int) round( $az ) );
+}
+/** Región aproximada por coordenadas; la misma regla se usa en la consulta SQL de WSPR. */
+function rau_region_de( $lat, $lng ) {
+	if ( $lat >= 35 && $lng >= -25 && $lng <= 60 ) return 'EU';
+	if ( $lat >= 15 && $lng < -50 ) return 'NA';
+	if ( $lng < -30 ) return 'SA';
+	if ( $lng >= -25 && $lng <= 60 ) return 'AF';
+	if ( $lat < 0 && $lng > 100 ) return 'OC';
+	return 'AS';
+}
+function rau_banda_de_khz( $khz ) {
+	foreach ( array( '160m' => array( 1800, 2000 ), '80m' => array( 3500, 4000 ), '60m' => array( 5330, 5410 ), '40m' => array( 7000, 7300 ), '30m' => array( 10100, 10150 ), '20m' => array( 14000, 14350 ), '17m' => array( 18068, 18168 ), '15m' => array( 21000, 21450 ), '12m' => array( 24890, 24990 ), '10m' => array( 28000, 29700 ), '6m' => array( 50000, 54000 ) ) as $b => $r ) {
+		if ( $khz >= $r[0] && $khz <= $r[1] ) return $b;
+	}
+	return null;
+}
+function rau_wspr_live( $sql, $timeout = 12 ) {
+	$r = rau_remote_get( 'https://db1.wspr.live/?query=' . rawurlencode( $sql . ' FORMAT JSONCompact' ), array( 'timeout' => $timeout, 'user-agent' => 'HK4RAU/1.0 (info@hk4rau.com)' ), 5 );
+	if ( is_wp_error( $r ) || 200 !== (int) wp_remote_retrieve_response_code( $r ) ) return null;
+	$j = json_decode( wp_remote_retrieve_body( $r ), true );
+	return isset( $j['data'] ) && is_array( $j['data'] ) ? $j['data'] : null;
+}
+
+/** Lo que oyó HK4RAU en los últimos 30 minutos (FT8 por PSK Reporter + WSPR por wspr.live). */
+function rau_sdr_oido() {
+	$c = get_transient( 'rau_sdr_oido' );
+	if ( false !== $c ) return $c;
+	$pos   = rau_sdr_posicion();
+	$crudo = array();
+	$fuentes_ok = 0;
+
+	$r = rau_remote_get( add_query_arg( array( 'receiverCallsign' => RAU_KIWI_INDICATIVO, 'flowStartSeconds' => -1800, 'rronly' => 1, 'appcontact' => 'info@hk4rau.com' ), 'https://retrieve.pskreporter.info/query' ),
+		array( 'timeout' => 15, 'user-agent' => 'HK4RAU/1.0 (info@hk4rau.com)' ), 5 );
+	if ( ! is_wp_error( $r ) && 200 === (int) wp_remote_retrieve_response_code( $r ) ) {
+		libxml_use_internal_errors( true );
+		$xml = simplexml_load_string( wp_remote_retrieve_body( $r ), 'SimpleXMLElement', LIBXML_NONET );
+		if ( $xml ) {
+			$fuentes_ok++;
+			foreach ( $xml->receptionReport as $rr ) {
+				$a = $rr->attributes();
+				$crudo[] = array( (string) $a['senderCallsign'], (string) $a['senderLocator'], (float) $a['frequency'] / 1000, (string) $a['mode'], (int) $a['sNR'], (int) $a['flowStartSeconds'], (string) $a['senderDXCC'] );
+			}
+		}
+	}
+	$w = rau_wspr_live( "SELECT tx_sign, tx_loc, frequency, snr, toUnixTimestamp(time) FROM wspr.rx WHERE rx_sign='" . RAU_KIWI_INDICATIVO . "' AND time > now() - INTERVAL 30 MINUTE ORDER BY time DESC LIMIT 300" );
+	if ( null !== $w ) {
+		$fuentes_ok++;
+		foreach ( $w as $f ) $crudo[] = array( (string) $f[0], (string) $f[1], (float) $f[2] / 1000, 'WSPR', (int) $f[3], (int) $f[4], '' );
+	}
+	if ( ! $fuentes_ok ) {
+		// Sin respuesta de ninguna fuente: se devuelve lo último bueno, marcado como viejo
+		$ultimo = get_option( 'rau_sdr_oido_ultimo' );
+		if ( $ultimo ) { $ultimo['viejo'] = true; set_transient( 'rau_sdr_oido', $ultimo, 2 * MINUTE_IN_SECONDS ); return $ultimo; }
+		return null;
+	}
+
+	// Una entrada por estación y banda: la más reciente
+	$por = array();
+	foreach ( $crudo as $x ) {
+		list( $call, $loc, $khz, $modo, $snr, $t, $pais ) = $x;
+		$banda = rau_banda_de_khz( $khz );
+		$coord = rau_locator_a_coord( $loc );
+		if ( ! $call || ! $banda || ! $coord ) continue;
+		$k = $call . '|' . $banda;
+		if ( isset( $por[ $k ] ) && $por[ $k ]['t'] >= $t ) continue;
+		list( $km, $az ) = rau_distancia_rumbo( $pos['lat'], $pos['lng'], $coord[0], $coord[1] );
+		$por[ $k ] = array( 'c' => sanitize_text_field( $call ), 'b' => $banda, 'f' => round( $khz, 2 ), 'm' => sanitize_text_field( $modo ), 'snr' => $snr, 't' => $t,
+			'pais' => sanitize_text_field( $pais ), 'lat' => $coord[0], 'lng' => $coord[1], 'km' => $km, 'az' => $az, 'r' => rau_region_de( $coord[0], $coord[1] ) );
+	}
+	$reportes = array_values( $por );
+	usort( $reportes, function( $a, $b ) { return $b['t'] - $a['t']; } );
+	$reportes = array_slice( $reportes, 0, 400 );
+
+	$bandas = array();
+	foreach ( $reportes as $x ) {
+		$b = &$bandas[ $x['b'] ];
+		if ( ! $b ) $b = array( 'n' => 0, 'regiones' => array(), 'lejos' => null, 'mejor_snr' => null );
+		$b['n']++;
+		$b['regiones'][ $x['r'] ] = ( $b['regiones'][ $x['r'] ] ?? 0 ) + 1;
+		if ( ! $b['lejos'] || $x['km'] > $b['lejos']['km'] ) $b['lejos'] = array( 'c' => $x['c'], 'km' => $x['km'], 'pais' => $x['pais'] );
+		if ( null === $b['mejor_snr'] || $x['snr'] > $b['mejor_snr'] ) $b['mejor_snr'] = $x['snr'];
+		unset( $b );
+	}
+	$ap  = rau_sdr_aperturas();
+	$out = array( 'rx' => array( 'lat' => $pos['lat'], 'lng' => $pos['lng'], 'grid' => $pos['grid'], 'lugar' => rau_sdr_lugar() ),
+		'actualizado' => time(), 'reportes' => $reportes, 'bandas' => $bandas,
+		// Bandas que el receptor vigila (las que tienen datos en 30 días): en las demás no hay medición
+		'vigiladas' => $ap ? array_keys( $ap['bandas'] ) : array_keys( $bandas ) );
+	update_option( 'rau_sdr_oido_ultimo', $out, false );
+	set_transient( 'rau_sdr_oido', $out, 5 * MINUTE_IN_SECONDS );
+	return $out;
+}
+add_action( 'wp_ajax_rau_sdr_oido',        'rau_sdr_oido_endpoint' );
+add_action( 'wp_ajax_nopriv_rau_sdr_oido', 'rau_sdr_oido_endpoint' );
+function rau_sdr_oido_endpoint() {
+	$o = rau_sdr_oido();
+	$o ? wp_send_json_success( $o ) : wp_send_json_error( 'sin_datos' );
+}
+
+/**
+ * Aperturas medidas: con 30 días de WSPR recibidos por HK4RAU, para cada banda, hora del día (de
+ * Colombia, UTC−5 todo el año) y región, en qué porcentaje de los días se oyó al menos una estación.
+ */
+function rau_sdr_aperturas() {
+	$c = get_transient( 'rau_sdr_aperturas' );
+	if ( false !== $c ) return $c ?: null;
+	$ind  = RAU_KIWI_INDICATIVO;
+	$base = "FROM wspr.rx WHERE rx_sign='$ind' AND time > now() - INTERVAL 30 DAY";
+	$tot  = rau_wspr_live( "SELECT uniqExact(toDate(time)), toUnixTimestamp(min(time)) $base", 20 );
+	$cel  = rau_wspr_live( "SELECT band, toHour(time - INTERVAL 5 HOUR) AS h, multiIf(tx_lat>=35 AND tx_lon>=-25 AND tx_lon<=60,'EU', tx_lat>=15 AND tx_lon<-50,'NA', tx_lon<-30,'SA', tx_lon>=-25 AND tx_lon<=60,'AF', tx_lat<0 AND tx_lon>100,'OC','AS') AS r, uniqExact(toDate(time)) AS dias $base GROUP BY band, h, r", 20 );
+	if ( null === $tot || null === $cel ) {
+		$ultimo = get_option( 'rau_sdr_aperturas_ultimo' );
+		set_transient( 'rau_sdr_aperturas', $ultimo ?: 0, 30 * MINUTE_IN_SECONDS );
+		return $ultimo ?: null;
+	}
+	$dias    = max( 1, (int) $tot[0][0] );
+	$nombres = array( 1 => '160m', 3 => '80m', 5 => '60m', 7 => '40m', 10 => '30m', 14 => '20m', 18 => '17m', 21 => '15m', 24 => '12m', 28 => '10m', 50 => '6m' );
+	$bandas  = array();
+	foreach ( $cel as $f ) {
+		$b = $nombres[ (int) $f[0] ] ?? null;
+		if ( ! $b ) continue;
+		$bandas[ $b ][ (int) $f[1] ][ $f[2] ] = (int) round( 100 * min( $dias, (int) $f[3] ) / $dias );
+	}
+	$orden = array_flip( array_values( $nombres ) );
+	uksort( $bandas, function( $a, $b ) use ( $orden ) { return $orden[ $a ] - $orden[ $b ]; } );
+	$out = array( 'dias' => $dias, 'desde' => (int) $tot[0][1], 'bandas' => $bandas, 'rx' => rau_sdr_posicion(), 'lugar' => rau_sdr_lugar() );
+	update_option( 'rau_sdr_aperturas_ultimo', $out, false );
+	set_transient( 'rau_sdr_aperturas', $out, 6 * HOUR_IN_SECONDS );
+	return $out;
+}
+add_action( 'wp_ajax_rau_sdr_aperturas',        'rau_sdr_aperturas_endpoint' );
+add_action( 'wp_ajax_nopriv_rau_sdr_aperturas', 'rau_sdr_aperturas_endpoint' );
+function rau_sdr_aperturas_endpoint() {
+	$a = rau_sdr_aperturas();
+	$a ? wp_send_json_success( $a ) : wp_send_json_error( 'sin_datos' );
+}
 
 /* ── Proxy DX Spots — múltiples fuentes con fallback — caché 3 min ── */
 add_action( 'wp_ajax_rau_dx_spots',        'rau_dx_spots_proxy' );
