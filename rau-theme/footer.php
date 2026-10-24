@@ -228,7 +228,7 @@ if('serviceWorker' in navigator){
 			respuesta:'Todos nuestros repetidores (y los de aliados) están en el <a href="'+'<?php echo esc_url( get_post_type_archive_link( "repetidor" ) ); ?>'+'" class="text-primary underline">Directorio de Repetidores</a>, con frecuencia, tono y ubicación.' },
 		{ id:'kiwisdr', pregunta:'¿Cómo escucho el receptor en línea?',
 			palabras:['kiwisdr','sdr','escuchar en linea','receptor','radio en linea'],
-			respuesta:'Nuestro KiwiSDR en <?php echo esc_js( rau_sdr_lugar() ); ?> cubre de 0 a 30 MHz. En la página del <a href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>" class="text-primary underline">receptor</a> ves si hay canal libre, a qué horas suele haberlo y cómo escucharlo.' },
+			respuesta:'Nuestro KiwiSDR en <?php echo esc_js( rau_sdr_lugar( true ) ); ?> cubre de 0 a 30 MHz. En la página del <a href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>" class="text-primary underline">receptor</a> ves si hay canal libre, a qué horas suele haberlo y cómo escucharlo.' },
 		{ id:'herramientas', pregunta:'¿Qué herramientas tienen?',
 			palabras:['herramienta','calculadora','utilidad','conversor'],
 			respuesta:'Tenemos <?php echo (int) count( rau_get_herramientas_tabs() ); ?> herramientas gratuitas: calculadoras de antenas, propagación solar, predicción de pasadas de satélites, generador de QSL y muchas más. Todo en <a href="'+'<?php echo esc_url( home_url( "/herramientas/" ) ); ?>'+'" class="text-primary underline">Herramientas de Radio</a>.' },

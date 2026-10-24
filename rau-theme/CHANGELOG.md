@@ -264,6 +264,22 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.47.1 — concurso en curso y redacción
+
+Ajustes tras revisar la 19.47.0 publicada.
+
+- **Concurso en curso.** Durante el CQ WW DX SSB (24 y 25 de octubre) la franja decía «Próximo: CQ WW
+  DX (SSB) — hoy», con el concurso ya corriendo. Ahora dice «🏆 En curso: CQ WW DX (SSB) · termina en
+  41 h» y enlaza al calendario. La lista de concursos marca «en curso» en lugar de «0d».
+- **«En el Quindío».** `rau_sdr_lugar( true )` pone artículo a los departamentos que lo llevan (el
+  Quindío, el Valle del Cauca, La Guajira…) y no a los que no (Antioquia, Caldas…). Los rótulos cortos
+  siguen sin artículo («Receptor SDR · Quindío»).
+- **Subtítulo.** «Más 62 herramientas en el catálogo» pasa a «Y 62 herramientas más en el catálogo».
+- **Conteo por banda.** Una línea aclara que suma las tres fuentes (cluster, POTA y receptor). Antes
+  parecía contradecir a la tarjeta «Abierta ahora», que cuenta solo lo oído por el receptor.
+
+---
+
 ## 19.47.0 — el receptor como sensor de propagación
 
 Los decodificadores automáticos del KiwiSDR (FT8 y WSPR) suben cada estación que oyen a PSK

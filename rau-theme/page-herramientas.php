@@ -35,7 +35,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 	?>
 	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary"><?php echo $tool_h1 ? 'Herramientas de Radio' : 'Utilidades técnicas'; ?></p>
 	<h1 class="mb-2 font-display text-3xl font-bold sm:text-4xl"><?php echo esc_html( $tool_h1 ? $tool_h1['label'] : 'Herramientas de Radio' ); ?></h1>
-	<p class="mb-6 max-w-2xl text-muted-foreground">Escucha el receptor del club, mira cómo están las bandas y lleva tu bitácora, todo en un mismo lugar. Más <?php echo count( $tabs ); ?> herramientas en el catálogo.</p>
+	<p class="mb-6 max-w-2xl text-muted-foreground">Escucha el receptor del club, mira cómo están las bandas y lleva tu bitácora, todo en un mismo lugar. Y <?php echo count( $tabs ); ?> herramientas más en el catálogo.</p>
 
 	<!-- ── TABS ─────────────────────────────────────────────── -->
 	<div id="rau-tools">
@@ -84,7 +84,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 			<div class="rau-col space-y-5 lg:order-2 lg:col-span-6" data-col="escuchar">
 				<div>
 					<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-						<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🎧 Receptor HK4RAU · en vivo desde <?php echo esc_html( rau_sdr_lugar() ); ?></p>
+						<p class="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🎧 Receptor HK4RAU · en vivo desde <?php echo esc_html( rau_sdr_lugar( true ) ); ?></p>
 						<a href="<?php echo esc_url( home_url( '/herramientas/receptor/' ) ); ?>" id="consola-rx-completo" class="font-mono text-[10px] text-muted-foreground hover:text-primary">Pantalla completa ↗</a>
 					</div>
 					<div id="consola-receptor-slot"></div>
@@ -104,6 +104,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						</div>
 					</div>
 					<div class="rounded-xl border border-border/70 bg-card p-2.5">
+						<p class="mb-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Por banda, sumando las tres fuentes · toca una para ir</p>
 						<div id="consola-banda-conteo" class="mb-2 grid grid-cols-8 gap-1" aria-label="Estaciones reportadas por banda"></div>
 						<div id="consola-banda-lista" class="max-h-96 space-y-1 overflow-y-auto font-mono text-[11px] text-muted-foreground">Cargando estaciones…</div>
 						<p class="mt-2 text-[10px] text-muted-foreground"><span class="text-amber-400">▼</span> cluster DX · <span class="text-emerald-400">▼</span> POTA · <span class="text-sky-400">▼</span> oídas por el receptor del club. 🎧 la sintoniza · 📝 la pasa a la bitácora · 📏 la ubica en el mapa. Las mismas marcas aparecen sobre la cascada.</p>
@@ -120,7 +121,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<a href="<?php echo esc_url( home_url( '/herramientas/aperturas/' ) ); ?>" id="consola-oido-mas" class="font-mono text-[10px] text-muted-foreground hover:text-primary">Por hora ↗</a>
 					</div>
 					<div class="rounded-xl border border-sky-400/30 bg-card p-2.5">
-						<p class="mb-1.5 text-[10px] text-muted-foreground">Lo que oye en este momento el receptor del club en <?php echo esc_html( rau_sdr_lugar() ); ?>: señales reales, no una estimación.</p>
+						<p class="mb-1.5 text-[10px] text-muted-foreground">Lo que oye en este momento el receptor del club en <?php echo esc_html( rau_sdr_lugar( true ) ); ?>: señales reales, no una estimación.</p>
 						<div id="consola-oido-bandas" class="space-y-0.5 font-mono text-[11px] text-muted-foreground">Leyendo lo que oye el receptor…</div>
 						<p id="consola-oido-hora" class="mt-2 hidden border-t border-border/50 pt-2 text-[10px] text-muted-foreground"></p>
 						<p id="consola-oido-nota" class="mt-1 text-[9px] text-muted-foreground"></p>
@@ -804,7 +805,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						</span>
 					</div>
 					<div id="dash-sdr-info" class="rounded-lg border border-border/50 bg-background p-3 font-mono text-[11px] text-muted-foreground">
-						<p>Receptor de 0 a 30 MHz en <?php echo esc_html( rau_sdr_lugar() ); ?>, antena dipolo.</p>
+						<p>Receptor de 0 a 30 MHz en <?php echo esc_html( rau_sdr_lugar( true ) ); ?>, antena dipolo.</p>
 						<p id="dash-sdr-detalle" class="mt-1">Consultando canales…</p>
 					</div>
 					<a href="<?php echo esc_url( home_url( '/herramientas/receptor/' ) ); ?>" id="dash-sdr-ir" class="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 font-mono text-xs font-bold text-primary-foreground hover:bg-primary/90">Escuchar en vivo →</a>
@@ -2146,7 +2147,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 			<div class="rounded-2xl border border-border/70 bg-card p-5 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-sky-400">Propagación medida · HK4RAU</p>
 				<h2 class="mb-2 font-display text-2xl font-bold">Aperturas desde Colombia</h2>
-				<p class="mb-5 max-w-3xl text-sm text-muted-foreground">Cada casilla dice en qué porcentaje de los días el receptor del club, en <?php echo esc_html( rau_sdr_lugar() ); ?>, oyó al menos una estación de esa región, en esa banda y a esa hora (hora de Colombia). Son señales WSPR reales recibidas aquí, no un modelo de propagación. Toca una banda para escucharla.</p>
+				<p class="mb-5 max-w-3xl text-sm text-muted-foreground">Cada casilla dice en qué porcentaje de los días el receptor del club, en <?php echo esc_html( rau_sdr_lugar( true ) ); ?>, oyó al menos una estación de esa región, en esa banda y a esa hora (hora de Colombia). Son señales WSPR reales recibidas aquí, no un modelo de propagación. Toca una banda para escucharla.</p>
 				<div id="ap-regiones" class="mb-4 flex flex-wrap gap-2" role="group" aria-label="Región de destino">
 					<button type="button" data-r="todas" class="ap-region is-active rounded-md border border-border px-3 py-1.5 font-mono text-xs">Cualquier región</button>
 					<button type="button" data-r="NA" class="ap-region rounded-md border border-border px-3 py-1.5 font-mono text-xs">Norteamérica</button>

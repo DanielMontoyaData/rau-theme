@@ -611,8 +611,14 @@ function rauFaseLunar(frac){
 		var proximoConc=CONCURSOS_INSTR.map(function(c){ return {nombre:c.n, fecha:proximoConcurso(c.mes, c.n_semana)}; })
 			.sort(function(a,b){ return a.fecha-b.fecha; })[0];
 
+		// Un concurso de fin de semana corre ~48 h desde el sábado 00:00 UTC: mientras dure, eso manda
+		var enCurso=CONCURSOS_INSTR.map(function(c){ return {nombre:c.n, fecha:nEsimoFinDeSemana(ahora.getUTCFullYear(), c.mes, c.n_semana)}; })
+			.filter(function(c){ return c.fecha && ahora>=c.fecha && ahora<c.fecha.getTime()+48*3600000; })[0];
 		if(mallaEnCurso){
 			el.innerHTML='<span class="text-emerald-400 font-bold">🔴 Malla RAU EN VIVO ahora</span>';
+		} else if(enCurso){
+			var horasFin=Math.max(1, Math.round((enCurso.fecha.getTime()+48*3600000-ahora)/3600000));
+			el.innerHTML='<a href="<?php echo esc_url( home_url( '/herramientas/concursos/' ) ); ?>" class="font-bold text-amber-400 hover:underline">🏆 En curso: '+enCurso.nombre+' · termina en '+horasFin+' h</a>';
 		} else {
 			var candidatos=[{nombre:'Malla RAU', fecha:proximaMalla}];
 			if(proximoConc) candidatos.push(proximoConc);
@@ -629,8 +635,8 @@ function rauFaseLunar(frac){
 				.sort(function(a,b){ return a.fecha-b.fecha; })
 				.slice(0,3);
 			listaEl.innerHTML=todosOrdenados.map(function(c){
-				var dias=Math.ceil((c.fecha-ahora)/86400000);
-				return '<div class="flex justify-between"><span>'+c.nombre+'</span><span class="text-primary">'+dias+'d</span></div>';
+				var dias=Math.ceil((c.fecha-ahora)/86400000), corre=ahora>=c.fecha;
+				return '<div class="flex justify-between"><span>'+c.nombre+'</span><span class="'+(corre?'font-bold text-amber-400':'text-primary')+'">'+(corre?'en curso':dias+'d')+'</span></div>';
 			}).join('');
 		}
 	}

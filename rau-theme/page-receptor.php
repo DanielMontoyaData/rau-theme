@@ -19,7 +19,7 @@ require_once get_template_directory() . '/inc/receptor-kiwi.php';
 	<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 		<div>
 			<h1 class="font-display text-3xl font-bold sm:text-4xl">KiwiSDR HK4RAU</h1>
-			<p class="mt-2 max-w-2xl text-muted-foreground">Un receptor de 0 a 30 MHz en <?php echo esc_html( rau_sdr_lugar() ); ?> que cualquiera puede escuchar desde el navegador: bandas de radioaficionado, onda corta, señales horarias. Hasta 7 personas a la vez.</p>
+			<p class="mt-2 max-w-2xl text-muted-foreground">Un receptor de 0 a 30 MHz en <?php echo esc_html( rau_sdr_lugar( true ) ); ?> que cualquiera puede escuchar desde el navegador: bandas de radioaficionado, onda corta, señales horarias. Hasta 7 personas a la vez.</p>
 		</div>
 	</div>
 

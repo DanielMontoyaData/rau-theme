@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.47.0' );
+define( 'RAU_THEME_VERSION', '19.47.1' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -3563,9 +3563,14 @@ function rau_sdr_posicion() {
  * Nombre del lugar donde está el receptor, según su GPS (departamento, por OpenStreetMap). Solo se
  * consulta desde el cron, nunca al pintar una página, y se repite únicamente si el GPS se mueve.
  */
-function rau_sdr_lugar() {
+function rau_sdr_lugar( $con_articulo = false ) {
 	$l = get_option( 'rau_sdr_lugar' );
-	return is_array( $l ) && ! empty( $l['nombre'] ) ? $l['nombre'] : 'Quindío';
+	$n = is_array( $l ) && ! empty( $l['nombre'] ) ? $l['nombre'] : 'Quindío';
+	if ( ! $con_articulo ) return $n;
+	// En Colombia se dice «en el Quindío», «en el Valle del Cauca», «en La Guajira», pero «en Antioquia»
+	if ( preg_match( '/^(Quindío|Valle del Cauca|Cauca|Huila|Tolima|Meta|Chocó|Cesar|Magdalena|Atlántico|Caquetá|Putumayo|Amazonas|Vaupés|Guaviare|Vichada|Casanare|Guainía)$/u', $n ) ) return 'el ' . $n;
+	if ( 'La Guajira' === $n || 'Guajira' === $n ) return 'La Guajira';
+	return $n;
 }
 function rau_sdr_actualizar_lugar() {
 	$p = rau_sdr_posicion();
