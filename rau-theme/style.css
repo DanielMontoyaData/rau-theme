@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.51.0
+Version: 19.51.1
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -985,3 +985,18 @@ html.rau-splash-active body {
 .rx-mini-btn:hover { border-color: #4d5c77; color: #fff; }
 .rx-mini-stop { color: #fff; border-color: #991b1b; background: linear-gradient(180deg, #f87171, #b91c1c); }
 @media (pointer: coarse) { .rx-mini-btn { min-height: 2.75rem; min-width: 2.75rem; } }
+
+/* Receptor en la columna de la consola (19.51.1): en dos columnas las teclas se partían («FM»,
+   «5 kHz» solas en otra línea). Aquí cada bloque es una fila y sus mandos van en una sola línea */
+@container radio (min-width: 560px) and (max-width: 979px) {
+	.rx-mesa { grid-template-columns: minmax(0, 1fr); }
+	.rx-grupo-ancho { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 1rem; }
+	.rx-grupo-ancho > .rx-serigrafia { width: 100%; }
+	#rx-filtros { max-width: 24rem; }
+	.rx-grupo-ancho .rx-fader-n { width: auto; }
+	.rx-grupo-ancho .rx-fader-v { width: 2.4rem; }
+	.rx-grupo-ancho > .rx-fader { flex: 1 1 11rem; }
+	.rx-grupo-ancho > .rx-ir { flex: 1 1 12rem; }
+	#rx-app .rx-mesa .rx-tecla:not(.rx-tecla-doble) { padding: .35rem .55rem .35rem .95rem; }
+	#rx-app .rx-mesa .rx-tecla::before { left: .38rem; }
+}

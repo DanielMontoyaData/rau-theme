@@ -7246,16 +7246,21 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	nav.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.ir===cols.dataset.pestana); });
 
 	var chip=document.getElementById('consola-rx-chip');
+	var ultimo;
 	function pintar(d){
 		if(!chip) return;
 		if(d===undefined) return;
-		chip.textContent = d===null ? '🎧 Receptor: fuera de línea' : d.libres===0 ? '🎧 Receptor: muy ocupado' : '🎧 Receptor: '+d.libres+' libres';
-		chip.classList.toggle('text-emerald-400', !!(d && d.libres>0));
-		chip.classList.toggle('text-amber-400', !!(d && d.libres===0));
+		ultimo=d;
+		// Mientras uno mismo escucha, «muy ocupado» confundía: uno de esos canales es el suyo
+		var yo=!!(window.RauRx && window.RauRx.encendido());
+		chip.textContent = yo ? '🎧 Receptor: escuchando' : d===null ? '🎧 Receptor: fuera de línea' : d.libres===0 ? '🎧 Receptor: muy ocupado' : '🎧 Receptor: '+d.libres+' libres';
+		chip.classList.toggle('text-emerald-400', yo || !!(d && d.libres>0));
+		chip.classList.toggle('text-amber-400', !yo && !!(d && d.libres===0));
 		chip.classList.toggle('text-rose-400', d===null);
 	}
 	pintar(window.rauRxEstado);
 	document.addEventListener('rau:sdr-estado', function(ev){ pintar(ev.detail); });
+	document.addEventListener('rau:rx-encendido', function(){ pintar(ultimo===undefined ? null : ultimo); });
 	if(chip) chip.addEventListener('click', function(){
 		if(document.getElementById('rau-tools').classList.contains('rau-vista-herramienta') && typeof window.rauVolverConsola==='function') window.rauVolverConsola();
 		ir('escuchar');

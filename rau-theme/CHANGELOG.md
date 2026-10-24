@@ -264,6 +264,22 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.51.1 — revisión en vivo de la 19.51.0
+
+- **Arranque más fiable.** La emisora se elegía con las últimas 10 líneas de la cascada (≈1,4 s).
+  Con desvanecimiento ganaba la que estuviera en un pico: una vez quedó en 11860 kHz a S5, mientras
+  11930 llegaba a S8. Ahora se promedian todas las líneas desde que la banda queda centrada (≈3,5 s).
+  En 6 arranques con el Kiwi real eligió 11930 cinco veces; la sexta, 11860, que en ese momento
+  llegaba igual de fuerte (S8).
+- **Consola: «Receptor: escuchando».** La etiqueta de arriba decía «muy ocupado» mientras uno mismo
+  escuchaba, porque uno de esos canales ocupados es el propio. El receptor avisa con
+  `rau:rx-encendido` al encender y al apagar.
+- **Mandos en la columna de la consola.** En dos columnas, «FM» y «5 kHz» quedaban solos en otra
+  línea. Entre 560 y 980 px de ancho del receptor, cada bloque es ahora una fila y sus mandos caben
+  en una sola línea.
+
+---
+
 ## 19.51.0 — todo el receptor como un solo equipo, y arranca sonando
 
 **Arranque con algo que oír.** Quien llega por primera vez (sin frecuencia guardada ni enlace)

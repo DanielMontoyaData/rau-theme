@@ -138,7 +138,7 @@ function rau_receptor_kiwi( $args = array() ) {
 					<button type="button" data-v="0" class="rx-filtro-op rx-tecla rx-tecla-doble">Angosto <span class="rx-tecla-sub"></span></button><button type="button" data-v="1" class="rx-filtro-op rx-tecla rx-tecla-doble">Normal <span class="rx-tecla-sub"></span></button><button type="button" data-v="2" class="rx-filtro-op rx-tecla rx-tecla-doble">Ancho <span class="rx-tecla-sub"></span></button>
 				</div>
 			</div>
-			<div class="rx-grupo" role="group" aria-label="Sintonía">
+			<div class="rx-grupo rx-grupo-ancho" role="group" aria-label="Sintonía">
 				<span class="rx-serigrafia">Sintonía · paso</span>
 				<div id="rx-pasos" class="rx-teclas" role="group" aria-label="Paso de sintonía">
 					<button type="button" data-v="0.01" class="rx-paso-op rx-tecla">10 Hz</button><button type="button" data-v="0.1" class="rx-paso-op rx-tecla">100 Hz</button><button type="button" data-v="1" class="rx-paso-op rx-tecla">1 kHz</button><button type="button" data-v="5" class="rx-paso-op rx-tecla">5 kHz</button>
@@ -150,7 +150,7 @@ function rau_receptor_kiwi( $args = array() ) {
 					<button type="button" data-pasos="1" class="rx-paso rx-tecla rx-tecla-sin-led" aria-label="Subir un paso">▶</button>
 				</div>
 			</div>
-			<div class="rx-grupo" role="group" aria-label="Audio">
+			<div class="rx-grupo rx-grupo-ancho" role="group" aria-label="Audio">
 				<span class="rx-serigrafia">Audio</span>
 				<label class="rx-fader"><span class="rx-fader-n">Vol</span><input id="rx-vol" type="range" min="0" max="100" value="60" aria-label="Volumen"><span id="rx-vol-v" class="rx-fader-v">60</span></label>
 				<label class="rx-fader"><span class="rx-fader-n" title="Silenciador: corta el ruido entre transmisiones">SQL</span><input id="rx-sq" type="range" min="0" max="9" value="0" aria-label="Silenciador"><span id="rx-sq-v" class="rx-fader-v">off</span></label>
@@ -722,7 +722,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.on=true; st.t=0; st.dec={i:0,p:0}; st.rpos=0; st.rprev=0; st.ts=Date.now(); st.esp=[]; st.sqAbierto=st.sq===0; volumen();
 			$('rx-libres').textContent='Conectando…';
 			$('rx-power').textContent='■ Detener'; $('rx-power').setAttribute('aria-pressed','true'); $('rx-ind-rx').classList.add('is-on'); $('rx-ayuda').classList.add('hidden'); $('rx-avisar').classList.add('hidden');
-			msg('Conectando con el receptor…');
+			msg('Conectando con el receptor…'); document.dispatchEvent(new CustomEvent('rau:rx-encendido', {detail:{on:true}}));
 			st.snd=abrir('SND', function(o){
 				if(o.audio_rate) send(st.snd, 'SET AR OK in='+o.audio_rate+' out='+Math.round(st.ctx.sampleRate));
 				if(o.sample_rate){
@@ -753,9 +753,10 @@ function rau_receptor_kiwi( $args = array() ) {
 				if(tag!=='W/F') return;
 				var dv=new DataView(buf), xbin=dv.getUint32(4,true), z=dv.getUint32(8,true)&0xffff, datos=new Uint8Array(buf,16);
 				st.wfStart=xbin/(st.fft*Math.pow(2,st.zoomMax))*st.bw; st.wfSpan=st.bw/Math.pow(2,z);
-				if(xbin!==st.ultXbin || z!==st.ultZoom){ st.ultXbin=xbin; st.ultZoom=z; limpiarCascada(); st.esp=[]; st.piso=null; dibujarPlan(); dibujarEscala(); dibujarSpots(); marcas(); }
+				if(xbin!==st.ultXbin || z!==st.ultZoom){ st.ultXbin=xbin; st.ultZoom=z; limpiarCascada(); st.esp=[]; st.piso=null; if(st.busq) st.busq={n:0}; dibujarPlan(); dibujarEscala(); dibujarSpots(); marcas(); }
 				var lin=new Float32Array(datos.length); for(var i=0;i<datos.length;i++) lin[i]=datos[i]-255;
 				st.esp.push(lin); if(st.esp.length>10) st.esp.shift();
+				if(st.busq){ if(!st.busq.s) st.busq.s=new Float32Array(lin.length); for(i=0;i<lin.length;i++) st.busq.s[i]+=lin[i]; st.busq.n++; }
 				lineaCascada(datos);
 				if(!st.dibujoPend){ st.dibujoPend=true; requestAnimationFrame(function(){ st.dibujoPend=false; dibujarEspectro(); }); }
 			}); }, 300);
@@ -763,15 +764,15 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.ka=setInterval(function(){ send(st.snd,'SET keepalive'); send(st.wf,'SET keepalive'); }, 3000);
 			clearInterval(st.miniT); st.miniT=setInterval(mini, 700);
 		}
-		/* La portadora más alta del rango (en kHz) sobre la mediana de la cascada, promediando las
-		   últimas líneas; null si nada sobresale 15 dB. Las emisoras de onda corta van cada 5 kHz. */
+		/* La portadora más alta del rango (en kHz) sobre la mediana de la cascada, promediando todas
+		   las líneas desde que se centró la banda (unos 3 s: con menos, ganaba la emisora que estuviera
+		   en un pico de desvanecimiento); null si nada sobresale 15 dB. La onda corta va cada 5 kHz. */
 		function portadoraMasFuerte(r){
-			var k=st.esp.length; if(k<3) return null;
-			var n=st.esp[0].length, prom=new Float32Array(n), i, mejor=null;
-			st.esp.forEach(function(l){ for(i=0;i<n;i++) prom[i]+=l[i]/k; });
+			var bq=st.busq; st.busq=null; if(!bq || bq.n<5) return null;
+			var n=bq.s.length, prom=bq.s, i, mejor=null;
 			var med=Array.from(prom).sort(function(a,b){ return a-b; })[n>>1];
 			for(i=2;i<n-2;i++){
-				var f=(st.wfStart+i/n*st.wfSpan)/1000, d=prom[i]-med;
+				var f=(st.wfStart+i/n*st.wfSpan)/1000, d=(prom[i]-med)/bq.n;
 				if(f>=r[0] && f<=r[1] && d>15 && (!mejor || d>mejor.d)) mejor={f:Math.round(f/5)*5, d:d};
 			}
 			return mejor;
@@ -779,14 +780,14 @@ function rau_receptor_kiwi( $args = array() ) {
 		function buscarEmisora(i){
 			var b=OC_ARRANQUE[i]; if(!b) return msg('La onda corta está tranquila en este momento. Prueba 40 m o 20 m en BANDA, o toca cualquier señal de la cascada.');
 			var centro=(b[0]+b[1])/2;
-			sintonizar(centro, 'am'); msg('Buscando la emisora más fuerte de la banda de '+b[2]+'…');
+			st.busq={n:0}; sintonizar(centro, 'am'); msg('Buscando la emisora más fuerte de la banda de '+b[2]+'…');
 			setTimeout(function(){
 				// Si la persona ya movió el dial, se respeta
-				if(!st.on || Math.abs(st.freq-centro)>0.01) return;
+				if(!st.on || Math.abs(st.freq-centro)>0.01){ st.busq=null; return; }
 				var e=portadoraMasFuerte(b); if(!e) return buscarEmisora(i+1);
 				sintonizar(e.f, 'am');
 				msg('Suena la emisora de onda corta más fuerte de este momento: '+e.f+' kHz AM, banda de '+b[2]+'. Para oír radioaficionados elige 40 m o 20 m en BANDA.');
-			}, 3000);
+			}, 3500);
 		}
 		/* Mini barra flotante: en Herramientas el panel se guarda al cambiar de herramienta y el audio
 		   sigue; sin esto quedaba sonando sin forma visible de pararlo. */
@@ -804,6 +805,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.snd=st.wf=null; st.ultXbin=-1;
 			$('rx-power').textContent='▶ Escuchar'; $('rx-power').setAttribute('aria-pressed','false'); $('rx-ind-rx').classList.remove('is-on'); $('rx-s').textContent='—'; $('rx-smeter').style.width='0'; st.pico=0; $('rx-pico').style.left='0';
 			if(!silencioso) msg('Desconectado. El canal quedó libre para otra persona.');
+			document.dispatchEvent(new CustomEvent('rau:rx-encendido', {detail:{on:false}}));
 			limpiarCascada(); st.esp=[]; dibujarEspectro(); vistaLocal(true);
 		}
 		/* «Avísame cuando haya canal»: consulta el estado cada 30 s y avisa con un tono, una
