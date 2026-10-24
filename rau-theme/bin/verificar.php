@@ -374,10 +374,14 @@ titulo( '16. El JavaScript de Herramientas se sirve en línea' );
 // Se intentó servirlo como archivo aparte y falló dos veces en producción: con regla de
 // reescritura devolvía 404 (página entera sin JavaScript) y por parámetro de consulta, HTTP 500.
 // Esta comprobación existe para que nadie lo reintente sin darse cuenta de que ya se probó.
+// Desde la 19.49.0 se sirve como archivo estático en uploads, pero solo si el servidor comprobó
+// que lo entrega como JavaScript, y con respaldo en línea si no llega a ejecutarse.
 if ( strpos( $html, "include get_template_directory() . '/inc/herramientas-scripts.php'" ) === false ) {
-	mal( 'la página ya no incluye el JS: si se movió a un archivo aparte, verifica el Content-Type antes de dar por bueno el cambio' );
+	mal( 'la página ya no incluye el JS: sin él no hay respaldo en línea' );
+} elseif ( strpos( $html, 'rau_js_estatico(' ) !== false && ( strpos( $html, 'rauJsFallo' ) === false || strpos( $html, 'echo $rau_js' ) === false ) ) {
+	mal( 'el archivo estático no tiene respaldo: falta rauJsFallo() o la versión en línea' );
 } else {
-	ok( 'se incluye en línea, que es lo que funciona en este alojamiento' );
+	ok( 'archivo estático comprobado, con respaldo en línea si no llega a ejecutarse' );
 }
 if ( strpos( $js, 'window.RAU_JS_COMPLETO' ) === false || strpos( $html, 'RAU_JS_COMPLETO' ) === false ) {
 	mal( 'falta el vigilante de arranque: si el JS muere, los paneles se quedarán diciendo "Cargando…" sin avisar' );

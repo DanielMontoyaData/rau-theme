@@ -264,6 +264,56 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.49.0 — página más liviana, bitácora única y decodificador de CW
+
+**Peso de Herramientas.** Los ~400 KB de JavaScript iban en el HTML de cada una de las 61
+direcciones, así que se volvían a descargar en cada herramienta y en cada visita. Ahora se guardan
+como archivo estático en `wp-content/uploads/rau/`, con el nombre derivado del contenido: si
+cambia (versión nueva, una repetidora editada), sale otro archivo. El HTML baja de ~960 KB a
+~585 KB. El JavaScript se descarga una vez y queda en el navegador.
+
+Los dos intentos anteriores lo servían a través de WordPress (regla de reescritura: 404; parámetro
+de consulta: HTTP 500). Este no pasa por WordPress, y tiene tres protecciones:
+1. Solo se usa si el propio servidor comprobó que el archivo responde 200 como JavaScript; si no,
+   va en línea como antes, y se reintenta una vez al día.
+2. Si en el navegador el archivo no llega o no termina de ejecutarse, la página se recarga sola con
+   `?rau_inline=1`, una sola vez, con el JavaScript en línea.
+3. Se conservan los tres últimos archivos, para las páginas que LiteSpeed tenga en caché.
+
+Probado borrando el archivo: la página se recuperó sola con la herramienta abierta. La comprobación
+16 del verificador ahora exige el respaldo.
+
+**Bitácora única.** La bitácora rápida de la consola y el Log ADIF eran dos libretas. Ahora escriben
+en la misma (`rau_log_adif`) y se actualizan entre sí sin recargar. Los QSO de la bitácora vieja
+pasan solos al Log ADIF la primera vez. La bitácora separa el RST enviado del recibido y tiene su
+botón «⬇ Exportar ADIF».
+
+El exportador ADIF tenía errores. Escribía `<TIME_ON:6>` con 8 cifras, contaba las longitudes en
+caracteres y no en bytes UTF-8 (un nombre con ñ corría el resto del registro), y no incluía la
+banda. Ahora escribe ADIF 3.1.4 con BAND y, si Mi estación está configurada, STATION_CALLSIGN,
+MY_GRIDSQUARE y TX_PWR, que es lo que piden LoTW y QRZ.
+
+**Decodificador de CW en el receptor.** En modo CW aparece debajo de la cascada y escribe lo que se
+transmite. Funciona así:
+- Busca el tono entre 300 y 900 Hz con filtros Goertzel, cada 8 ms.
+- El umbral se adapta al ruido y a la señal.
+- Las duraciones se agrupan en puntos y rayas por el salto más grande entre ellas, y cada letra se
+  clasifica al terminar. Así no depende de adivinar la velocidad: aprende sola de 5 a 60 PPM.
+- Un pulso de más de 1,5 s no es CW (es ruido o una portadora) y pasa a ser el fondo.
+- Muestra la velocidad, el tono y la relación señal/ruido. Se reinicia al cambiar de estación.
+
+La configuración se eligió entre 72 combinaciones, midiendo a la vez la velocidad y la sensibilidad:
+- **Con señal sintética:** 0 % de caracteres errados de 5 a 40 PPM, con desvanecimiento y con 6 dB de
+  señal sobre el ruido. Un QSO completo con números («RST 599 5NN … 73 TU») sale exacto.
+- **Con ruido real del receptor** (grabado en 7.020 y 14.100 kHz): no inventa letras, y decodifica
+  bien a partir de unos 6 a 10 dB de señal sobre el ruido del filtro. Por debajo no alcanza.
+- **Al empezar:** el primer segundo tras conectarse o cambiar de estación se usa para conocer el
+  ruido, así que puede perderse la primera letra.
+- **Sin prueba con una estación real:** el 24 de octubre no había estaciones de CW reportadas (era el
+  CQ WW de fonía) y los radiofaros de 14.100 no se oían.
+
+---
+
 ## 19.48.0 — catálogo ordenado, consola armónica y sintonía más intuitiva
 
 **Sintonía.**

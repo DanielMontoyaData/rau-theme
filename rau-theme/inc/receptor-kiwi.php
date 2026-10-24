@@ -72,6 +72,16 @@ function rau_receptor_kiwi( $args = array() ) {
 			<div id="rx-marca" class="pointer-events-none absolute w-px bg-accent" style="top:38px;height:280px;left:50%"></div>
 			<p id="rx-ayuda" class="pointer-events-none absolute inset-x-0 top-[150px] text-center font-mono text-xs text-muted-foreground">Pulsa «Escuchar». Luego toca una señal en la cascada para sintonizarla.</p>
 		</div>
+		<div id="rx-cw" class="mt-3 hidden rounded-xl border border-border/60 bg-background p-3">
+			<div class="mb-1 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+				<span>🔤 Decodificador de CW</span><span id="rx-cw-info" class="normal-case tracking-normal">Esperando una señal…</span>
+			</div>
+			<p id="rx-cw-texto" class="min-h-[2.5rem] break-words font-mono text-base text-foreground" aria-live="polite"></p>
+			<div class="mt-1 flex items-center justify-between gap-2">
+				<span class="text-[10px] text-muted-foreground">Funciona mejor con una sola señal clara: tócala en la cascada para centrarla en el filtro y usa el filtro «Angosto».</span>
+				<button type="button" id="rx-cw-borrar" class="shrink-0 font-mono text-[10px] text-primary hover:underline">Borrar</button>
+			</div>
+		</div>
 
 		<div class="mt-5">
 			<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -461,10 +471,13 @@ function rau_receptor_kiwi( $args = array() ) {
 			document.querySelectorAll('.rx-paso-txt').forEach(function(x){ x.textContent=pasoTxt(st.paso); });
 			document.querySelectorAll('.rx-paso-op').forEach(function(x){ var on=+x.dataset.v===st.paso; x.classList.toggle('bg-primary/15',on); x.classList.toggle('text-primary',on); x.setAttribute('aria-pressed',on); });
 			pintarBanda();
+			$('rx-cw').classList.toggle('hidden', st.modo!=='cw');
 			document.querySelectorAll('.rx-modo').forEach(function(b){ var on=b.dataset.m===st.modo; b.classList.toggle('bg-primary',on); b.classList.toggle('text-primary-foreground',on); });
 		}
 		function enviarModo(){ var f=MODOS[st.modo].f[st.filtro]; send(st.snd, 'SET mod='+st.modo+' low_cut='+f[0]+' high_cut='+f[1]+' freq='+st.freq.toFixed(3)); }
 		function sintonizar(f, modo, recentrar){
+			// Otra estación: el decodificador de CW vuelve a aprender tono y velocidad
+			if(st.cw && Math.abs(f-st.freq)>0.3) st.cw.reiniciar();
 			st.freq=Math.min(30000, Math.max(10, Math.round(f*100)/100));
 			if(modo && MODOS[modo]) st.modo=modo;
 			enviarModo();
@@ -475,6 +488,98 @@ function rau_receptor_kiwi( $args = array() ) {
 		}
 		function zoomA(z){ st.zoom=Math.max(0, Math.min(st.zoomMax, z)); send(st.wf, 'SET zoom='+st.zoom+' cf='+st.freq.toFixed(3)); $('rx-zoom').textContent=st.zoom; $('rx-ancho').textContent=anchoTxt(); vistaLocal(true); }
 		function redondear(f){ return Math.round(f/st.paso)*st.paso; }
+
+		/* ── Decodificador de CW ──────────────────────────────────────────────
+		   Sobre el audio del receptor (≈12 kHz): un banco de filtros Goertzel entre 300 y 900 Hz
+		   busca el tono (la nota del CW), y su nivel, cada 8 ms, decide si la tecla está abajo. El
+		   umbral se adapta al ruido y a la señal, y la duración del punto se aprende sola, así que
+		   sigue cambios de velocidad (5 a 60 PPM). Puntos y rayas se separan por 2 puntos de
+		   largo; las letras, por silencios de más de 2 puntos; las palabras, por más de 5. */
+		var MORSE={'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'G','....':'H','..':'I','.---':'J','-.-':'K','.-..':'L','--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z',
+			'-----':'0','.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9','.-.-.-':'.','--..--':',','..--..':'?','-..-.':'/','-...-':'=','.-.-.':'+','-....-':'-','.--.-.':'@','...-.-':'<SK>','-.--.':'('};
+		function crearDecodificadorCW(tasa, alTexto, alInfo){
+			var hop=Math.round(tasa*0.008), ven=hop*2, frec=[], buf=[], i;
+			for(var f=300; f<=900; f+=50) frec.push(f);
+			var coef=frec.map(function(f){ return 2*Math.cos(2*Math.PI*f/tasa); }), media=frec.map(function(){ return 0; });
+			var ruido=-80, pico=-80, potAnt=0, pasos=0, primero=true, abajo=false, dur=0, silencio=0, dit=60, frontera=120, marcas=[], letra=[], espacio=true, tono=600, pasoMs=hop/tasa*1000;
+			function goertzel(x, c){ var s1=0, s2=0; for(var n=0;n<x.length;n++){ var s0=x[n]+c*s1-s2; s2=s1; s1=s0; } return s1*s1+s2*s2-c*s1*s2; }
+			function prom(a){ return a.reduce(function(x,y){ return x+y; }, 0)/a.length; }
+			/* Las últimas duraciones se parten en dos grupos por el salto más grande entre ellas
+			   (puntos y rayas). Con los dos grupos, la frontera es su media geométrica; con uno solo,
+			   se decide si son puntos o rayas comparando con la estimación anterior. */
+			function aprender(){
+				var o=marcas.slice().sort(function(a,b){ return a-b; }), salto=1, k=-1;
+				for(var j=1;j<o.length;j++){ var r=o[j]/o[j-1]; if(r>salto){ salto=r; k=j; } }
+				if(salto>1.8){ var c=prom(o.slice(0,k)), l=prom(o.slice(k)); dit=(c+l/3)/2; frontera=Math.sqrt(c*l); }
+				else { var m=prom(o); dit = m<1.5*dit ? m : m/3; frontera=2*dit; }
+				dit=Math.max(20, Math.min(250, dit));
+			}
+			// Cada letra se clasifica al terminar, con la frontera ya aprendida de sus propios pulsos
+			function soltarLetra(){
+				if(!letra.length) return;
+				var codigo=letra.map(function(d){ return d<frontera ? '.' : '-'; }).join('');
+				alTexto(MORSE[codigo]||'·'); letra=[]; espacio=false;
+			}
+			function paso(x){
+				var p=coef.map(function(c){ return goertzel(x, c); }), mejor=0;
+				for(i=0;i<p.length;i++){ media[i]=media[i]*0.97+p[i]*0.03; if(media[i]>media[mejor]) mejor=i; }
+				tono=frec[mejor];
+				// Ventana de 16 ms y promedio de dos seguidas: separa el tono del ruido sin borrar los
+				// silencios de 30 ms entre elementos del CW rápido. Elegido entre 72 combinaciones
+				// midiendo velocidad (8 a 40 PPM) y sensibilidad con ruido real del receptor (19.49.0).
+				var pot=Math.max(p[mejor], mejor>0?p[mejor-1]:0, mejor<p.length-1?p[mejor+1]:0), suave=(pot+potAnt)/2; potAnt=pot;
+				var db=10*Math.log10(suave/(x.length*x.length)+1e-12);
+				// Nivel del ruido: promedio mientras la tecla está arriba. Nivel de la señal: sube de
+				// golpe con cada pulso y se promedia mientras dura; sin pulsos, baja despacio.
+				if(primero){ ruido=db; pico=db; primero=false; }
+				pasos++;
+				var umbral=ruido+0.45*(pico-ruido), hay=pico-ruido>9;
+				var ahora=hay && (abajo ? db>umbral-2 : db>umbral+2);
+				if(!ahora) ruido+= (db<ruido ? 0.08 : 0.03)*(db-ruido);
+				if(db>pico) pico=db; else if(ahora) pico+=0.1*(db-pico); else pico-=0.01;
+				if(pico<ruido) pico=ruido;
+				if(ahora){
+					if(!abajo){ abajo=true; dur=0; }
+					dur+=pasoMs;
+					// Ningún elemento de CW dura más de 1,5 s: es ruido o una portadora, y pasa a ser el fondo
+					if(dur>1500){ ruido+=0.05*(db-ruido); if(pico-ruido<9){ abajo=false; dur=0; letra=[]; } }
+				} else {
+					if(abajo){
+						abajo=false; silencio=0;
+						dur-=2*pasoMs;  // la ventana y el promedio alargan cada pulso dos pasos
+						// El primer segundo solo sirve para conocer el ruido: un pico ahí no es una letra
+						if(dur>=0.35*dit && pasos>125){
+							marcas.push(dur); if(marcas.length>14) marcas.shift();
+							aprender();
+							letra.push(dur); if(letra.length>7) letra=[];
+						}
+					}
+					silencio+=pasoMs;
+					// Entre elementos hay 1 punto de silencio, entre letras 3 y entre palabras 7: se corta en la mitad
+					if(letra.length && silencio>2*dit) soltarLetra();
+					if(!espacio && silencio>5*dit){ alTexto(' '); espacio=true; }
+				}
+				alInfo({ppm:Math.round(1200/dit), tono:tono, snr:Math.round(pico-ruido), senal:hay && marcas.length>=4});
+			}
+			return {
+				procesar:function(m){
+					for(var k=0;k<m.length;k++){
+						buf.push(m[k]);
+						if(buf.length>=ven){ paso(buf); buf=buf.slice(hop); }
+					}
+				},
+				reiniciar:function(){ letra=[]; marcas=[]; abajo=false; dur=0; silencio=0; pasos=0; primero=true; espacio=true; }
+			};
+		}
+		function cwTexto(ch){
+			var el=$('rx-cw-texto'), t=(el.textContent+ch).replace(/ {2,}/g,' ');
+			el.textContent=t.length>400 ? t.slice(-400) : t;
+		}
+		var cwInfoT=0;
+		function cwInfo(o){
+			var ahora=Date.now(); if(ahora-cwInfoT<400) return; cwInfoT=ahora;
+			$('rx-cw-info').textContent = o.senal ? o.ppm+' PPM · tono '+o.tono+' Hz · '+o.snr+' dB sobre el ruido' : 'Sin señal clara en el filtro';
+		}
 
 		/* ── Audio ────────────────────────────────────────────────────────── */
 		function adpcm(bytes, dec){
@@ -495,6 +600,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		function reproducir(m){
 			var ctx=st.ctx; if(!ctx || !m.length) return;
 			if(st.grab) grabar(m);
+			if(st.modo==='cw'){ if(!st.cw) st.cw=crearDecodificadorCW(st.rate, cwTexto, cwInfo); st.cw.procesar(m); }
 			m=remuestrear(m); if(!m.length) return;
 			var buf=ctx.createBuffer(1, m.length, ctx.sampleRate); buf.getChannelData(0).set(m);
 			var src=ctx.createBufferSource(); src.buffer=buf; src.connect(st.gain);
@@ -718,6 +824,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		});
 		$('rx-power').addEventListener('click', function(){ st.on ? apagar() : encender(); });
 		$('rx-avisar').addEventListener('click', vigilarCanal);
+		$('rx-cw-borrar').addEventListener('click', function(){ $('rx-cw-texto').textContent=''; if(st.cw) st.cw.reiniciar(); });
 		// En la consola los ajustes avanzados van plegados para que la lista de estaciones quede cerca
 		$('rx-ajustes').addEventListener('click', function(){ var ab=$('rx-avanzado').classList.toggle('abierto'); this.setAttribute('aria-expanded', ab); });
 

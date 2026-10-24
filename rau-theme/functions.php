@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.48.0' );
+define( 'RAU_THEME_VERSION', '19.49.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -3739,6 +3739,43 @@ add_action( 'wp_ajax_nopriv_rau_sdr_aperturas', 'rau_sdr_aperturas_endpoint' );
 function rau_sdr_aperturas_endpoint() {
 	$a = rau_sdr_aperturas();
 	$a ? wp_send_json_success( $a ) : wp_send_json_error( 'sin_datos' );
+}
+
+/**
+ * El JavaScript de Herramientas como archivo estático (19.49.0). Devuelve su URL, o null para que
+ * la página lo ponga en línea. El nombre lleva un resumen del contenido: si cambia (versión nueva,
+ * una repetidora editada), sale otro archivo y ninguna página guardada en caché pide uno que no le
+ * corresponde. Se usa solo si el propio servidor comprobó que lo entrega con código 200 y tipo
+ * JavaScript; si no, se reintenta una vez al día. Se conservan los tres últimos archivos, porque
+ * LiteSpeed puede tener páginas en caché que todavía apuntan al anterior.
+ */
+function rau_js_estatico( $js ) {
+	if ( isset( $_GET['rau_inline'] ) || '' === trim( (string) $js ) ) return null;
+	$up = wp_upload_dir();
+	if ( ! empty( $up['error'] ) ) return null;
+	$hash   = substr( md5( $js ), 0, 12 );
+	$nombre = 'herramientas-' . $hash . '.js';
+	$dir    = trailingslashit( $up['basedir'] ) . 'rau';
+	$url    = trailingslashit( $up['baseurl'] ) . 'rau/' . $nombre;
+	$estado = get_option( 'rau_js_estatico' );
+	if ( is_array( $estado ) && $estado['hash'] === $hash ) {
+		if ( $estado['ok'] && file_exists( $dir . '/' . $nombre ) ) return $url;
+		if ( ! $estado['ok'] && time() - $estado['t'] < DAY_IN_SECONDS ) return null;
+	}
+	if ( ! wp_mkdir_p( $dir ) || false === file_put_contents( $dir . '/' . $nombre, $js ) ) {
+		update_option( 'rau_js_estatico', array( 'hash' => $hash, 'ok' => false, 't' => time() ), false );
+		return null;
+	}
+	$r    = wp_remote_head( $url, array( 'timeout' => 6, 'redirection' => 0 ) );
+	$tipo = (string) wp_remote_retrieve_header( $r, 'content-type' );
+	$ok   = ! is_wp_error( $r ) && 200 === (int) wp_remote_retrieve_response_code( $r ) && false !== stripos( $tipo, 'javascript' );
+	update_option( 'rau_js_estatico', array( 'hash' => $hash, 'ok' => $ok, 't' => time(), 'tipo' => $tipo ), false );
+	if ( $ok ) {
+		$viejos = glob( $dir . '/herramientas-*.js' ) ?: array();
+		usort( $viejos, function( $a, $b ) { return filemtime( $b ) - filemtime( $a ); } );
+		foreach ( array_slice( $viejos, 3 ) as $f ) @unlink( $f );
+	}
+	return $ok ? $url : null;
 }
 
 /* ── Proxy DX Spots — múltiples fuentes con fallback — caché 3 min ── */

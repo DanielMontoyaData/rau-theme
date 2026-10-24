@@ -337,6 +337,41 @@ function rauCuandoVisible(id, fn){
 	io.observe(el);
 }
 
+/* Log ADIF compartido (19.49.0). La bitácora rápida de la consola y la herramienta Log ADIF eran
+   dos libretas distintas; ahora escriben en la misma (rau_log_adif) y se avisan con el evento
+   rau:log, cuyo detalle dice quién escribió para no repintarse a sí misma. */
+function rauLogLeer(){ try { var l=JSON.parse(localStorage.getItem('rau_log_adif')||'[]'); return Array.isArray(l)?l:[]; } catch(e){ return []; } }
+function rauLogGuardar(l, origen){
+	try { localStorage.setItem('rau_log_adif', JSON.stringify(l)); } catch(e){}
+	document.dispatchEvent(new CustomEvent('rau:log', {detail:origen||''}));
+}
+/* ADIF 3: las longitudes cuentan bytes UTF-8 (un nombre con ñ ocupa más), la hora va en HHMMSS
+   y la banda se deduce de la frecuencia. Con Mi estación configurada se agregan el indicativo
+   propio, el locator y la potencia, que es lo que piden LoTW y QRZ al importar. */
+function rauLogExportar(l){
+	if(!l.length){ alert('No hay QSOs para exportar.'); return; }
+	function campo(tag, v){ v=String(v==null?'':v); if(!v) return ''; return '<'+tag+':'+new TextEncoder().encode(v).length+'>'+v+' '; }
+	function banda(mhz){
+		var b=[[1.8,2,'160m'],[3.5,4,'80m'],[5.3,5.41,'60m'],[7,7.3,'40m'],[10.1,10.15,'30m'],[14,14.35,'20m'],[18.068,18.168,'17m'],[21,21.45,'15m'],[24.89,24.99,'12m'],[28,29.7,'10m'],[50,54,'6m'],[144,148,'2m'],[420,450,'70cm']];
+		for(var i=0;i<b.length;i++) if(mhz>=b[i][0] && mhz<=b[i][1]) return b[i][2];
+		return '';
+	}
+	var est={}; try { est=JSON.parse(localStorage.getItem('rau_estacion')||'{}')||{}; } catch(e){}
+	var hoy=new Date(), d=hoy.getUTCFullYear()+String(hoy.getUTCMonth()+1).padStart(2,'0')+String(hoy.getUTCDate()).padStart(2,'0');
+	var adif='Log exportado desde las Herramientas de RAU (hk4rau.com)\n'+campo('ADIF_VER','3.1.4')+campo('PROGRAMID','HK4RAU Herramientas')+'<EOH>\n\n';
+	l.forEach(function(q){
+		var mhz=parseFloat(String(q.freq||'').replace(',','.'));
+		adif+=campo('CALL',q.call)+campo('QSO_DATE',q.date)+campo('TIME_ON',String(q.time||'').replace(/:/g,'').slice(0,6))
+			+(mhz?campo('FREQ',mhz.toFixed(4).replace(/0+$/,'').replace(/\.$/,''))+campo('BAND',banda(mhz)):'')
+			+campo('MODE',q.mode)+campo('RST_SENT',q.rstS)+campo('RST_RCVD',q.rstR)+campo('NAME',q.name)
+			+campo('STATION_CALLSIGN',est.indicativo)+campo('MY_GRIDSQUARE',est.locator)+campo('TX_PWR',est.potencia)+'<EOR>\n';
+	});
+	var a=document.createElement('a');
+	a.href=URL.createObjectURL(new Blob([adif],{type:'text/plain'}));
+	a.download='log-'+(est.indicativo||'hk4rau').toLowerCase()+'-'+d+'.adi';
+	document.body.appendChild(a); a.click(); a.remove();
+}
+
 function rauOn(id, evento, fn){
 	var el=document.getElementById(id);
 	if(!el){
@@ -6375,12 +6410,12 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 
 /* ── Log ADIF ── */
 (function(){
-	var LS_KEY='rau_log_adif';
-	var log=[];
-	try { log=JSON.parse(localStorage.getItem(LS_KEY)||'[]'); } catch(e){ log=[]; }
+	var log=rauLogLeer();
 	var tbody=document.getElementById('log-tbody');
 
-	function guardar(){ try { localStorage.setItem(LS_KEY, JSON.stringify(log)); } catch(e){} }
+	function guardar(){ rauLogGuardar(log, 'log'); }
+	// Lo que anota la bitácora rápida de la consola aparece aquí sin recargar
+	document.addEventListener('rau:log', function(e){ if(e.detail!=='log'){ log=rauLogLeer(); render(); } });
 
 	function pad(n){return String(n).padStart(2,'0');}
 	function nowUTC(){var d=new Date();return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());}
@@ -6424,26 +6459,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		render();
 	});
 
-	document.getElementById('log-export').addEventListener('click',function(){
-		if(!log.length){alert('No hay QSOs para exportar.');return;}
-		var adif='ADIF Export by HK4RAU Herramientas\n<EOH>\n\n';
-		log.forEach(function(q){
-			adif+='<CALL:'+q.call.length+'>'+q.call;
-			adif+=' <QSO_DATE:8>'+q.date;
-			adif+=' <TIME_ON:6>'+q.time.replace(/:/g,'')+'00';
-			if(q.freq) adif+=' <FREQ:'+q.freq.length+'>'+q.freq;
-			adif+=' <MODE:'+q.mode.length+'>'+q.mode;
-			adif+=' <RST_SENT:'+q.rstS.length+'>'+q.rstS;
-			adif+=' <RST_RCVD:'+q.rstR.length+'>'+q.rstR;
-			if(q.name) adif+=' <NAME:'+q.name.length+'>'+q.name;
-			adif+=' <EOR>\n';
-		});
-		var blob=new Blob([adif],{type:'text/plain'});
-		var a=document.createElement('a');
-		a.href=URL.createObjectURL(blob);
-		a.download='log-hk4rau-'+dateUTC()+'.adi';
-		a.click();
-	});
+	document.getElementById('log-export').addEventListener('click',function(){ rauLogExportar(log); });
 
 	document.getElementById('log-clear').addEventListener('click',function(){
 		if(confirm('¿Borrar todos los QSOs guardados en este navegador?')){log=[]; guardar(); render();}
@@ -6501,20 +6517,20 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 (function(){
 	var btnGuardar=document.getElementById('bitacora-guardar');
 	if(!btnGuardar) return;
-	var LOG_KEY='rau_bitacora_rapida';
-
-	function getLog(){
-		try { return JSON.parse(localStorage.getItem(LOG_KEY)||'[]'); } catch(e){ return []; }
-	}
-	function setLog(arr){
-		try { localStorage.setItem(LOG_KEY, JSON.stringify(arr.slice(-100))); } catch(e){}
-	}
-	function hoyISO(){ return new Date().toISOString().slice(0,10); }
+	function hoyADIF(){ return new Date().toISOString().slice(0,10).replace(/-/g,''); }
+	// Los QSO que quedaron en la bitácora vieja (rau_bitacora_rapida) pasan una sola vez al Log ADIF
+	try {
+		var viejos=JSON.parse(localStorage.getItem('rau_bitacora_rapida')||'[]');
+		if(Array.isArray(viejos) && viejos.length){
+			var l0=rauLogLeer();
+			viejos.forEach(function(q){ l0.push({call:String(q.indicativo||'').toUpperCase(), date:String(q.fecha||'').replace(/-/g,''), time:(q.hora||'00:00')+':00', freq:q.freq||'', mode:q.modo||'SSB', rstS:q.rst||'', rstR:'', name:''}); });
+			rauLogGuardar(l0, 'bitacora'); localStorage.removeItem('rau_bitacora_rapida');
+		}
+	} catch(e){}
 
 	function render(){
-		var log=getLog();
-		var hoy=hoyISO();
-		var deHoy=log.filter(function(q){ return q.fecha===hoy; });
+		var log=rauLogLeer().map(function(q){ return {indicativo:q.call, freq:q.freq, modo:q.mode, rst:[q.rstS,q.rstR].filter(Boolean).join('/'), fecha:q.date}; });
+		var deHoy=log.filter(function(q){ return q.fecha===hoyADIF(); });
 		document.getElementById('bitacora-contador-hoy').textContent=deHoy.length;
 
 		var listaEl=document.getElementById('bitacora-lista');
@@ -6524,7 +6540,8 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 			return;
 		}
 		listaEl.innerHTML=ultimos.map(function(q){
-			return '<div class="flex justify-between"><span class="text-foreground">'+q.indicativo+'</span><span>'+q.freq+' '+q.modo+' '+(q.rst||'')+'</span></div>';
+			var e=function(t){ return String(t==null?'':t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+			return '<div class="flex justify-between"><span class="text-foreground">'+e(q.indicativo)+'</span><span>'+e(q.freq)+' '+e(q.modo)+' '+e(q.rst)+'</span></div>';
 		}).join('');
 	}
 
@@ -6534,10 +6551,11 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		var freq=(document.getElementById('bitacora-freq').value||'').trim();
 		var modo=document.getElementById('bitacora-modo').value;
 		var rst=(document.getElementById('bitacora-rst').value||'').trim();
+		var rstR=document.getElementById('bitacora-rst-r') ? (document.getElementById('bitacora-rst-r').value||'').trim() : '';
 
-		var log=getLog();
-		log.push({ indicativo:indicativo, freq:freq, modo:modo, rst:rst, fecha:hoyISO(), hora:new Date().toISOString().slice(11,16) });
-		setLog(log);
+		var log=rauLogLeer();
+		log.push({ call:indicativo, date:hoyADIF(), time:new Date().toISOString().slice(11,19), freq:freq, mode:modo, rstS:rst, rstR:rstR, name:'' });
+		rauLogGuardar(log, 'bitacora');
 
 		var confEl=document.getElementById('bitacora-confirmacion');
 		if(confEl){
@@ -6549,10 +6567,14 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		document.getElementById('bitacora-indicativo').value='';
 		document.getElementById('bitacora-freq').value='';
 		document.getElementById('bitacora-rst').value='';
+		if(document.getElementById('bitacora-rst-r')) document.getElementById('bitacora-rst-r').value='';
 		document.getElementById('bitacora-indicativo').focus();
 		render();
 	});
 	document.getElementById('bitacora-indicativo').addEventListener('keydown', function(e){ if(e.key==='Enter') btnGuardar.click(); });
+	var exportar=document.getElementById('bitacora-exportar');
+	if(exportar) exportar.addEventListener('click', function(){ rauLogExportar(rauLogLeer()); });
+	document.addEventListener('rau:log', function(e){ if(e.detail!=='bitacora') render(); });
 
 	render();
 })();
@@ -6597,10 +6619,8 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 (function(){
 	var el=document.getElementById('consola-logadif-conteo');
 	if(!el) return;
-	try {
-		var log=JSON.parse(localStorage.getItem('rau_log_adif')||'[]');
-		if(Array.isArray(log) && log.length>0) el.textContent='('+log.length+' QSO'+(log.length===1?'':'s')+')';
-	} catch(e){}
+	function contar(){ var n=rauLogLeer().length; el.textContent = n ? '('+n+' QSO'+(n===1?'':'s')+')' : ''; }
+	contar(); document.addEventListener('rau:log', contar);
 })();
 
 /* ── CONSOLA: D-STAR LAST HEARD — dstarusers.org, actividad global (no filtrada a Colombia, ver justificación en functions.php) ── */

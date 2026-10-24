@@ -291,12 +291,18 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<select id="bitacora-modo" aria-label="Modo de la comunicación" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
 							<option>SSB</option><option>CW</option><option>FM</option><option>FT8</option><option>FT4</option><option>RTTY</option><option>PSK31</option>
 						</select>
-						<input aria-label="RST" type="text" id="bitacora-rst" placeholder="RST" maxlength="6" class="rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
+						<div class="flex gap-1">
+							<input aria-label="RST enviado" type="text" id="bitacora-rst" placeholder="RST env." maxlength="6" class="w-full min-w-0 rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
+							<input aria-label="RST recibido" type="text" id="bitacora-rst-r" placeholder="rec." maxlength="6" class="w-full min-w-0 rounded-md border border-input bg-background px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-ring">
+						</div>
 					</div>
 					<button type="button" id="bitacora-guardar" class="mt-1.5 w-full rounded-md border border-primary/40 bg-primary/10 py-1 font-mono text-[11px] font-bold text-primary hover:bg-primary/20">+ Registrar QSO</button>
 					<div id="bitacora-confirmacion" role="status" aria-live="polite" class="hidden mt-1.5 rounded-md border border-emerald-400/40 bg-emerald-400/10 p-2 text-center font-mono text-[11px] text-emerald-400"></div>
 					<div id="bitacora-lista" class="mt-2 max-h-32 space-y-1 overflow-y-auto font-mono text-[10px] text-muted-foreground"></div>
-					<p class="mt-1.5 text-[9px] text-muted-foreground">Guardado solo en este navegador — para tu log oficial usa <a href="<?php echo esc_url( home_url( '/herramientas/log/' ) ); ?>" class="text-primary hover:underline">Log ADIF</a> <span id="consola-logadif-conteo"></span>.</p>
+					<div class="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+						<p class="text-[10px] text-muted-foreground">Va a tu <a href="<?php echo esc_url( home_url( '/herramientas/log/' ) ); ?>" class="text-primary hover:underline">Log ADIF</a> <span id="consola-logadif-conteo"></span>, guardado en este navegador.</p>
+						<button type="button" id="bitacora-exportar" class="font-mono text-[10px] font-bold text-primary hover:underline">⬇ Exportar ADIF</button>
+					</div>
 				</div>
 				</div>
 
@@ -3640,14 +3646,32 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 <?php endif; ?>
 </script>
 <?php
-// El JavaScript va en línea a propósito. Se intentó servirlo como archivo aparte para que el
-// navegador lo cacheara entre las 54 herramientas, y falló dos veces en este alojamiento: primero
-// con regla de reescritura (404, página sin JavaScript) y después por parámetro de consulta
-// (HTTP 500). El ahorro no compensa el riesgo de dejar la página inutilizable, así que se
-// mantiene el modo que funciona con certeza en cualquier servidor.
+// El JavaScript (≈400 KB) va a un archivo estático en wp-content/uploads para que el navegador lo
+// guarde y no lo vuelva a bajar en cada una de las herramientas. Los dos intentos anteriores
+// (regla de reescritura: 404; parámetro de consulta: HTTP 500) lo servían a través de WordPress;
+// este no: lo entrega el servidor web como cualquier archivo, y solo se usa si el servidor
+// comprobó que responde 200 como JavaScript (rau_js_estatico). Si no, o si en el navegador no
+// llega a ejecutarse, la página vuelve a ponerlo en línea, como siempre.
+ob_start();
+include get_template_directory() . '/inc/herramientas-scripts.php';
+$rau_js     = ob_get_clean();
+$rau_js_url = rau_js_estatico( $rau_js );
 ?>
 <script>
 window.RAU_INIT = { tool: <?php echo wp_json_encode( sanitize_title( (string) get_query_var( 'rau_tool' ) ) ); ?> };
-<?php include get_template_directory() . '/inc/herramientas-scripts.php'; ?>
+<?php if ( $rau_js_url ) : ?>
+window.rauJsFallo = function(){
+	try { if ( sessionStorage.getItem( 'rau_js_inline' ) ) return; sessionStorage.setItem( 'rau_js_inline', '1' ); } catch ( e ) {}
+	var u = new URL( location.href ); u.searchParams.set( 'rau_inline', '1' ); location.replace( u.toString() );
+};
+<?php endif; ?>
 </script>
+<?php if ( $rau_js_url ) : ?>
+<script src="<?php echo esc_url( $rau_js_url ); ?>" onerror="rauJsFallo()"></script>
+<script>if ( ! window.RAU_JS_COMPLETO ) rauJsFallo();</script>
+<?php else : ?>
+<script>
+<?php echo $rau_js; // phpcs:ignore WordPress.Security.EscapeOutput -- JavaScript propio del tema ?>
+</script>
+<?php endif; ?>
 <?php get_footer(); ?>
