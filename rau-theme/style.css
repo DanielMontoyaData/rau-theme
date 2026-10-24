@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.50.0
+Version: 19.50.1
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -876,3 +876,17 @@ html.rau-splash-active body {
 #rx-app select, #rx-app input[type="text"] { background: #0c1018; border-color: #344055; color: #e2e8f0; }
 #rx-app #rx-cw { background: #0c1018; border-color: #2a3446; }
 .rx-ayuda-digitos { margin-top: .5rem; font-family: ui-monospace, monospace; font-size: 10px; color: #6b778a; }
+
+/* Receptor con el dedo (19.50.1): flechas visibles sobre cada dígito, teclas de 44 px y ayuda legible */
+.rx-solo-tactil { display: none; }
+@media (pointer: coarse) {
+	.rx-solo-raton { display: none; }
+	.rx-solo-tactil { display: inline; }
+	.rx-lcd-freq { margin: 1.5rem 0 1.6rem; }
+	.rx-lcd .rx-dig { position: relative; }
+	.rx-lcd .rx-dig::before, .rx-lcd .rx-dig::after { position: absolute; left: -2px; right: -2px; height: 24px; line-height: 24px; text-align: center; font-family: ui-monospace, monospace; font-size: 12px; color: rgba(255,181,71,.55); }
+	.rx-lcd .rx-dig::before { content: '▲'; top: -26px; }
+	.rx-lcd .rx-dig::after { content: '▼'; bottom: -26px; }
+	#rx-app .rx-tecla { min-height: 2.75rem; }
+	.rx-ayuda-digitos { font-size: 12px; }
+}

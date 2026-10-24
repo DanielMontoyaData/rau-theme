@@ -264,6 +264,24 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.50.1 — receptor más fácil con el dedo
+
+Revisión de uso con el receptor real, midiendo en un celular (Pixel 7):
+
+| | Antes | Ahora |
+|---|---|---|
+| Zona táctil de cada mitad de dígito | 28 × 17 px | ▲ y ▼ propios de 28 × 24 px, más la mitad del dígito |
+| Alto de las teclas | 36 px | 44 px (lo recomendado para el dedo) |
+| Ayuda bajo la pantalla | «usa la rueda», también en celular, a 10 px | Texto propio para dedo o ratón, a 12 px en táctil |
+| Línea de estado mientras se escucha | «Muy ocupado: prueba igual» | «Conectado: usas uno de los canales» |
+| Cascada | 1 px por línea | 2 px por línea: se llena el doble de rápido |
+
+Lo que ya funcionaba se mantiene:
+- La perilla gira con el dedo sin desplazar la página (media vuelta = 15 pasos).
+- En computador, el radio completo con su cascada cabe en la primera pantalla (1440 × 900).
+
+---
+
 ## 19.50.0 — el receptor con frente de radio
 
 El receptor tiene ahora el aspecto y los mandos de un equipo de comunicaciones.

@@ -84,7 +84,7 @@ function rau_receptor_kiwi( $args = array() ) {
 				</div>
 			</div>
 		</div>
-		<p class="rx-ayuda-digitos">Toca arriba o abajo de un dígito para subirlo o bajarlo, gira la perilla o usa la rueda.</p>
+		<p class="rx-ayuda-digitos"><span class="rx-solo-raton">Haz clic arriba o abajo de un dígito para subirlo o bajarlo, gira la perilla o usa la rueda sobre ellos.</span><span class="rx-solo-tactil">Toca ▲ o ▼ sobre un dígito para cambiarlo, o gira la perilla con el dedo.</span></p>
 
 		<div id="rx-pantalla" class="relative mt-5 touch-none select-none overflow-hidden rounded-xl border border-border/60 bg-background" style="cursor:crosshair">
 			<canvas id="rx-plan" class="block h-[20px] w-full" aria-hidden="true"></canvas>
@@ -227,7 +227,8 @@ function rau_receptor_kiwi( $args = array() ) {
 				var d=j.data;
 				window.rauRxEstado=d; document.dispatchEvent(new CustomEvent('rau:sdr-estado', {detail:d}));
 				var lib=document.getElementById('rx-libres');
-				if(lib) lib.textContent=(d.libres===0 ? 'Muy ocupado ahora: prueba igual' : d.libres+' de '+d.max+' canales libres')+(mejoresHoras ? ' · mejores horas: '+mejoresHoras : '');
+				if(lib && window.RauRx && window.RauRx.encendido()) lib.textContent='Conectado: usas uno de los '+d.max+' canales';
+				else if(lib) lib.textContent=(d.libres===0 ? 'Muy ocupado ahora: prueba igual' : d.libres+' de '+d.max+' canales libres')+(mejoresHoras ? ' · mejores horas: '+mejoresHoras : '');
 				el.innerHTML=d.libres===0 ? '<span class="text-amber-400">Muy ocupado: prueba igual</span>' : '<span class="text-emerald-400">'+d.libres+' de '+d.max+' libres</span>';
 				document.getElementById('rx-d-users').textContent=d.users==null?'—':d.users+' de '+d.max;
 				document.getElementById('rx-d-pre').textContent=d.preempt;
@@ -416,7 +417,8 @@ function rau_receptor_kiwi( $args = array() ) {
 		function limpiarCascada(){ var c=st.lut?st.lut[0]:[0,0,0]; w2d.fillStyle='rgb('+c.map(Math.round).join(',')+')'; w2d.fillRect(0,0,wf.width,wf.height); }
 		function lineaCascada(datos){
 			var w=wf.width, h=wf.height, n=datos.length;
-			w2d.drawImage(wf, 0, 0, w, h-1, 0, 1, w, h-1);
+			// Dos píxeles por línea: la cascada se llena el doble de rápido y se ve viva desde el principio
+			w2d.drawImage(wf, 0, 0, w, h-2, 0, 2, w, h-2);
 			var orden=Array.prototype.slice.call(datos).sort(function(a,b){ return a-b; });
 			var med=orden[n>>1]-255;                               // mediana de la línea = ruido de fondo
 			st.piso = st.piso===null ? med : st.piso*0.9+med*0.1;   // la primera línea fija el piso: sin esto, las primeras salían saturadas
@@ -425,7 +427,7 @@ function rau_receptor_kiwi( $args = array() ) {
 				var dbm=datos[Math.floor(x*n/w)]-255, t=Math.max(0,Math.min(1,(dbm-st.piso-2)/st.contraste)), col=st.lut[Math.round(Math.pow(t,0.8)*255)];
 				img.data[4*x]=col[0]; img.data[4*x+1]=col[1]; img.data[4*x+2]=col[2]; img.data[4*x+3]=255;
 			}
-			w2d.putImageData(img,0,0);
+			w2d.putImageData(img,0,0); w2d.putImageData(img,0,1);
 		}
 		function marcas(){
 			var pant=$('rx-pantalla').getBoundingClientRect().width;
@@ -706,6 +708,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			st.ctx=st.ctx||new (window.AudioContext||window.webkitAudioContext)(); st.ctx.resume();
 			if(!st.gain){ st.gain=st.ctx.createGain(); st.gain.connect(st.ctx.destination); }
 			st.on=true; st.t=0; st.dec={i:0,p:0}; st.rpos=0; st.rprev=0; st.ts=Date.now(); st.esp=[]; st.sqAbierto=st.sq===0; volumen();
+			$('rx-libres').textContent='Conectando…';
 			$('rx-power').textContent='■ Detener'; $('rx-power').setAttribute('aria-pressed','true'); $('rx-ind-rx').classList.add('is-on'); $('rx-ayuda').classList.add('hidden'); $('rx-avisar').classList.add('hidden');
 			msg('Conectando con el receptor…');
 			st.snd=abrir('SND', function(o){
@@ -715,7 +718,8 @@ function rau_receptor_kiwi( $args = array() ) {
 					send(st.snd, 'SET squelch=0 max=0'); send(st.snd, 'SET genattn=0'); send(st.snd, 'SET gen=0 mix=-1');
 					agc(); send(st.snd, 'SET compression=1'); send(st.snd, 'SET ident_user=hk4rau.com');
 					sintonizar(st.freq, st.modo);
-					msg('Escuchando. Toca la cascada para sintonizar, arrástrala para recorrer la banda o usa la rueda.');
+					msg('Escuchando. Toca una señal en la cascada para sintonizarla o arrástrala para recorrer la banda.');
+					$('rx-libres').textContent='Conectado: usas uno de los canales del receptor';
 				}
 				if(o.audio_adpcm_state){ var v=o.audio_adpcm_state.split(','); st.dec={i:+v[0]|0,p:+v[1]|0}; }
 			}, function(tag, buf, u8){
