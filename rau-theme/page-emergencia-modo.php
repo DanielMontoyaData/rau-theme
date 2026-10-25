@@ -68,6 +68,7 @@ $rau_em_rep = rau_get_repetidor_principal();
 		<label class="rau-em-check"><input type="checkbox"> Mantener escucha en la frecuencia hasta nueva instrucción</label>
 	</div>
 
+	<a href="<?php echo esc_url( home_url( '/emergencias/' ) ); ?>" class="rau-em-btn" style="background:#f87171;color:#fff">🛟 Centro de Mando: registrar estaciones y mensajes</a>
 	<a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" class="rau-em-btn wa">📞 Contactar a RAU (WhatsApp)</a>
 	<a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="rau-em-btn volver">← Salir del Modo Emergencia</a>
 

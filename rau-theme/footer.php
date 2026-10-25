@@ -11,6 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 		<div class="mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-b border-border/50 pb-4 font-mono text-xs text-muted-foreground sm:justify-start">
 			<a href="<?php echo esc_url( home_url( '/estado-rau/' ) ); ?>" class="hover:text-primary">Estado RAU</a>
 			<a href="<?php echo esc_url( home_url( '/rau-field/' ) ); ?>" class="hover:text-primary">RAU Field</a>
+			<a href="<?php echo esc_url( home_url( '/emergencias/' ) ); ?>" class="hover:text-accent">🛟 Centro de Mando de Emergencias</a>
 			<a href="<?php echo esc_url( home_url( '/modo-emergencia/' ) ); ?>" class="hover:text-accent">🚨 Modo Emergencia</a>
 			<a href="<?php echo esc_url( home_url( '/herramientas/' ) ); ?>" class="hover:text-primary">Herramientas</a>
 			<a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="hover:text-primary">Sacar la licencia</a>

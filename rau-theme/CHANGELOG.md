@@ -264,6 +264,83 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.52.0 — Centro de Mando de Emergencias (/emergencias/)
+
+Una aplicación nueva e independiente para operar comunicaciones de emergencia, abierta a
+radioaficionados de toda Colombia. Se diseñó a partir de lo que pasó en el sismo de magnitud 7,4 del
+10 de agosto de 2026 (Chocó y Eje Cafetero), según los reportes de la IARU Región 2 publicados por la
+ARRL, la IARU Región 1, ARNewsline y la UBA:
+- La red de la Liga operó 124 horas seguidas.
+- La red celular y el wifi cayeron en minutos.
+- Varias repetidoras se apagaron porque la transferencia automática al generador no funcionó.
+- Los bomberos de Dosquebradas pasaron a usar repetidoras de radioaficionado.
+- Se entregaron 15 radios a la Gobernación de Risaralda.
+
+**Cómo funciona**
+- **Sin internet primero.** Todo lo registrado queda en el teléfono. El service worker guarda la
+  página y sus dos archivos, así que abre sin conexión después de una primera visita.
+- **Clave de red por incidente, sin cuentas.** Quien activa el incidente dicta por radio un código
+  de 6 letras (sin O/0 ni I/1) y la clave. Los demás operadores se unen con ambos.
+- **Registros que solo se agregan.** Cada cosa es un evento con un identificador único creado en el
+  teléfono, y el estado se calcula recorriéndolos en orden. Así, los registros de varios operadores
+  se combinan sin conflictos, y un teléfono que estuvo horas sin señal entrega lo suyo al volver.
+- **Sincronización** cada 15 s y al recuperar la señal. Si no hay internet, se pasa un respaldo en
+  archivo a otro teléfono (Bluetooth, cable o WhatsApp) y se importa sin duplicar.
+- **Simulacros** con una franja visible «SIMULACRO · NO ES UNA EMERGENCIA REAL», y mensajes marcados
+  como PRUEBA.
+
+**Módulos**
+- **Tablero:**
+  - Cifras de estaciones, mensajes, personas y repetidoras.
+  - «Atención ahora»: urgencias, mensajes de emergencia sin entregar, estaciones calladas y repetidoras caídas.
+  - Acciones rápidas, últimos registros, banda recomendada y alertas.
+- **Red:**
+  - Registro de estaciones con estado, energía, mensajes pendientes, ubicación y GPS (locator).
+  - Reloj de último contacto contra un intervalo de reporte configurable.
+  - Pase de lista que llama a las estaciones en orden, con su indicativo en fonético.
+- **Mensajes:**
+  - Radiograma con precedencia (emergencia, prioridad, bienestar, rutina), instrucciones HX,
+    numeración y cuenta de palabras automáticas.
+  - SCI-213 para organismos.
+  - Texto «para leer por radio» con el indicativo en fonético.
+  - Estados: recibido, retransmitido a… y entregado, con historial.
+- **Bitácora:** todo lo del incidente en orden, en hora UTC, con buscador. Exporta el SCI-214.
+- **Plan de comunicaciones (SCI-205):**
+  - Asignaciones por función.
+  - Estado de cada repetidora: en el aire, con batería, con generador o caída.
+  - Frecuencias nacionales. Se puede imprimir.
+- **Bienestar:** «estoy bien» y búsqueda de familiares, sin datos médicos.
+- **Recursos y directorio** del incidente, con los teléfonos 123, 132, 144 y 119.
+- **Herramientas de campo:** autonomía de batería, dipolo NVIS, deletreo fonético y posición GPS
+  con la repetidora más cercana.
+- **Inicio (guardia):**
+  - Incidentes abiertos en el país.
+  - Sismos de magnitud 3,5 o más de los últimos 7 días (USGS) y alertas de GDACS para Colombia. El feed
+    del Servicio Geológico Colombiano responde «acceso denegado».
+  - Qué bandas oye el receptor HK4RAU y cuál usar dentro de Colombia: 40 m de día, 80 m de noche.
+  - Listas de preparación (maletín, estación, coordinación) con fecha de revisión y vencimiento.
+- **Modo sol** de alto contraste, botones de 44 px o más y una versión para imprimir.
+
+**Frecuencias nacionales verificadas**
+- 7060, 7240, 7275, 3985, 14300, 18160 y 21360 kHz, y 146.520 MHz: las que la Liga activó en agosto de 2026.
+- El panel «Frecuencias de Emergencia» de Herramientas decía que faltaban porque no estaban
+  verificadas. Ahora las muestra con su fuente y enlaza al centro de mando.
+- El pie de página y el Modo Emergencia también enlazan al centro de mando.
+
+**Servidor**
+- Dos tablas: incidentes y eventos. El índice único por identificador evita los duplicados.
+- La clave solo se guarda como hash, y el teléfono guarda un token derivado de ella.
+- Límites por conexión: crear incidentes, intentos de clave y registros por hora.
+- Todo el texto se limpia antes de guardarlo.
+- En Herramientas → Incidentes de emergencia, un administrador puede borrar incidentes si hay abuso.
+
+**Probado** con dos operadores, uno en computador y otro en celular, en el mismo simulacro:
+- El segundo se une con código y clave, ve lo del primero, registra sin internet y sincroniza al volver la señal.
+- La página abre sin conexión y se puede crear un incidente local.
+- No hubo errores de JavaScript ni scroll horizontal.
+
+---
+
 ## 19.51.1 — revisión en vivo de la 19.51.0
 
 - **Arranque más fiable.** La emisora se elegía con las últimas 10 líneas de la cascada (≈1,4 s).

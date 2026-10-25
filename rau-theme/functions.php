@@ -6,10 +6,11 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.51.1' );
+define( 'RAU_THEME_VERSION', '19.52.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
+require get_template_directory() . '/inc/emergencias.php';
 
 /**
  * Configuración básica del tema

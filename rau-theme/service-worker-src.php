@@ -6,9 +6,14 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 $herramientas_url = home_url( '/herramientas/' );
 $cache_version    = 'rau-cache-' . RAU_THEME_VERSION;
+$em_url           = home_url( '/emergencias/' );
+$em_assets        = array( get_template_directory_uri() . '/assets/emergencias/em.css?ver=' . RAU_THEME_VERSION, get_template_directory_uri() . '/assets/emergencias/em.js?ver=' . RAU_THEME_VERSION );
 ?>
 const CACHE_NAME = '<?php echo esc_js( $cache_version ); ?>';
 const APP_SHELL_URL = '<?php echo esc_js( $herramientas_url ); ?>';
+// Centro de Mando de Emergencias: tiene que abrir sin internet, que es justo cuando más se necesita
+const EM_URL = '<?php echo esc_js( $em_url ); ?>';
+const EM_ASSETS = <?php echo wp_json_encode( $em_assets ); ?>;
 
 /**
  * Instalación: guarda una copia del "shell" de Herramientas — la página
@@ -20,7 +25,8 @@ const APP_SHELL_URL = '<?php echo esc_js( $herramientas_url ); ?>';
 self.addEventListener('install', function(event){
 	event.waitUntil(
 		caches.open(CACHE_NAME).then(function(cache){
-			return cache.addAll([APP_SHELL_URL]).catch(function(){ /* si falla, no bloquea la instalación */ });
+			// Cada uno por separado: si uno falla, los demás igual quedan guardados
+			return Promise.all([APP_SHELL_URL, EM_URL].concat(EM_ASSETS).map(function(u){ return cache.add(u).catch(function(){}); }));
 		})
 	);
 	self.skipWaiting();
@@ -42,7 +48,13 @@ self.addEventListener('activate', function(event){
  */
 self.addEventListener('fetch', function(event){
 	if(event.request.method !== 'GET') return;
-	if(event.request.url.indexOf(APP_SHELL_URL) === -1) return; // solo cachea la página de Herramientas
+	// Archivos del centro de mando (llevan la versión en la URL): primero la copia guardada
+	if(EM_ASSETS.indexOf(event.request.url) !== -1){
+		event.respondWith(caches.match(event.request).then(function(c){ return c || fetch(event.request).then(function(r){ var copia=r.clone(); caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, copia); }); return r; }); }));
+		return;
+	}
+	var esEm = event.request.url.split('?')[0] === EM_URL;
+	if(!esEm && event.request.url.indexOf(APP_SHELL_URL) === -1) return; // solo Herramientas y el centro de mando
 
 	event.respondWith(
 		fetch(event.request).then(function(respuesta){
@@ -51,6 +63,7 @@ self.addEventListener('fetch', function(event){
 			return respuesta;
 		}).catch(function(){
 			return caches.match(event.request).then(function(cacheada){
+				if(!cacheada && esEm) return caches.match(EM_URL);
 				return cacheada || new Response('Sin conexión y sin copia guardada todavía. Visita Herramientas una vez con internet primero.', { status: 503 });
 			});
 		})

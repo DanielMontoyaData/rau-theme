@@ -1666,26 +1666,22 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 
 				<div class="mb-5">
-					<h3 class="mb-2 font-display text-lg font-semibold">HF — Centros de Actividad de Emergencia</h3>
-					<p class="mb-3 text-xs text-muted-foreground">Adoptadas por la IARU Región 2 (las Américas). No son frecuencias exclusivas sino puntos de reunión: en una emergencia se despejan y se escucha ahí.</p>
+					<h3 class="mb-2 font-display text-lg font-semibold">Red nacional de emergencia (Liga Colombiana de Radioaficionados)</h3>
+					<p class="mb-3 text-xs text-muted-foreground">Las que la Liga activó en el sismo del 10 de agosto de 2026, según los reportes de la coordinación de emergencias de la IARU Región 2 publicados por la ARRL y la IARU. Son centros de actividad, no frecuencias exclusivas: el tráfico puede estar hasta ±20 kHz alrededor. En 80 m es 3.985, no 3.750.</p>
 					<div class="space-y-1.5">
-						<?php
-						// Verificadas contra la publicación de la IARU y de la ARRL. Solo se listan las
-						// que están formalmente adoptadas como Centro Global de Actividad en Región 2;
-						// no se inventan las de 40m y 80m, que varían por país y no están formalizadas.
-						$fe_hf = [
-							['14.300', '20m', 'La más usada; suele haber alguien escuchando'],
-							['18.160', '17m', 'Alternativa cuando 20m está saturada'],
-							['21.360', '15m', 'Útil de día para distancias largas'],
-						];
-						foreach ( $fe_hf as $f ) : ?>
-						<button type="button" class="fe-copiar flex w-full items-center justify-between rounded-lg border border-border/60 bg-background px-4 py-2.5 text-left hover:border-primary/50" data-freq="<?php echo esc_attr( $f[0] ); ?>">
-							<span><span class="font-mono text-lg font-bold text-primary"><?php echo esc_html( $f[0] ); ?></span> <span class="font-mono text-xs text-muted-foreground">MHz · <?php echo esc_html( $f[1] ); ?></span></span>
-							<span class="hidden font-mono text-xs text-muted-foreground sm:inline"><?php echo esc_html( $f[2] ); ?></span>
+						<?php foreach ( rau_em_frecuencias() as $f ) : if ( '146.520' === $f['f'] ) continue; ?>
+						<button type="button" class="fe-copiar flex w-full items-center justify-between gap-3 rounded-lg border border-border/60 bg-background px-4 py-2.5 text-left hover:border-primary/50" data-freq="<?php echo esc_attr( $f['f'] ); ?>">
+							<span class="shrink-0"><span class="font-mono text-lg font-bold text-primary"><?php echo esc_html( $f['f'] ); ?></span> <span class="font-mono text-xs text-muted-foreground">MHz · <?php echo esc_html( $f['b'] . ' ' . $f['m'] ); ?></span></span>
+							<span class="hidden text-right font-mono text-xs text-muted-foreground sm:inline"><?php echo esc_html( $f['uso'] ); ?></span>
 						</button>
 						<?php endforeach; ?>
 					</div>
 				</div>
+
+				<a href="<?php echo esc_url( home_url( '/emergencias/' ) ); ?>" class="mb-5 block rounded-xl border-2 border-rose-500/40 bg-rose-400/5 p-5 hover:border-primary/50">
+					<p class="mb-1 font-mono text-[11px] uppercase tracking-wider text-rose-400">Centro de Mando de Emergencias →</p>
+					<p class="text-sm text-muted-foreground">Para operar un incidente o un simulacro: red de estaciones con pase de lista, radiogramas y SCI-213, bitácora, plan de frecuencias, bienestar y recursos. Funciona sin internet y lo comparten todos los operadores con una clave de red.</p>
+				</a>
 
 				<div class="mb-5">
 					<h3 class="mb-2 font-display text-lg font-semibold">Socorro internacional</h3>
@@ -1695,12 +1691,6 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<div class="flex items-center justify-between rounded-lg border border-border/50 bg-background px-4 py-2"><span class="font-bold text-foreground">156.800 MHz</span><span class="text-xs text-muted-foreground">Marítimo VHF, canal 16</span></div>
 						<div class="flex items-center justify-between rounded-lg border border-border/50 bg-background px-4 py-2"><span class="font-bold text-foreground">2.182 kHz</span><span class="text-xs text-muted-foreground">Marítimo HF</span></div>
 					</div>
-				</div>
-
-				<div class="rounded-xl border border-amber-400/30 bg-amber-400/5 p-5">
-					<p class="mb-2 font-mono text-[11px] uppercase tracking-wider text-amber-400">Falta lo nacional — y a propósito</p>
-					<p class="text-sm text-muted-foreground">Aquí deberían ir las frecuencias de la Defensa Civil, la Cruz Roja, los bomberos y la red nacional de emergencia. <strong class="text-foreground">No las incluyo porque no pude verificarlas contra una fuente oficial</strong>, y un número equivocado en esta pantalla es peor que un espacio en blanco: alguien llamaría a una frecuencia muerta creyendo que pide auxilio.</p>
-					<p class="mt-2 text-sm text-muted-foreground">La junta debería confirmarlas con el MinTIC y con la UNGRD, y añadirlas aquí. Es un trabajo de una tarde y convierte esta herramienta en la que de verdad hace falta.</p>
 				</div>
 
 				<div id="fe-aviso" class="mt-4 hidden rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-4 py-2 font-mono text-xs text-emerald-400"></div>
