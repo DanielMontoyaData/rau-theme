@@ -264,6 +264,17 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.53.1 — revisión en vivo de la 19.53.0
+
+- **El mapa tapaba los formularios.** Las capas de Leaflet usan z-index de 400 a 1000 y el modal 50:
+  con el simulador corriendo y el mapa abierto, la tarjeta «Llega por radio» y sus botones quedaban
+  debajo del mapa; al desplazarse, el mapa también pasaba por encima de la cabecera y de la barra
+  inferior del celular. El contenedor del mapa ahora forma su propio contexto de apilamiento
+  (`isolation: isolate`). La prueba E2E 11 abre un formulario sobre el mapa y comprueba qué queda
+  encima (falla sin el arreglo, pasa con él).
+
+---
+
 ## 19.53.0 — Centro de mando integral: incidentes, trazabilidad, roles, mapa y simulador
 
 La misma ruta `/emergencias/` pasa de ser una libreta compartida a un centro de mando de comunicaciones

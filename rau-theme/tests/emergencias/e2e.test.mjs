@@ -222,6 +222,18 @@ test('11. el mapa carga Leaflet del propio sitio y dibuja con procedencia', asyn
 	const n = await coord.$$eval('#mp-mapa path.leaflet-interactive, #mp-mapa .em-mk', l => l.length);
 	assert.ok(n >= 2, 'dibuja los elementos con ubicación: ' + n);
 	assert.match(await texto(coord, '.em-leyenda'), /no simula cobertura/);
+	// Un formulario abierto sobre el mapa queda encima de Leaflet (sus capas usan z-index 400 a 1000).
+	await coord.keyboard.press('n'); await modalListo(coord);
+	// Las capas de Leaflet no reciben el puntero y elementFromPoint las salta: se activan para medir qué queda encima.
+	const tapados = await coord.evaluate(() => {
+		document.querySelectorAll('#mp-mapa, #mp-mapa *').forEach(x => { x.style.pointerEvents = 'auto'; });
+		const c = document.querySelector('#em-modal .em-modal-caja').getBoundingClientRect(), m = document.querySelector('#mp-mapa').getBoundingClientRect(), fuera = [];
+		for (let y = Math.max(c.top, m.top) + 5; y < Math.min(c.bottom, m.bottom); y += 25) for (let x = Math.max(c.left, m.left) + 5; x < Math.min(c.right, m.right); x += 60) { const e = document.elementFromPoint(x, y); if (e && !e.closest('#em-modal')) fuera.push(Math.round(x) + ',' + Math.round(y)); }
+		document.querySelectorAll('#mp-mapa, #mp-mapa *').forEach(x => { x.style.pointerEvents = ''; });
+		return fuera;
+	});
+	assert.deepEqual(tapados.slice(0, 5), [], 'el mapa tapa el modal en esos puntos');
+	await coord.keyboard.press('Escape'); await coord.waitForSelector('#em-modal', { state: 'hidden' });
 });
 
 test('12. observador por invitación: lee, no registra, no ve datos de personas', async () => {

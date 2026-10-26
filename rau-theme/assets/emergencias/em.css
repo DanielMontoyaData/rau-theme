@@ -324,6 +324,8 @@ body.em-con-modal { overflow: hidden; }
 .em-pop { font: 13px/1.45 system-ui, sans-serif; min-width: 12rem; }
 .em-pop .em-link { padding: .2rem 0; font-size: 13px; }
 .em-pop-q { color: #555; font-size: 12px; }
+/* Leaflet usa z-index de 400 a 1000: el mapa forma su propio contexto para no tapar cabecera, barra ni modales. */
+.em-mapa, .em-mapa-mini { position: relative; z-index: 0; isolation: isolate; }
 .leaflet-container { background: #0e1520; font: inherit; }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #f8fafc; color: #0b0f17; }
 .leaflet-control-layers { background: var(--tarjeta) !important; color: var(--texto) !important; border: 1px solid var(--borde) !important; }
