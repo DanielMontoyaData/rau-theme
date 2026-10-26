@@ -50,10 +50,10 @@ atención ni de despacho, **no** transmite por radio y **no** emite alertas púb
 
 | Módulo | Tipos |
 |---|---|
-| Operación | `op` (abrir o cerrar), `leccion`, `informe`, `resuelve` (conflictos), `sim` (solo simulacros) |
+| Operación | `op` (abrir o cerrar), `periodo` (período operacional), `ajuste` (límites de alarmas), `leccion`, `informe` (SITREP, cierre, relevo), `resuelve` (conflictos), `sim` (solo simulacros) |
 | Incidentes | `i_nuevo`, `i_act`, `i_verif`, `i_estado`, `i_prio`, `i_desp`, `i_resp`, `i_vinc`, `i_fusion`, `i_nodup`, `decision`, `accion`, `accion_ok` |
 | Mensajes | `msg`, `m_est` (entrega), `m_int` (intentos y errores) |
-| Estaciones y enlaces | `e_reg`, `e_est` (estado reportado), `e_verif` (verificación), `enlace` (prueba), `contacto`, `sinresp`, `repe` |
+| Red y estaciones | `red` (abierta, dirigida, cerrada; control y canal), `contacto` (con tráfico, precedencia, ubicación o salida de la red), `sinresp`, `e_reg`, `e_est` (estado reportado), `e_verif` (verificación), `enlace` (prueba), `repe` |
 | Recursos | `r_reg`, `r_sol`, `r_sol_est`, `r_est` |
 | Plan | `p_ver` (versión), `p_est` (borrador, propuesto, aprobado, retirado), `plan` y `planx` (canales asignados) |
 | Mapa | `pt`, `pt_act` |
@@ -255,6 +255,8 @@ simulación en operaciones reales, y el rol «usuario de simulación» no entra 
 | Voz y CW | Transporte **manual**: el operador transmite y registra. |
 | Winlink, APRS, EchoLink | **No configurados**. El modelo de mensaje es independiente del medio. Para Winlink, se exporta el texto o el ICS-213 y se adjunta en su cliente. |
 | CAP 1.2 | Exportación por incidente en estado `Draft` (o `Exercise` en simulacro), con alcance restringido. **No** es una alerta pública. |
+| Open-Meteo: elevación | Activa, **solo cuando alguien pide un perfil de enlace**. Envía las coordenadas de los dos puntos. Modelo Copernicus GLO-90. Sin clave. |
+| Open-Meteo: pronóstico de lluvia | Activa, **solo cuando alguien la pide** en un incidente. Envía el punto redondeado a 0,1° (unos 11 km). No es una alerta oficial (las emite el IDEAM). |
 | Sistemas de gobierno, satélites, radios | **Sin integración**. No se simulan. |
 
 ---
@@ -320,7 +322,7 @@ Requieren un WordPress con el tema y `RAU_EM_PRUEBAS` definido en ese `wp-config
 | Núcleo (lógica, sin navegador) | `node --test tests/emergencias/core.test.mjs` |
 | API REST | `RAU_EM_BASE=http://localhost:8099 node --test tests/emergencias/api.test.mjs` |
 | Cuentas, organizaciones, conservación y directorio | `php tests/emergencias/cuentas.php /ruta/a/wordpress/wp-load.php` |
-| De punta a punta (Playwright) | `RAU_EM_BASE=http://localhost:8099 node --test --test-concurrency=1 tests/emergencias/e2e.test.mjs` |
+| De punta a punta (Playwright; las consultas a Open-Meteo se responden con datos fijos) | `RAU_EM_BASE=http://localhost:8099 node --test --test-concurrency=1 tests/emergencias/e2e.test.mjs` |
 | Verificador general del tema | `php bin/verificar.php` |
 
 La carpeta `tests/` no se incluye en el zip que se sube al sitio.
@@ -328,6 +330,14 @@ La carpeta `tests/` no se incluye en el zip que se sube al sitio.
 ---
 
 ## 10. Limitaciones conocidas
+
+- **Paquetes sin internet**: el autor de cada registro viaja dentro del paquete y no se puede comprobar.
+  Por eso los registros recibidos quedan marcados «por paquete» y no se reenvían al servidor desde el
+  dispositivo que los recibe: los sube quien los registró cuando tenga conexión.
+- **Perfil de enlace**: no modela vegetación, edificios, difracción ni propagación troposférica.
+  «Despejado» es condición necesaria, no garantía: se confirma con una prueba de enlace.
+- **Alarmas**: suenan solo con la página abierta (no hay notificaciones push del servidor) y el sonido
+  necesita que alguien lo active en ese dispositivo.
 
 - **Formularios**: no son formularios oficiales validados por la UNGRD.
   - El ICS-213, el SCI-205 y el SCI-214 son adaptaciones y lo dicen en su texto.
@@ -341,3 +351,99 @@ La carpeta `tests/` no se incluye en el zip que se sube al sitio.
 - **Duplicados**: la detección es una ayuda. Puede no ver duplicados sin coordenadas y con textos
   distintos, y puede sugerir falsos duplicados cercanos.
 - **IA**: no se usa. La detección de duplicados y de vacíos de información es por reglas explícitas.
+
+---
+
+## 11. Sala de mando y control de red (19.54.0)
+
+Lo que hace del centro de mando una herramienta de trabajo para quien lleva la red, no un formulario.
+
+**Sala de mando** (vista de entrada en cada operación):
+
+- Franja de estado: grupo fecha-hora, tiempo desde la activación, período operacional con cuenta
+  regresiva, estado de la red, alarmas, incidentes, tráfico y estaciones en red.
+- Paneles: red con luces y temporizadores, mapa, alarmas, cola de tráfico, incidentes activos, registro
+  en vivo y período. Los temporizadores se actualizan cada 10 s.
+- **Pantalla de sala**: sin menú y con letra más grande, a pantalla completa, para un televisor o un
+  proyector en el puesto de mando.
+
+**Línea de comandos** (en la sala y en el control de red; tecla `:` desde cualquier parte):
+
+| Escribes | Se registra |
+|---|---|
+| `HK4ABC` | Contacto: la estación se reporta y entra a la red |
+| `HK4ABC sin novedad` | Contacto sin tráfico |
+| `HK4ABC tráfico 2 P albergue` | Dos mensajes de prioridad en espera (E, P, B, R) |
+| `HK4ABC urgente …` | Urgencia: la estación pasa primera en la cola y suena la alarma |
+| `HK4ABC no responde` · `HK4ABC qrt` · `HK4ABC fuera de servicio` | Llamado sin respuesta · sale de la red · estado |
+| `red dirigida 7.060 LSB` | Estado de la red, con quien escribe como control |
+| `nota …` · `decisión …` · `inc …` · `msg Para: texto` | Nota · decisión · abre el formulario de incidente o de mensaje |
+
+Antes de registrar se muestra qué se va a guardar. Lo que no se entiende no se registra.
+
+**Control de red**:
+
+- Cola de palabra: urgencias, luego tráfico por precedencia y tiempo de espera, luego quien lleva más
+  en silencio.
+- Acciones de un toque por estación:
+  - «Paso»: descuenta un mensaje y abre el formulario con esa estación como origen.
+  - Contacto, no responde, sale y fuera de servicio.
+- Guiones para leer por radio, con los datos de la operación. Son modelos, no procedimientos oficiales.
+- Registro de comunicaciones en formato basado en ICS-309, imprimible y en CSV.
+
+**Alarmas** (`core.alarmas`):
+
+| Situación | Nivel | Límite |
+|---|---|---|
+| Estación de la red reporta urgencia | Crítico | Inmediato |
+| Estación en silencio (en red y no fuera de servicio) | Media; alta al doble | 30 min (ajustable) |
+| No responde a 2 llamados seguidos | Alta | — |
+| Mensaje sin entregar | E crítico, P alto, B y R medio | E 10, P 30, B 120, R 240 min |
+| Incidente crítico o alto sin responsable | Crítico o alto | 15 min |
+| Incidente crítico o alto sin verificar | Alto | 30 min |
+| Solicitud de recurso sin respuesta | Inmediata alta; otras media | 30 / 120 / 480 min |
+| Acción vencida, SITREP atrasado, período por terminar o vencido, cambios simultáneos | Media o alta | SITREP cada 4 h (ajustable) |
+
+- Las alarmas cuentan desde los registros y se apagan cuando se atiende la causa.
+- «Enterado» quita el aviso solo en ese dispositivo; si la alarma sube de nivel, vuelve a avisar.
+- El sonido y los avisos del sistema se activan por dispositivo.
+- Los límites ajustables los fija la coordinación (`ajuste`) y rigen para todos.
+
+**Período operacional y relevo**:
+
+- El período fija número, inicio, fin, objetivos medibles, énfasis, mensaje de seguridad y responsable,
+  al estilo SCI-202.
+- El relevo de turno se genera de la bitácora y cubre:
+  - período y alarmas activas;
+  - incidentes nuevos, actualizados y activos, marcando los que no tienen responsable;
+  - tráfico pendiente, estado de la red, recursos, decisiones y acciones.
+- El relevo se puede registrar en la bitácora.
+
+**Herramientas**:
+
+- **Perfil de enlace** (Estaciones):
+  - Toma 100 puntos del terreno real entre dos estaciones, repetidoras, puntos o coordenadas.
+  - Calcula la curvatura (k = 4/3), la primera zona de Fresnel (criterio del 60 %), la pérdida en
+    espacio libre y el rumbo.
+  - Dice si está despejado, justo u obstruido y dónde está el punto crítico.
+  - El terreno consultado queda guardado para esos dos puntos.
+- **Lluvia en la zona** (detalle de un incidente con coordenadas):
+  - Lluvia de las últimas 24 h y de las próximas 24 h, la hora más lluviosa y la probabilidad.
+  - Gráfico por hora.
+- **Tablero de tráfico** (Comunicaciones): mensajes por estado, con la antigüedad frente al límite de
+  su precedencia.
+- **Paquetes sin internet** (Campo; también «Recibir paquete» desde el inicio):
+  - Formato: los registros se comprimen y se parten en texto `RAUEM1 <código> <i>/<n> <crc32> <datos>`.
+    Las partes son de 600 caracteres para radio digital, de 900 para QR o una sola para mensajería.
+  - Recepción: se pegan las partes en cualquier orden, o se escanean con la cámara en Android.
+  - Integridad: se avisa qué partes faltan y se rechaza lo alterado.
+  - Duplicados: un registro que ya existe no se repite.
+  - Aislamiento: un simulacro y una operación real no se mezclan.
+  - Si la operación no está en el dispositivo, se crea una copia local.
+
+Además, en esta versión:
+
+- Los sismos de USGS se muestran en español.
+- Durante un simulacro, las alertas reales llevan la marca «Datos REALES».
+- La tabla de frecuencias del inicio lleva las condiciones y fuentes como notas numeradas.
+

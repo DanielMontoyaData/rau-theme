@@ -30,6 +30,7 @@ $em_cfg = array(
 	'checkin'    => home_url( '/check-in-de-malla/' ),
 	'contorno'   => $em_uri . 'colombia.geojson?ver=' . $em_ver,
 	'leaflet'    => array( 'js' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.js?ver=1.9.4', 'css' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.css?ver=1.9.4' ),
+	'qr'         => get_template_directory_uri() . '/assets/vendor/qrcode/qrcode.js?ver=1.4.4',
 );
 ?><!DOCTYPE html>
 <html lang="es">
@@ -70,7 +71,7 @@ $em_cfg = array(
 	</main>
 </div>
 <script>window.RAU_EM=<?php echo wp_json_encode( $em_cfg ); ?>;</script>
-<?php foreach ( array( 'em-core', 'em-db', 'em', 'em-vistas', 'em-mapa', 'em-sim' ) as $js ) : ?>
+<?php foreach ( array( 'em-core', 'em-db', 'em', 'em-vistas', 'em-sala', 'em-herr', 'em-mapa', 'em-sim' ) as $js ) : ?>
 <script src="<?php echo esc_url( $em_uri . $js . '.js?ver=' . $em_ver ); ?>" defer></script>
 <?php endforeach; ?>
 <script>

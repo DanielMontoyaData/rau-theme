@@ -13,7 +13,7 @@
 'use strict';
 var C = window.RAU_EM || {}, core = window.RauEmCore, DB = window.RauEmDB;
 core.usarEsquema(C.esquema);
-var E = window.RauEm = { C:C, core:core, db:DB, VISTAS:{}, VIVO:{}, op:null, eventos:[], S:core.reducir([]), yo:{ind:'', nombre:''}, cuenta:null, actor:null, ventana:60, filtros:{}, vista:'tablero', params:{} };
+var E = window.RauEm = { C:C, core:core, db:DB, VISTAS:{}, VIVO:{}, op:null, eventos:[], S:core.reducir([]), yo:{ind:'', nombre:''}, cuenta:null, actor:null, ventana:60, filtros:{}, vista:'sala', params:{} };
 
 /* ── Utilidades de interfaz ──────────────────────────────────────────────── */
 var $ = E.$ = function(s, el){ return (el||document).querySelector(s); };
@@ -180,8 +180,8 @@ E.pintarSync = pintarSync;
 setInterval(function(){ if(sync.reintento>Date.now()) pintarSync(); else if(sync.reintento){ sync.reintento=0; } }, 1000);
 
 /* ── Estructura de la página ─────────────────────────────────────────────── */
-var GRUPOS = [['Operación',['tablero','mapa','incidentes','comunicaciones','estaciones','plan','recursos']],['Registro e informes',['bitacora','informes','personas','directorio']],['Campo y administración',['campo','herramientas','simulador','admin']]];
-var MOVIL = ['tablero','incidentes','comunicaciones','estaciones','mas'];
+var GRUPOS = [['Mando',['sala','red','mapa','incidentes','comunicaciones']],['Operación',['estaciones','plan','recursos','tablero']],['Registro e informes',['bitacora','informes','personas','directorio']],['Campo y administración',['campo','herramientas','simulador','admin']]];
+var MOVIL = ['sala','red','incidentes','comunicaciones','mas'];
 E.registrarVista = function(id, def){ E.VISTAS[id]=def; };
 function armar(){
 	$('#em-app').innerHTML =
@@ -190,6 +190,7 @@ function armar(){
 		+'<div class="em-titulo" id="em-titulo"></div>'
 		+'<form class="em-buscar-cab" id="em-buscar-f" role="search"><label class="sr-only" for="em-buscar">Buscar en la operación</label><input id="em-buscar" type="search" placeholder="Buscar ( / )" autocomplete="off"></form>'
 		+'<div class="em-reloj" aria-label="Hora"><strong id="em-utc">--:--Z</strong><span id="em-hora-local">--:-- local</span></div>'
+		+'<button type="button" class="em-alarmas-b" id="em-alarmas" hidden aria-live="polite"></button>'
 		+'<button type="button" class="em-sync" id="em-sync" aria-live="polite"></button></header>'
 		+'<div class="em-franja" id="em-franja" hidden></div>'
 		+'<div class="em-cuerpo"><nav class="em-nav" id="em-nav" aria-label="Secciones del centro de mando"></nav><main class="em-main" id="em-main" tabindex="-1"></main></div>'
@@ -231,11 +232,11 @@ function botonNav(id){
 }
 function pintarCuentas(){
 	if(!E.op) return;
-	var I=core.indicadores(E.S, {}, Date.now(), E.ventana), c={tablero:I.vencidos.length+I.conflictos+I.duplicados, incidentes:I.incidentes.porPrio.critica, comunicaciones:I.mensajes.emergencia, campo:E.pendientes().length+E.rechazados().length};
+	var I=core.indicadores(E.S, {}, Date.now(), E.ventana), c={sala:E.alarmasActivas?E.alarmasActivas().filter(function(a){ return a.nivel==='critica'||a.nivel==='alta'; }).length:0, red:core.colaRed(E.S, Date.now()).filter(function(x){ return x.trafico||x.urgente; }).length, tablero:I.vencidos.length+I.conflictos+I.duplicados, incidentes:I.incidentes.porPrio.critica, comunicaciones:I.mensajes.emergencia, campo:E.pendientes().length+E.rechazados().length};
 	$$('[data-cuenta]').forEach(function(el){ var n=c[el.dataset.cuenta]||0; el.textContent=n||''; el.hidden=!n; });
 }
 E.ir = function(v, params){
-	if(!E.VISTAS[v]) v='tablero';
+	if(!E.VISTAS[v]) v='sala';
 	E.vista=v; E.params=params||{};
 	try { sessionStorage.setItem('rau_em_vista', v); } catch(e){}
 	pintarCabecera(); pintarVista(); window.scrollTo(0,0);
@@ -245,7 +246,7 @@ function pintarVista(){
 	var m=$('#em-main'); m.innerHTML='';
 	if(!E.yo.ind){ m.appendChild(vistaIdentidad()); return; }
 	if(!E.op){ m.appendChild(vistaInicio()); return; }
-	var v=E.VISTAS[E.vista]||E.VISTAS.tablero;
+	var v=E.VISTAS[E.vista]||E.VISTAS.sala||E.VISTAS.tablero;
 	m.appendChild(v.fn(E.params||{}));
 	if(v.alMontar) v.alMontar(E.params||{});
 }
@@ -261,7 +262,7 @@ E.alRefrescar=[];
 function atajos(e){
 	if(!$('#em-modal').hidden || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || e.ctrlKey || e.metaKey) return;
 	if(!E.op) return;
-	var orden=['tablero','mapa','incidentes','comunicaciones','estaciones','plan','recursos','bitacora','informes'];
+	var orden=['sala','red','mapa','incidentes','comunicaciones','estaciones','plan','recursos','bitacora'];
 	if(e.altKey && /^[1-9]$/.test(e.key)){ e.preventDefault(); E.ir(orden[+e.key-1]); return; }
 	if(e.altKey) return;
 	if(e.key==='/'){ e.preventDefault(); var b=$('#em-buscar'); if(b && b.offsetParent) b.focus(); else buscar(''); }
@@ -309,7 +310,7 @@ function vistaInicio(){
 		+'<div class="em-acciones"><button type="button" class="em-btn peligro em-grande" id="in-activar">Activar operación real</button>'
 		+'<button type="button" class="em-btn em-grande" id="in-unirme">Unirme con código y clave</button>'
 		+'<button type="button" class="em-btn em-grande" id="in-sim">Simulacro y entrenamiento</button>'
-		+'<button type="button" class="em-btn" id="in-local">Trabajar sin conexión</button></div>'
+		+'<button type="button" class="em-btn" id="in-local">Trabajar sin conexión</button><button type="button" class="em-btn" id="in-paq">Recibir paquete</button></div>'
 		+'<p class="em-nota">'+(c?'Cuenta: <b>'+esc(c.login)+'</b> · '+esc((C.roles||{})[c.rol]||c.rol)+(c.org?' · '+esc(c.org.nombre):' · sin organización'):'¿Tienes cuenta de coordinador u operador? <a href="'+esc(C.login)+'">Entra con tu cuenta</a> para ver las operaciones de tu organización.')+'</p></section>'
 		+'<section class="em-tarjeta"><h2>Operaciones abiertas</h2><div data-vivo="abiertas">'+E.VIVO.abiertas()+'</div></section>'
 		+'<section class="em-tarjeta"><h2>En este dispositivo</h2><div data-vivo="mias">'+E.VIVO.mias()+'</div></section>'
@@ -322,6 +323,7 @@ function vistaInicio(){
 	$('#in-sim',v).addEventListener('click', function(){ if(E.abrirSimulador) E.abrirSimulador(); else formCrear('simulacro'); });
 	$('#in-unirme',v).addEventListener('click', function(){ pedirEntrada(''); });
 	$('#in-local',v).addEventListener('click', function(){ formLocal(false); });
+	$('#in-paq',v).addEventListener('click', function(){ if(E.recibirPaquete) E.recibirPaquete(); });
 	v.addEventListener('click', function(e){
 		var r=e.target.closest('[data-abrir]'); if(r) E.entrar(r.dataset.abrir);
 		var u=e.target.closest('[data-unir]'); if(u) pedirEntrada(u.dataset.unir, u.dataset.cuenta==='1');
@@ -416,14 +418,14 @@ E.entrar = function(cod){
 		E.op=op; E.actor=op.actor||null; E.eventos=(r[1]||[]).filter(function(e){ return !e.descartado; }); op.visto=Date.now(); DB.guardarOp(op);
 		try { sessionStorage.setItem('rau_em_op', cod); } catch(e){}
 		sync.error=''; sync.espera=5000; sync.reintento=0; E.recalcular();
-		var v='tablero'; try { v=sessionStorage.getItem('rau_em_vista')||'tablero'; } catch(e){}
+		var v='sala'; try { v=sessionStorage.getItem('rau_em_vista')||'sala'; } catch(e){}
 		E.ir(v); pintarSync();
 		E.alEntrar.forEach(function(f){ try { f(); } catch(e){} });
 		if(!op.local) return E.sincronizar();
 	});
 };
 E.alEntrar=[];
-E.salir = function(){ E.op=null; E.actor=null; E.eventos=[]; E.recalcular(); try { sessionStorage.removeItem('rau_em_op'); } catch(e){} E.vista='tablero'; pintarCabecera(); pintarVista(); pintarSync(); cargarMias(); };
+E.salir = function(){ E.op=null; E.actor=null; E.eventos=[]; E.recalcular(); try { sessionStorage.removeItem('rau_em_op'); } catch(e){} E.vista='sala'; pintarCabecera(); pintarVista(); pintarSync(); cargarMias(); };
 
 /* ── Preparación (en el dispositivo) ─────────────────────────────────────── */
 var PREPARACION = [
@@ -454,6 +456,7 @@ E.registrarVista('campo', {nombre:'Campo y sin conexión', icono:'⛺', fn:funct
 		+'<label class="em-check"><input type="checkbox" id="cp-sol"'+(document.documentElement.dataset.tema==='sol'?' checked':'')+'> <span>Modo sol: pantalla clara de alto contraste</span></label>'
 		+'<label class="em-inline">Un reporte o verificación vale <select class="em-campo" id="cp-ventana">'+[30,60,120,240].map(function(n){ return '<option value="'+n+'"'+(E.ventana===n?' selected':'')+'>'+n+' min</option>'; }).join('')+'</select></label>'
 		+'<div class="em-acciones"><button type="button" class="em-btn" id="cp-instalar">Instalar como aplicación</button></div><p class="em-nota" id="cp-instalar-n">En el celular también: menú del navegador → «Agregar a la pantalla de inicio».</p></section>'
+		+'<section class="em-tarjeta em-ancho-2"><h2>Pasar registros sin internet</h2><div id="cp-paq"></div></section>'
 		+'<section class="em-tarjeta"><h2>Sincronización</h2><div data-vivo="cola">'+E.VIVO.cola()+'</div></section>'
 		+'<section class="em-tarjeta"><h2>Almacenamiento</h2><div id="cp-esp"><p class="em-nota">Calculando…</p></div><p class="em-aviso">Los datos de este dispositivo <b>no son un respaldo suficiente</b>: un teléfono se pierde, se moja o se borra. En una operación real, exporta respaldos con frecuencia (Informes → Exportar).</p></section>'
 		+'<section class="em-tarjeta"><h2>Qué funciona sin internet</h2><ul class="em-lista-txt"><li>Abrir esta página (después de una primera visita con internet).</li><li>Registrar incidentes, mensajes, estaciones, recursos y notas: quedan en cola y se envían solos al volver la señal.</li><li>Consultar lo ya descargado de la operación, el plan, el directorio de frecuencias y las herramientas.</li><li>El mapa con las capas de la operación sobre un contorno de Colombia guardado. El mapa base detallado necesita internet: solo se conservan los mosaicos ya vistos.</li></ul><p class="em-nota">No funciona sin internet: crear operaciones en el servidor, unirse, alertas en vivo, búsqueda de lugares.</p></section>'
@@ -462,6 +465,7 @@ E.registrarVista('campo', {nombre:'Campo y sin conexión', icono:'⛺', fn:funct
 	$('#cp-sol',v).addEventListener('change', function(){ E.tema(this.checked?'sol':''); });
 	$('#cp-ventana',v).addEventListener('change', function(){ E.ventana=+this.value; DB.kvSet('ventana', E.ventana); E.refrescar(); });
 	$('#cp-instalar',v).addEventListener('click', function(){ if(instalar){ instalar.prompt(); instalar=null; } else $('#cp-instalar-n',v).textContent='Este navegador no ofrece la instalación directa (o ya está instalada). Usa «Agregar a la pantalla de inicio» en su menú.'; });
+	if(E.montarPaquetes) E.montarPaquetes($('#cp-paq',v));
 	DB.espacio().then(function(s){
 		$('#cp-esp',v).innerHTML=(s.memoria?'<p class="em-error">Este navegador no permite guardar datos (modo privado): todo se pierde al cerrar la pestaña.</p>':'')
 			+'<p>Usado: '+(s.uso?(s.uso/1048576).toFixed(1)+' MB':'—')+(s.cuota?' de '+(s.cuota/1073741824).toFixed(1)+' GB disponibles':'')+'</p><p>'+(s.persistente?'El navegador se comprometió a no borrar estos datos por falta de espacio.':'El navegador podría borrar estos datos si se queda sin espacio.')+'</p>'

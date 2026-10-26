@@ -102,10 +102,10 @@ test('4. el operador se une por el celular, con su rol y sin botones de coordina
 	await oper.waitForFunction(() => /no coincide/.test(document.querySelector('#f-unir-msg').textContent));
 	await oper.fill('#f-unir [name=clave]', datos.clave);
 	await oper.click('#f-unir button');
-	await oper.waitForSelector('[data-vivo=cifras]');
+	await oper.waitForSelector('[data-vivo=salaEstado]');
 	assert.match(await texto(oper, '#em-titulo'), /Operador/);
 	await sincronizado(oper);
-	assert.match(await texto(oper, '[data-vivo=cifras]'), /1\s*Incidentes activos/);
+	assert.match(await texto(oper, '[data-vivo=salaEstado]'), /Incidentes\s*1/i);
 	await oper.click('[data-v=incidentes]'); await oper.click('.em-inc');
 	await oper.waitForSelector('.em-detalle');
 	assert.equal(await oper.$('[data-ia=verificar]'), null, 'el operador no ve «Verificar»');
@@ -250,8 +250,10 @@ test('12. observador por invitación: lee, no registra, no ve datos de personas'
 	await entrarComo(obs, 'hk6obs');
 	await obs.click('#in-unirme'); await modalListo(obs);
 	await obs.fill('#f-unir [name=codigo]', datos.codigo); await obs.fill('#f-unir [name=clave]', claveObs); await obs.click('#f-unir button');
-	await obs.waitForSelector('[data-vivo=cifras]'); await sincronizado(obs);
+	await obs.waitForSelector('[data-vivo=salaEstado]'); await sincronizado(obs);
 	assert.equal(await obs.$('#tb-inc'), null, 'sin botones para registrar');
+	assert.equal(await obs.$('#sl-cmd'), null, 'sin línea de comandos');
+	assert.equal(await obs.$('[data-red=ok]'), null, 'sin acciones sobre la red');
 	await obs.evaluate(() => RauEm.ir('personas'));
 	const t = await texto(obs, '[data-vivo=personas]');
 	assert.doesNotMatch(t, /María|3001234567/); assert.match(t, /Persona registrada/);
@@ -288,6 +290,152 @@ test('14. simulador: aislado, marcado y con métricas', async () => {
 	await p.context().close();
 });
 
-test('15. sin errores de JavaScript en ninguna pantalla', () => {
+/* ── 19.54: sala de mando y herramientas ─────────────────────────────────── */
+async function comando(p, linea) {
+	await p.fill('#sl-cmd-i, #rd-cmd-i', linea);
+	const vista = await p.$eval('.em-cmd-o', (o) => o.textContent);
+	await p.press('#sl-cmd-i, #rd-cmd-i', 'Enter');
+	await p.waitForFunction(() => document.querySelector('.em-cmd input').value === '' || document.querySelector('.em-cmd-o').classList.contains('error'));
+	return vista;
+}
+
+test('15. sala de mando: la línea de comandos lleva la red y la cola de palabra', async () => {
+	await coord.evaluate(() => RauEm.ir('sala'));
+	await coord.waitForSelector('#sl-cmd-i');
+	assert.match(await comando(coord, 'red dirigida 7.060 LSB'), /Red dirigida con HK6COO como control en 7\.060 LSB/);
+	await comando(coord, 'HK6AAA');
+	assert.match(await comando(coord, 'HK6BBB tráfico 2 P albergue del coliseo'), /HK6BBB tiene 2 mensajes de prioridad/);
+	await comando(coord, 'HK6CCC urgente techo caído en La Badea');
+	// Lo que no se entiende no se registra
+	await coord.fill('#sl-cmd-i', 'hola'); await coord.press('#sl-cmd-i', 'Enter');
+	assert.match(await texto(coord, '.em-cmd-o'), /No reconozco/);
+	assert.equal(await coord.inputValue('#sl-cmd-i'), 'hola');
+	await coord.fill('#sl-cmd-i', '');
+	const red = await coord.$$eval('[data-vivo=salaRed] .em-red-f strong', (l) => l.map((x) => x.textContent));
+	assert.deepEqual(red.slice(0, 3), ['HK6CCC', 'HK6BBB', 'HK6AAA'], 'urgencia, luego tráfico, luego el resto');
+	assert.match(await texto(coord, '[data-vivo=salaEstado]'), /Dirigida[\s\S]*control HK6COO · 7\.060 LSB/);
+	assert.match(await texto(coord, '#em-alarmas'), /alarma/);
+	assert.match(await texto(coord, '[data-vivo=salaAlarmas]'), /HK6CCC reporta URGENCIA: techo caído en La Badea/);
+	await sincronizado(coord);
+	// El operador (su sesión se revocó en la prueba 13) vuelve a entrar con código y clave y ve la misma red en su consola
+	await oper.evaluate(() => RauEm.salir()); await oper.waitForSelector('#in-unirme');
+	await oper.click('#in-unirme'); await modalListo(oper);
+	await oper.fill('#f-unir [name=codigo]', datos.codigo); await oper.fill('#f-unir [name=clave]', datos.clave); await oper.click('#f-unir button');
+	await oper.waitForFunction(() => RauEm.op && RauEm.op.token); await sincronizado(oper);
+	await oper.evaluate(() => RauEm.ir('red')); await oper.waitForSelector('[data-vivo=redTabla]');
+	await oper.waitForFunction(() => /HK6CCC/.test(document.querySelector('[data-vivo=redTabla]').innerText), null, { timeout: 15000 });
+	assert.match(await texto(oper, '[data-vivo=redEstado]'), /Dirigida[\s\S]*HK6COO/i);
+});
+
+test('16. dar paso: abre el mensaje de esa estación y descuenta su tráfico; el tablero lo muestra', async () => {
+	await coord.click('[data-vivo=salaRed] [data-red=paso][data-ind=HK6BBB]'); await modalListo(coord);
+	assert.equal(await coord.inputValue('#f-msg [name=origen]'), 'HK6BBB');
+	assert.equal(await coord.$eval('#f-msg input[name=prec]:checked', (x) => x.value), 'P');
+	await coord.fill('#f-msg [name=para]', 'CMGRD Dosquebradas');
+	await coord.fill('#f-msg [name=texto]', 'ALBERGUE COLISEO NECESITA 40 COLCHONETAS');
+	await coord.click('#f-msg button.primario'); await coord.waitForSelector('#lm-texto'); await coord.click('#em-modal-x');
+	assert.match(await texto(coord, '[data-vivo=salaRed]'), /HK6BBB\s*1 P/);
+	await coord.evaluate(() => RauEm.ir('comunicaciones')); await coord.waitForSelector('.em-kanban');
+	// Lo pasó otra estación: entra como «recibido por nodo», en tránsito hacia el destinatario
+	assert.match(await texto(coord, '.em-kb-col:nth-child(2)'), /Prioridad\s*n\.º \d+\s*→ CMGRD Dosquebradas/);
+	// ICS-309 con los contactos
+	await coord.evaluate(() => RauEm.ir('red')); await coord.click('#rd-309'); await modalListo(coord);
+	assert.match(await texto(coord, '#em-modal-c'), /HK6CCC[\s\S]*URGENCIA/);
+	await coord.click('#em-modal-x');
+	await sincronizado(coord);
+});
+
+test('17. alarmas por tiempo: estación en silencio, sonido opcional y «enterado»', async () => {
+	const ctx = await nav.newContext({ viewport: { width: 1400, height: 900 } });
+	const p = await pagina(ctx, 'alarmas');
+	await p.clock.install({ time: new Date('2026-10-26T15:00:00Z') });
+	await entrarComo(p, 'hk6ncs');
+	await p.click('#in-local'); await p.fill('#f-local [name=nombre]', 'Prueba de alarmas'); await p.click('#f-local button');
+	await p.waitForSelector('#sl-cmd-i');
+	await comando(p, 'HK4AAA');
+	await comando(p, 'HK4BBB');
+	assert.match(await texto(p, '#em-alarmas'), /Sin alarmas/);
+	await p.clock.fastForward('20:00');
+	await comando(p, 'HK4BBB sin novedad');
+	await p.clock.fastForward('16:00');
+	await p.waitForFunction(() => /1 alarma/.test(document.querySelector('#em-alarmas').textContent));
+	assert.match(await texto(p, '[data-vivo=salaAlarmas]'), /HK4AAA sin contacto hace 36 min \(límite 30\)/);
+	assert.ok(await p.$('[data-vivo=salaRed] .em-red-f.n-ambar'), 'la luz de HK4AAA pasa a ámbar');
+	await p.click('#em-alarmas'); await modalListo(p);
+	await p.click('#al-todas');
+	assert.ok(await p.$('#al-lista .em-alarma.enterada'));
+	await p.click('#em-modal-x');
+	// Contestar apaga la alarma
+	await comando(p, 'HK4AAA sin novedad');
+	assert.match(await texto(p, '#em-alarmas'), /Sin alarmas/);
+	datos.ctxAlarmas = ctx; datos.pAlarmas = p;
+});
+
+test('18. período operacional y relevo de turno generado de la bitácora', async () => {
+	const p = datos.pAlarmas;
+	await p.click('#sl-per'); await modalListo(p);
+	await p.fill('#f-per [name=objetivos]', '1. Contacto cada 30 min con las estaciones de campo.');
+	await p.selectOption('#f-per [name=h]', '6'); await p.click('#f-per button');
+	await p.waitForFunction(() => /P1 · 5:59|P1 · 6:00/.test(document.querySelector('[data-vivo=salaEstado]').innerText));
+	assert.match(await texto(p, '[data-vivo=salaPeriodo]'), /Contacto cada 30 min/);
+	await p.click('#sl-rel'); await modalListo(p);
+	await p.fill('#f-rel [name=recibe]', 'hk6rel');
+	const t = await texto(p, '#rel-t');
+	assert.match(t, /RELEVO DE TURNO/); assert.match(t, /Recibe: HK6REL/); assert.match(t, /Período 1/); assert.match(t, /Estaciones en la red: 2/);
+	await p.click('#rel-reg');
+	await p.evaluate(() => RauEm.ir('bitacora'));
+	assert.match(await texto(p, '#em-main'), /el relevo de turno/);
+});
+
+test('19. perfil de enlace sobre el terreno y lluvia en el incidente (consultas simuladas en la prueba)', async () => {
+	const p = datos.pAlarmas;
+	// En la prueba nada sale a internet: se responden las consultas a Open-Meteo con datos fijos
+	await p.route(/api\.open-meteo\.com\/v1\/elevation/, (r) => { const e = Array.from({ length: 100 }, (_, i) => 1400 + (i === 50 ? 700 : 0)); r.fulfill({ json: { elevation: e } }); });
+	await p.route(/api\.open-meteo\.com\/v1\/forecast/, (r) => { const ini = Date.UTC(2026, 9, 25, 0); const t = Array.from({ length: 72 }, (_, i) => new Date(ini + i * 3600000).toISOString().slice(0, 16)); r.fulfill({ json: { hourly: { time: t, precipitation: t.map((_, i) => (i === 50 ? 12.5 : 1)), precipitation_probability: t.map(() => 80) } } }); });
+	await p.evaluate(() => RauEm.ir('estaciones')); await p.click('[data-perfil]'); await modalListo(p);
+	await p.fill('#f-pf [name=a_pos]', '4.8133, -75.6961'); await p.fill('#f-pf [name=b_pos]', 'FJ25ab');
+	await p.click('#f-pf button');
+	await p.waitForSelector('.em-pf-res');
+	const r = await texto(p, '.em-pf-res');
+	assert.match(r, /Obstruido por el terreno/); assert.match(r, /Rumbo de A a B/); assert.match(r, /Pérdida en espacio libre/);
+	assert.ok(await p.$('.em-perfil path.em-pf-suelo'));
+	await p.click('#em-modal-x');
+	await p.keyboard.press('n'); await modalListo(p);
+	await p.selectOption('#f-inc [name=tipo]', 'deslizamiento'); await p.fill('#f-inc [name=titulo]', 'Deslizamiento vereda La Florida');
+	await p.fill('#f-inc [name=fuente]', 'HK4AAA'); await p.fill('#f-inc [name=pos]', '4.7700, -75.6200'); await p.click('#f-inc button.primario');
+	await p.waitForSelector('[data-lluvia-cargar]'); await p.click('[data-lluvia-cargar]');
+	await p.waitForSelector('.em-lluvia');
+	const ll = await texto(p, '[data-lluvia]');
+	assert.match(ll, /Últimas 24 h\s*\d/); assert.match(ll, /12,5 mm/); assert.match(ll, /No es una alerta oficial/);
+	assert.match(ll, /4\.8, -75\.6/, 'consulta con el punto redondeado');
+	assert.match(await texto(p, '.em-detalle'), /Ubicación aproximada/, 'con coordenadas, la precisión no queda «desconocida»');
+});
+
+test('20. paquete sin internet: se prepara en un dispositivo y se recibe en otro sin la operación', async () => {
+	const p = datos.pAlarmas;
+	await p.evaluate(() => RauEm.ir('campo')); await p.waitForSelector('#pq-env');
+	await p.selectOption('#pq-env [name=medio]', 'radio'); await p.click('#pq-env button');
+	await p.waitForSelector('#pq-sal textarea');
+	const paquete = await p.inputValue('#pq-sal textarea');
+	assert.match(paquete, /^RAUEM1 LOCAL[A-Z0-9]+ 1\/\d+ [0-9A-F]{8} /);
+	const n = (await p.evaluate(() => RauEm.eventos.length));
+	const q = await pagina(await nav.newContext({ ...devices['Pixel 7'] }), 'receptor');
+	await entrarComo(q, 'hk6rel');
+	await q.click('#in-paq'); await modalListo(q);
+	const partes = paquete.split('\n\n');
+	await q.fill('#pq-rec [name=t]', partes.slice(1).join('\n\n')); await q.click('#pq-rec button.primario');
+	if (partes.length > 1) await q.waitForFunction(() => /Faltan las partes 1/.test(document.querySelector('#pq-est').textContent));
+	await q.fill('#pq-rec [name=t]', partes.reverse().join('\n\n')); await q.click('#pq-rec button.primario');
+	await q.waitForFunction(() => /registros nuevos/.test(document.querySelector('#pq-est').textContent));
+	assert.match(await texto(q, '#pq-est'), new RegExp(n + ' registros nuevos, 0 ya estaban'));
+	await q.click('#pq-entrar'); await q.waitForSelector('[data-vivo=salaEstado]');
+	await q.evaluate(() => RauEm.ir('bitacora'));
+	assert.match(await texto(q, '#em-main'), /por paquete/i);
+	assert.match(await texto(q, '#em-main'), /Deslizamiento vereda La Florida/);
+	await q.context().close();
+	await datos.ctxAlarmas.close();
+});
+
+test('21. sin errores de JavaScript en ninguna pantalla', () => {
 	assert.deepEqual(errores, []);
 });

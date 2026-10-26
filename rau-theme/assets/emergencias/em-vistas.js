@@ -47,7 +47,11 @@ E.describir = function(e){
 	case 'e_verif': return 'Verificación de <b>'+esc(d.ind)+'</b>: '+(d.resultado==='ok'?'respondió':'no respondió')+' ('+esc(d.metodo)+')';
 	case 'enlace': return 'Prueba de enlace '+esc(d.de)+' – '+esc(d.a)+' por '+esc(d.canal)+': '+esc({ok:'buena', debil:'débil', fallo:'falló'}[d.resultado])+(d.senal?' ('+esc(d.senal)+')':'');
 	case 'checkin': return 'Registró a <b>'+esc(d.ind)+'</b>'+(d.ubic?' en '+esc(d.ubic):'');
-	case 'contacto': return 'Contacto con <b>'+esc(d.ind)+'</b>'+(d.nota?' — '+esc(d.nota):'');
+	case 'contacto': return (d.sale?'<b>'+esc(d.ind)+'</b> sale de la red':d.estado==='urgente'?'<b class="em-rojo">URGENCIA</b> de <b>'+esc(d.ind)+'</b>':d.estado==='apoyo'?'<b>'+esc(d.ind)+'</b> pide apoyo':'Contacto con <b>'+esc(d.ind)+'</b>')
+		+(d.trafico?' · tráfico '+esc(d.trafico)+' '+esc(et('prec',d.prec||'R').toLowerCase()):d.trafico===0?' · sin tráfico':'')+(d.ubic?' · desde '+esc(d.ubic):'')+(d.nota?' — '+esc(d.nota):'');
+	case 'red': return '<span class="em-tipo-nota">Red</span> '+esc(et('red_est',d.e))+' · control <b>'+esc(d.ncs)+'</b>'+(d.canal?' · '+esc(d.canal):'')+(d.nota?' — '+esc(d.nota):'');
+	case 'periodo': return '<span class="em-tipo-nota">Período '+esc(d.n)+'</span> '+core.isoZ(d.inicio)+' → '+core.isoZ(d.fin)+' · '+esc(d.objetivos);
+	case 'ajuste': return 'Ajustes de alarmas: '+(d.silencio_min?'silencio '+esc(d.silencio_min)+' min':'')+(d.silencio_min&&d.sitrep_h?' · ':'')+(d.sitrep_h?'SITREP cada '+esc(d.sitrep_h)+' h':'');
 	case 'sinresp': return '<b>'+esc(d.ind)+'</b> no respondió';
 	case 'repe': return 'Repetidora '+esc(d.r)+': '+esc(et('repe_e',d.e))+(d.n?' — '+esc(d.n):'');
 	case 'r_reg': return 'Recurso registrado: '+esc(d.cant||1)+' × '+esc(d.desc)+' ('+esc(et('rec_tipo',d.tipo))+')';
@@ -62,7 +66,7 @@ E.describir = function(e){
 	case 'planx': return 'Se quitó una asignación de canal';
 	case 'pt': return 'Mapa: '+esc(et('pt_tipo',d.tipo))+' «'+esc(d.nombre)+'» (fuente: '+esc(d.fuente)+')';
 	case 'pt_act': x=S.pts[d.p]; return 'Mapa: «'+esc(x?x.nombre:'')+'»'+(d.verif?' → '+esc(et('pt_verif',d.verif)):'')+(d.activo===false?' → ya no vigente':'')+(d.nota?' — '+esc(d.nota):'');
-	case 'informe': return 'Se generó un informe '+(d.tipo==='sitrep'?'SITREP':'de cierre')+' con corte '+core.isoZ(d.corte);
+	case 'informe': return 'Se generó '+({sitrep:'un SITREP', cierre:'el informe de cierre', relevo:'el relevo de turno'}[d.tipo]||'un informe')+' con corte '+core.isoZ(d.corte);
 	case 'leccion': return 'Lección ('+esc(et('leccion_cat',d.cat))+'): '+esc(d.texto);
 	case 'resuelve': return 'Conflicto resuelto en '+esc(d.ent)+(d.nota?' — '+esc(d.nota):'');
 	case 'sim': return '<span class="em-tipo-nota">Simulación</span> '+esc(d.texto);
@@ -74,7 +78,7 @@ E.describir = function(e){
 	}
 	return esc(e.t);
 };
-function estadoReg(e){ if(E.op && E.op.local) return ''; return e.s==='r' ? '<i class="em-marca-r" title="'+esc(e.err||'Rechazado')+'">rechazado</i>' : e.s ? '' : '<i class="em-pend" title="Solo en este dispositivo: todavía no llegó al servidor">sin enviar</i>'; }
+function estadoReg(e){ if(e.s==='p') return '<i class="em-pend" title="Llegó en un paquete sin internet. Lo envía al servidor quien lo registró.">por paquete</i>'; if(E.op && E.op.local) return ''; return e.s==='r' ? '<i class="em-marca-r" title="'+esc(e.err||'Rechazado')+'">rechazado</i>' : e.s ? '' : '<i class="em-pend" title="Solo en este dispositivo: todavía no llegó al servidor">sin enviar</i>'; }
 E.filaBit = function(e){ return '<li><time>'+core.horaZ(e.ts)+'</time><span class="em-autor">'+esc(e.a)+'</span><span>'+E.describir(e)+'</span>'+estadoReg(e)+'</li>'; };
 function edadClase(ts){ var m=E.edadMin(ts); return m>=E.ventana?'em-rojo':m>=E.ventana/2?'em-ambar':'em-verde'; }
 
@@ -96,19 +100,34 @@ function recomendacionBanda(){
 	}
 	return r;
 }
+/* USGS escribe el lugar en inglés: «37 km ESE of Cañaveral, Peru» → «a 37 km al ESE de Cañaveral, Perú» */
+var PAISES={Peru:'Perú', Panama:'Panamá', Brazil:'Brasil', Mexico:'México', 'Dominican Republic':'República Dominicana', Haiti:'Haití', 'Trinidad and Tobago':'Trinidad y Tobago'};
+E.lugarSismo = function(t){
+	t=String(t||''); var m=t.match(/^(\d+(?:\.\d+)?) km ([NSEW]{1,3}) of (.+)$/);
+	function pais(x){ return x.replace(/([^,]+)$/, function(p){ p=p.trim(); return ' '+(PAISES[p]||p); }).replace(/^ /,''); }
+	if(m) return 'a '+m[1]+' km al '+m[2].replace(/W/g,'O')+' de '+pais(m[3]);
+	return pais(t.replace(/^(near|off) the coast of /i, 'frente a la costa de ').replace(/ region$/i, ' (región)'));
+};
 E.VIVO.alertas = function(){
-	var a=E.alertas && E.alertas.alertas, h=recomendacionBanda();
+	var a=E.alertas && E.alertas.alertas, h=(E.op && E.esSim() ? '<p class="em-aviso em-real">Datos REALES de fuentes externas: no forman parte del simulacro.</p>' : '')+recomendacionBanda();
 	if(!E.alertas) return h+'<p class="em-nota">Alertas en vivo: necesitan internet.</p>';
 	if(a && a.gdacs && a.gdacs.length) h+='<h3>Alertas de desastre (GDACS)</h3><div class="em-lista">'+a.gdacs.slice(0,4).map(function(g){ return '<div class="em-fila"><span>'+E.pill(g.nivel==='red'?'peligro':g.nivel==='orange'?'aviso':'ok', g.nivel==='red'?'Roja':g.nivel==='orange'?'Naranja':'Verde')+' <strong>'+esc(g.tipo)+'</strong> '+esc(g.nombre)+'<small>desde '+new Date(g.desde*1000).toLocaleDateString('es-CO')+'</small></span>'+(g.url?'<a href="'+esc(g.url)+'" target="_blank" rel="noopener">Ver</a>':'')+'</div>'; }).join('')+'</div>';
-	if(a && a.sismos){ var s=a.sismos.slice(0,5); h+='<h3>Sismos M3,5+ · 7 días (USGS)</h3>'+(s.length?'<div class="em-lista">'+s.map(function(x){ return '<div class="em-fila"><span><strong class="'+(x.m>=6?'em-rojo':x.m>=5?'em-ambar':'')+'">M'+x.m.toFixed(1)+'</strong> '+esc(x.lugar)+'<small>'+E.haceTxt(x.t*1000)+' · '+x.prof+' km de profundidad</small></span><a href="'+esc(x.url)+'" target="_blank" rel="noopener">Ver</a></div>'; }).join('')+'</div>':'<p class="em-nota">Ninguno en Colombia y alrededores.</p>'); }
+	if(a && a.sismos){ var s=a.sismos.slice(0,5); h+='<h3>Sismos M3,5+ · 7 días (USGS)</h3>'+(s.length?'<div class="em-lista">'+s.map(function(x){ return '<div class="em-fila"><span><strong class="'+(x.m>=6?'em-rojo':x.m>=5?'em-ambar':'')+'">M'+x.m.toFixed(1)+'</strong> '+esc(E.lugarSismo(x.lugar))+'<small>'+E.haceTxt(x.t*1000)+' · '+x.prof+' km de profundidad</small></span><a href="'+esc(x.url)+'" target="_blank" rel="noopener">Ver</a></div>'; }).join('')+'</div>':'<p class="em-nota">Ninguno en Colombia y alrededores.</p>'); }
 	h+='<p class="em-nota">Fuente: USGS y GDACS, recibido '+E.haceTxt(E.alertas.recibido)+(E.alertas.alertas&&E.alertas.alertas.viejo?' (copia anterior: la fuente no respondió)':'')+'. El Servicio Geológico Colombiano no publica sus datos para otras aplicaciones: confirma en sgc.gov.co. Una alerta no crea incidentes por sí sola.</p>';
 	return h;
 };
 E.VIVO.frecuencias = function(){
 	var d=E.directorio; if(!d) return '<p class="em-nota">Cargando…</p>';
 	var e=d.entradas.filter(function(x){ return x.cat==='actividad_ra'||x.cat==='llamada_ra'; });
-	return tablaDirectorio(e, false)+'<p class="em-nota">Centros de actividad de radioaficionados: puntos de reunión, no canales exclusivos. Ver todo en <button type="button" class="em-link" data-ir="directorio">Directorio</button>.</p>';
+	return tablaCompacta(e)+'<p class="em-nota">Centros de actividad de radioaficionados: puntos de reunión, no canales exclusivos. Ver todo en <button type="button" class="em-link" data-ir="directorio">Directorio</button>.</p>';
 };
+function tablaCompacta(l){
+	var notas=[];
+	function ref(t){ if(!t) return ''; var i=notas.indexOf(t); if(i<0){ notas.push(t); i=notas.length-1; } return '<sup>'+(i+1)+'</sup>'; }
+	var filas=l.map(function(x){ return '<tr><td class="em-f">'+esc(x.f)+' <small>'+esc(x.unidad)+'</small></td><td class="em-nw">'+esc(x.banda)+' · '+esc(x.modo)+'</td><td>'+esc(x.uso)+ref(x.condiciones)+ref(x.fuente+(x.verificado?' Verificado '+x.verificado+'.':' Sin verificar.'))+'</td></tr>'; }).join('');
+	return '<div class="em-tabla-c"><table class="em-tabla em-tabla-compacta"><thead><tr><th>Frecuencia</th><th>Banda · modo</th><th>Uso</th></tr></thead><tbody>'+filas+'</tbody></table></div>'
+		+'<ol class="em-notas">'+notas.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join('')+'</ol>';
+}
 function tablaDirectorio(l, editar){
 	return '<div class="em-tabla-c"><table class="em-tabla"><thead><tr><th>Frecuencia</th><th>Banda · modo</th><th>Uso</th><th>Fuente y verificación</th>'+(editar?'<th></th>':'')+'</tr></thead><tbody>'+l.map(function(x){
 		return '<tr><td class="em-f">'+esc(x.f)+' <small>'+esc(x.unidad)+'</small>'+(x.tono?'<small class="em-bloque">T '+esc(x.tono)+' Hz'+(x.desplazamiento?' · '+esc(x.desplazamiento):'')+'</small>':'')+'</td><td class="em-nw">'+esc(x.banda)+' · '+esc(x.modo)+'</td><td>'+esc(x.uso)+'<small class="em-bloque">'+esc(x.condiciones)+'</small></td><td><small>'+esc(x.fuente)+'<br>'+(x.verificado?'Verificado '+esc(x.verificado):'Sin verificar')+(x.mod?' · cambió '+esc(x.mod.por):'')+'</small></td>'
@@ -178,7 +197,7 @@ document.addEventListener('click', function(e){
 		$('#f-aok',c).addEventListener('submit', function(ev){ ev.preventDefault(); if(E.registrar('accion_ok', {a:b.dataset.accionOk, nota:this.nota.value})) E.cerrarModal(); });
 	});
 });
-E.registrarVista('tablero', {nombre:'Tablero', icono:'◉', fn:function(){
+E.registrarVista('tablero', {nombre:'Indicadores', icono:'▦', fn:function(){
 	var puede=E.puede('operar') && !cerrada();
 	var v=E.el('<div class="em-tablero">'
 		+'<div class="em-barra"><h1 class="sr-only">Tablero</h1>'+(puede?'<div class="em-acciones">'+boton('tb-inc','+ Incidente','primario')+boton('tb-msg','+ Mensaje','')+boton('tb-est','+ Estación','')+boton('tb-lista','Pasar lista','')+'</div>':'<p class="em-nota">'+(cerrada()?'Operación cerrada: solo consulta.':'Tu rol es de consulta.')+'</p>')+'</div>'
@@ -218,7 +237,7 @@ E.formIncidente = function(pre){
 		+(pre.sim?'<input type="hidden" name="sim" value="'+esc(pre.sim)+'">':'')
 		+'<p class="em-nota">Queda como «Reportado». Solo coordinación puede marcarlo como verificado o descartado.</p><button class="em-btn primario em-grande">Registrar incidente</button><p class="em-error" id="f-inc-err" role="alert"></p></form>', function(c){
 		var f=$('#f-inc',c);
-		function leerPos(){ var p=core.parsearPosicion(f.pos.value); $('#f-inc-pos',c).textContent=f.pos.value&&!p?'No se entiende esa posición.':p?'Locator '+core.locator(p.lat,p.lng):''; return p; }
+		function leerPos(){ var p=core.parsearPosicion(f.pos.value); $('#f-inc-pos',c).textContent=f.pos.value&&!p?'No se entiende esa posición.':p?'Locator '+core.locator(p.lat,p.lng):''; if(p && f.precision.value==='desconocida') f.precision.value='aproximada'; return p; }
 		f.pos.addEventListener('input', leerPos); leerPos();
 		$('#f-inc-gps',c).addEventListener('click', function(){ gps(function(p){ f.pos.value=p.lat.toFixed(5)+', '+p.lng.toFixed(5); f.precision.value=p.acc<=100?'exacta':'aproximada'; leerPos(); }); });
 		f.addEventListener('submit', function(e){
@@ -285,6 +304,7 @@ function verIncidente(id){
 		+'<dt>Responsable operativo</dt><dd>'+(x.resp?esc(x.resp)+(x.respOrg?' ('+esc(x.respOrg)+')':''):'Sin asignar')+'</dd>'
 		+'<dt>Organizaciones</dt><dd>'+esc(x.orgs||'—')+'</dd><dt>Descripción</dt><dd>'+esc(x.desc||'—')+'</dd><dt>Necesidades</dt><dd>'+esc(x.necesidades||'—')+'</dd>'
 		+'<dt>Personas afectadas</dt><dd>'+(x.afectados?esc(x.afectados)+' <small>(según la fuente'+(x.verif==='verificado'?'':', sin verificar')+')</small>':'Sin información')+'</dd><dt>Riesgos</dt><dd>'+esc(x.riesgos||'—')+'</dd></dl></section>'
+		+(x.lat!==undefined?'<section class="em-tarjeta"><h2>Lluvia en la zona</h2><div data-lluvia="'+x.id+'"><button type="button" class="em-btn" data-lluvia-cargar="'+x.id+'">Consultar lluvia (24 h atrás y 48 h adelante)</button></div></section>':'')
 		+'<section class="em-tarjeta"><h2>Acciones</h2><div class="em-acciones">'
 		+(op?'<button type="button" class="em-btn primario" data-ia="situacion">Actualizar situación</button>':'')
 		+(op&&x.verif==='reportado'?'<button type="button" class="em-btn" data-ia="enverif">Poner en verificación</button>':'')
@@ -436,7 +456,7 @@ E.verMensaje = function(id){
 		});
 	}, true);
 };
-var pestanaCom='cola';
+var pestanaCom='tablero';
 E.VIVO.mensajes = function(){
 	var l=Object.keys(E.S.msgs).map(function(k){ return E.S.msgs[k]; });
 	if(pestanaCom==='cola') l=l.filter(function(m){ return !core.MSG_FINAL[m.estado]; });
@@ -459,11 +479,12 @@ var ADAPTADORES = [
 E.registrarVista('comunicaciones', {nombre:'Comunicaciones', icono:'✉', fn:function(p){
 	if(p.id && E.S.msgs[p.id]) setTimeout(function(){ E.verMensaje(p.id); }, 50);
 	var v=E.el('<div><div class="em-barra"><h1>Centro de comunicaciones</h1>'+(E.puede('operar')&&!cerrada()?boton('cm-nuevo','+ Mensaje','primario'):'')+'</div>'
-		+'<div class="em-seg em-seg-tabs" role="tablist">'+[['cola','Cola por entregar'],['confirmar','Por confirmar'],['todos','Todos'],['canales','Canales'],['conectividad','Conectividad'],['procedimientos','Procedimientos'],['adaptadores','Transportes']].map(function(o){ return '<button type="button" role="tab" data-t="'+o[0]+'" aria-selected="'+(pestanaCom===o[0])+'" class="'+(pestanaCom===o[0]?'is-on':'')+'">'+o[1]+'</button>'; }).join('')+'</div>'
+		+'<div class="em-seg em-seg-tabs" role="tablist">'+[['tablero','Tablero de tráfico'],['cola','Cola por entregar'],['confirmar','Por confirmar'],['todos','Todos'],['canales','Canales'],['conectividad','Conectividad'],['procedimientos','Procedimientos'],['adaptadores','Transportes']].map(function(o){ return '<button type="button" role="tab" data-t="'+o[0]+'" aria-selected="'+(pestanaCom===o[0])+'" class="'+(pestanaCom===o[0]?'is-on':'')+'">'+o[1]+'</button>'; }).join('')+'</div>'
 		+'<div id="cm-c"></div></div>');
 	function pintar(){
 		var c=$('#cm-c',v);
-		if(['cola','confirmar','todos'].indexOf(pestanaCom)>=0){ c.innerHTML='<p class="em-nota">Ordenados por precedencia: emergencia, prioridad, bienestar, rutina. Estados: '+['creado','en_cola','enviado','recibido_nodo','entregado','confirmado'].map(function(s){ return et('msg_est',s); }).join(' → ')+'.</p><div data-vivo="mensajes">'+E.VIVO.mensajes()+'</div>'; }
+		if(pestanaCom==='tablero'){ c.innerHTML='<div data-vivo="trafTablero">'+E.VIVO.trafTablero()+'</div>'; }
+		else if(['cola','confirmar','todos'].indexOf(pestanaCom)>=0){ c.innerHTML='<p class="em-nota">Ordenados por precedencia: emergencia, prioridad, bienestar, rutina. Estados: '+['creado','en_cola','enviado','recibido_nodo','entregado','confirmado'].map(function(s){ return et('msg_est',s); }).join(' → ')+'.</p><div data-vivo="mensajes">'+E.VIVO.mensajes()+'</div>'; }
 		else if(pestanaCom==='canales'){ c.innerHTML='<section class="em-tarjeta"><h2>Canales asignados en esta operación</h2><div data-vivo="asig">'+E.VIVO.asig()+'</div><button type="button" class="em-link" data-ir="plan">Editar en el plan →</button></section><section class="em-tarjeta"><h2>Directorio de frecuencias</h2><div data-vivo="frecuencias">'+E.VIVO.frecuencias()+'</div></section>'; }
 		else if(pestanaCom==='conectividad'){ c.innerHTML='<section class="em-tarjeta"><h2>Último estado conocido de enlaces y repetidoras</h2><p class="em-nota">Cada estado lleva su antigüedad: pasado el plazo de vigencia ('+E.ventana+' min para estaciones, el doble para repetidoras) se muestra como desconocido.</p><div data-vivo="enlacesTab">'+E.VIVO.enlacesTab()+'</div><button type="button" class="em-link" data-ir="estaciones">Estaciones y pruebas de enlace →</button></section>'; }
 		else if(pestanaCom==='procedimientos'){ c.innerHTML='<section class="em-tarjeta"><h2>Procedimientos alternativos</h2><ol class="em-lista-txt"><li><b>Pérdida de la repetidora:</b> pasar a símplex en la frecuencia acordada en el plan (o la de llamada 146.520) y avisar a la estación de control.</li><li><b>Estación sin respuesta:</b> tres llamadas espaciadas; registrar «sin respuesta»; pedir relevo a otra estación cercana; marcar la estación como desconocida, no como caída.</li><li><b>Sin VHF entre municipios:</b> HF en onda de cielo casi vertical (NVIS): 40 m de día, 80 m de noche, dipolo bajo.</li><li><b>Retransmisión:</b> quien recibe para otro destino registra «Recibido por nodo» y luego «Enviado» con el canal; el número y la cuenta del mensaje no cambian.</li><li><b>Sin energía de red:</b> anunciar la autonomía restante en cada reporte; reducir potencia y ciclo de transmisión.</li><li><b>Sin internet:</b> esta aplicación sigue registrando; los datos se envían al volver la señal o se pasan con un respaldo exportado.</li></ol><p class="em-nota">Guía de trabajo de HK4RAU. El plan de comunicaciones aprobado de cada operación manda sobre esta lista.</p></section>'; }
@@ -566,7 +587,7 @@ E.VIVO.repes = function(){
 };
 E.registrarVista('estaciones', {nombre:'Estaciones y enlaces', icono:'📡', fn:function(p){
 	var op=E.puede('operar')&&!cerrada();
-	var v=E.el('<div><div class="em-barra"><h1>Estaciones y enlaces</h1>'+(op?'<div class="em-acciones">'+boton('es-nueva','+ Estación','primario')+boton('es-lista','Pasar lista','')+boton('es-enlace','Prueba de enlace','')+'</div>':'')+'</div>'
+	var v=E.el('<div><div class="em-barra"><h1>Estaciones y enlaces</h1>'+(op?'<div class="em-acciones">'+boton('es-nueva','+ Estación','primario')+boton('es-lista','Pasar lista','')+boton('es-enlace','Prueba de enlace','')+'<button type="button" class="em-btn" data-perfil>Perfil de enlace</button></div>':'<div class="em-acciones"><button type="button" class="em-btn" data-perfil>Perfil de enlace</button></div>')+'</div>'
 		+'<div class="em-barra em-filtros"><label class="em-inline">Mostrar <select class="em-campo" id="es-f">'+E.opciones(core.ET.est_op, filtroEst, 'Todas')+'</select></label><span class="em-nota">Un reporte o una verificación vale '+E.ventana+' min (cámbialo en Campo). Después, el estado es «desconocido».</span></div>'
 		+'<div data-vivo="estaciones">'+E.VIVO.estaciones()+'</div>'
 		+'<section class="em-tarjeta"><h2>Repetidoras</h2><div data-vivo="repes">'+E.VIVO.repes()+'</div>'+(op?'<button type="button" class="em-link" id="es-otra">+ Otra repetidora</button>':'')+'</section></div>');

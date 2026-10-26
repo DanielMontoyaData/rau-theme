@@ -9,8 +9,8 @@ $cache_version    = 'rau-cache-' . RAU_THEME_VERSION;
 $em_url           = home_url( '/emergencias/' );
 $em_base          = get_template_directory_uri() . '/assets/';
 $em_assets        = array( $em_base . 'emergencias/em.css?ver=' . RAU_THEME_VERSION, $em_base . 'emergencias/colombia.geojson?ver=' . RAU_THEME_VERSION,
-	$em_base . 'vendor/leaflet/leaflet.js?ver=1.9.4', $em_base . 'vendor/leaflet/leaflet.css?ver=1.9.4', $em_base . 'vendor/leaflet/images/layers.png', $em_base . 'vendor/leaflet/images/layers-2x.png' );
-foreach ( array( 'em-core', 'em-db', 'em', 'em-vistas', 'em-mapa', 'em-sim' ) as $js ) $em_assets[] = $em_base . 'emergencias/' . $js . '.js?ver=' . RAU_THEME_VERSION;
+	$em_base . 'vendor/leaflet/leaflet.js?ver=1.9.4', $em_base . 'vendor/leaflet/leaflet.css?ver=1.9.4', $em_base . 'vendor/leaflet/images/layers.png', $em_base . 'vendor/leaflet/images/layers-2x.png', $em_base . 'vendor/qrcode/qrcode.js?ver=1.4.4' );
+foreach ( array( 'em-core', 'em-db', 'em', 'em-vistas', 'em-sala', 'em-herr', 'em-mapa', 'em-sim' ) as $js ) $em_assets[] = $em_base . 'emergencias/' . $js . '.js?ver=' . RAU_THEME_VERSION;
 ?>
 const CACHE_NAME = '<?php echo esc_js( $cache_version ); ?>';
 const APP_SHELL_URL = '<?php echo esc_js( $herramientas_url ); ?>';

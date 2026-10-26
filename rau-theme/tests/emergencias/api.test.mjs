@@ -182,3 +182,20 @@ test('un bloque grande se rechaza entero; la hora absurda del dispositivo se cor
 	const l = await api(`/operaciones/${cod}/eventos`, { token: operReal });
 	assert.ok(l.j.eventos.find(x => x.u === e.u).ts > Date.now() - 3600e3);
 });
+
+test('19.54: red, contactos con tráfico, período y ajustes; el período y los ajustes son de coordinación', async () => {
+	const cod = real.j.operacion.codigo, ahora = Date.now();
+	const r = await api(`/operaciones/${cod}/eventos`, { metodo: 'POST', token: operReal, cuerpo: { eventos: [
+		ev('red', { e: 'dirigida', ncs: 'HK6OPR', canal: '7.060 LSB' }),
+		ev('contacto', { ind: 'HK4ABC', trafico: 2, prec: 'P', ubic: 'Santa Rosa de Cabal' }),
+		ev('contacto', { ind: 'HK4ABC', sale: true }),
+		ev('periodo', { n: 1, inicio: ahora, fin: ahora + 6 * 3600000, objetivos: 'Mantener la red' }),
+		ev('ajuste', { silencio_min: 20 }),
+		ev('red', { e: 'otra', ncs: 'HK6OPR' }),
+		ev('informe', { tipo: 'relevo', corte: ahora }),
+	] } });
+	const res = r.j.resultados.map((x) => x.ok);
+	assert.deepEqual(res, [true, true, true, false, false, false, true], JSON.stringify(r.j.resultados));
+	const c = await api(`/operaciones/${cod}/eventos`, { metodo: 'POST', token: coordReal, cuerpo: { eventos: [ev('periodo', { n: 1, inicio: ahora, fin: ahora + 6 * 3600000, objetivos: 'Mantener la red' }), ev('ajuste', { silencio_min: 20, sitrep_h: 3 })] } });
+	assert.deepEqual(c.j.resultados.map((x) => x.ok), [true, true], JSON.stringify(c.j.resultados));
+});

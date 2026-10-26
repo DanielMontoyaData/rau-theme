@@ -1,5 +1,5 @@
 {
-	"version": 2,
+	"version": 3,
 	"comentario": "Esquema único de los registros del centro de mando. Lo usan el servidor (inc/emergencias/esquema.php) y el navegador (em-core.js). Campo: [tipo, argumento, obligatorio]. Tipos: s=texto corto (largo máx), t=texto largo (largo máx), n=número [mín,máx], b=sí/no, e=lista (nombre del enum), u=referencia a otro registro, ind=indicativo, a=lista de textos (cantidad máx). 'perm' es el permiso mínimo; 'permPor' sube el permiso según el valor de un campo. 'soloSim' solo se acepta en simulacros.",
 	"enums": {
 		"tipo_inc": ["deslizamiento", "inundacion", "avenida_torrencial", "sismo", "incendio_forestal", "incendio_estructural", "vendaval", "erupcion_volcanica", "colapso_estructural", "accidente", "aislamiento_comunidad", "falla_comunicaciones", "salud_publica", "otro"],
@@ -30,7 +30,8 @@
 		"persona_e": ["bien", "herido", "albergue", "sinnoticias", "buscado", "encontrado"],
 		"est_legado": ["bien", "apoyo", "urgente", "fuera"],
 		"leccion_cat": ["funciono", "fallo", "mejorar"],
-		"informe_tipo": ["sitrep", "cierre"],
+		"informe_tipo": ["sitrep", "cierre", "relevo"],
+		"red_est": ["abierta", "dirigida", "cerrada"],
 		"vinc_tipo": ["msg", "rec", "sol", "pt"]
 	},
 	"comunes": { "base": ["u"], "sim": ["s", 40] },
@@ -88,6 +89,10 @@
 		"pt_act": { "perm": "operar", "permPor": { "campo": "verif", "valores": { "verificado": "coordinar", "descartado": "coordinar" } },
 			"campos": { "p": ["u", null, true], "verif": ["e", "pt_verif"], "activo": ["b"], "nota": ["s", 500] } },
 		"informe": { "perm": "operar", "campos": { "tipo": ["e", "informe_tipo", true], "corte": ["n", [0, 9999999999999], true] } },
+		"red": { "perm": "operar", "campos": { "e": ["e", "red_est", true], "ncs": ["ind", null, true], "canal": ["s", 80], "nota": ["s", 300] } },
+		"periodo": { "perm": "coordinar", "campos": { "n": ["n", [1, 999], true], "inicio": ["n", [0, 9999999999999], true], "fin": ["n", [0, 9999999999999], true],
+			"objetivos": ["t", 2000, true], "enfasis": ["t", 1000], "seguridad": ["t", 1000], "resp": ["s", 80] } },
+		"ajuste": { "perm": "coordinar", "campos": { "silencio_min": ["n", [5, 240]], "sitrep_h": ["n", [1, 24]] } },
 		"leccion": { "perm": "coordinar", "campos": { "cat": ["e", "leccion_cat", true], "texto": ["t", 1000, true] } },
 		"resuelve": { "perm": "operar", "campos": { "ent": ["s", 60, true], "gana": ["u", null, true], "nota": ["s", 300] } },
 		"sim": { "perm": "operar", "soloSim": true, "campos": { "escenario": ["s", 40, true], "paso": ["n", [0, 999], true], "texto": ["t", 1000, true], "espera": ["s", 40], "canal": ["s", 80] } },
@@ -100,7 +105,7 @@
 		"plan": { "perm": "operar", "campos": { "funcion": ["s", 80, true], "f": ["s", 80, true], "modo": ["s", 20], "obs": ["s", 300] } },
 		"planx": { "perm": "operar", "campos": { "p": ["u", null, true] } },
 		"checkin": { "perm": "operar", "legado": true, "campos": { "ind": ["ind", null, true], "nombre": ["s", 80], "ubic": ["s", 160], "lat": ["n", [-90, 90]], "lng": ["n", [-180, 180]], "grid": ["s", 8], "energia": ["s", 20], "estado": ["e", "est_legado"], "trafico": ["n", [0, 99]], "nota": ["s", 300] } },
-		"contacto": { "perm": "operar", "campos": { "ind": ["ind", null, true], "estado": ["e", "est_legado"], "trafico": ["n", [0, 99]], "nota": ["s", 300] } },
+		"contacto": { "perm": "operar", "campos": { "ind": ["ind", null, true], "estado": ["e", "est_legado"], "trafico": ["n", [0, 99]], "prec": ["e", "prec"], "ubic": ["s", 160], "sale": ["b"], "nota": ["s", 300] } },
 		"sinresp": { "perm": "operar", "campos": { "ind": ["ind", null, true] } },
 		"msgest": { "perm": "operar", "legado": true, "campos": { "m": ["u", null, true], "e": ["e", "msg_est_legado", true], "aq": ["s", 20], "n": ["s", 300] } },
 		"recurso": { "perm": "operar", "legado": true, "campos": { "tipo": ["s", 40, true], "cant": ["n", [1, 100000]], "desc": ["s", 160], "donde": ["s", 160], "resp": ["s", 80], "estado": ["s", 20] } },

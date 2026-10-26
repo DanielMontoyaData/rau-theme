@@ -264,6 +264,55 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.54.0 — Sala de mando: control de red, alarmas, comandos y herramientas de trabajo
+
+El centro de mando deja de ser una colección de formularios.
+
+- **Sala de mando** (nueva vista de entrada):
+  - Franja de estado con grupo fecha-hora, período operacional, red, alarmas, incidentes, tráfico y
+    estaciones.
+  - Paneles de red, mapa, alarmas, cola de tráfico, incidentes, registro en vivo y período.
+  - Pantalla de sala para un proyector.
+- **Línea de comandos** para registrar al ritmo de la radio (`HK4ABC tráfico 2 P`,
+  `HK4ABC urgente …`, `red dirigida 7.060 LSB`, `nota …`). Muestra lo que va a registrar antes de
+  hacerlo.
+- **Control de red**:
+  - Estado de la red (abierta, dirigida, cerrada).
+  - Cola de palabra por urgencia, precedencia y espera.
+  - «Paso», contacto, sin respuesta, salida y fuera de servicio con un toque.
+  - Guiones para leer por radio.
+  - Registro ICS-309.
+- **Alarmas con antigüedad**:
+  - Cubren estaciones en silencio, mensajes sin entregar según precedencia, incidentes críticos sin
+    responsable o sin verificar, solicitudes sin respuesta, acciones vencidas, SITREP atrasado y fin
+    del período.
+  - Tienen sonido, aviso del sistema y «enterado» por dispositivo.
+  - La coordinación ajusta los límites.
+- **Período operacional** con objetivos al estilo SCI-202, y **relevo de turno** generado de la
+  bitácora.
+- **Perfil de enlace** sobre el terreno real (Copernicus GLO-90 vía Open-Meteo): curvatura, zona de
+  Fresnel, pérdida en espacio libre, rumbo y punto crítico.
+- **Lluvia** observada y pronosticada en el incidente (Open-Meteo, con el punto redondeado). Se aclara
+  que no es una alerta oficial.
+- **Tablero de tráfico** por estado y antigüedad.
+- **Paquetes sin internet**:
+  - Texto comprimido con suma de verificación, en partes para radio, mensajería o QR.
+  - Se reciben pegados o escaneados, aun sin tener la operación.
+  - Los registros recibidos quedan marcados «por paquete».
+- **Otros arreglos**:
+  - Sismos en español.
+  - Marca de «Datos REALES» en simulacros.
+  - Tabla de frecuencias compacta.
+  - Cabecera de celular en dos filas.
+  - Con coordenadas, la precisión ya no queda «desconocida».
+  - El mapa de la sala no tapa la barra inferior del celular (lo detectó la prueba 4).
+- **Esquema 3**: tipos `red`, `periodo` y `ajuste`; `contacto` admite precedencia, ubicación y salida.
+  El servidor valida con el mismo esquema: el período y los ajustes son de coordinación.
+- **Pruebas**: núcleo 24 (6 nuevas), API 14 (1 nueva), E2E 21 (6 nuevas, con reloj simulado para las
+  alarmas y respuestas fijas para Open-Meteo).
+
+---
+
 ## 19.53.1 — revisión en vivo de la 19.53.0
 
 - **El mapa tapaba los formularios.** Las capas de Leaflet usan z-index de 400 a 1000 y el modal 50:
