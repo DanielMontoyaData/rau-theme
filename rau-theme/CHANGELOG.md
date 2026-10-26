@@ -264,6 +264,103 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.53.0 — Centro de mando integral: incidentes, trazabilidad, roles, mapa y simulador
+
+La misma ruta `/emergencias/` pasa de ser una libreta compartida a un centro de mando de comunicaciones
+de emergencia. Documentación completa (arquitectura, API, seguridad, despliegue, recuperación y
+limitaciones) en `EMERGENCIAS.md`.
+
+**Problemas de la 19.52.0 que se corrigen**
+- **Almacenamiento**: todo estaba en localStorage, de unos 5 MB y sin estructura. Ahora se usa IndexedDB,
+  con migración automática.
+- **Una sola clave por operación y sin roles**: cualquiera con la clave podía cerrar la operación o
+  borrar el plan. El token salía de la clave y no se podía revocar por dispositivo.
+- **Cualquiera podía crear una operación visible en la lista pública.** Ahora solo se listan las que
+  tienen una organización verificada por el administrador.
+- **El servidor solo limpiaba el texto**: no validaba el tipo de registro ni el permiso. Lo inválido se
+  descartaba sin aviso.
+- **No había incidentes individuales**: la «operación» era el incidente. No había verificación, prioridad
+  de despacho, historial por incidente ni duplicados.
+- **Mensajes**: tenían cuatro estados que no distinguían enviado, recibido por un nodo, entregado ni confirmado.
+- **Estaciones**: «bien / apoyo / urgente» mezclaba la situación con el estado del equipo, y un reporte
+  viejo seguía viéndose como vigente.
+- **Frecuencias**: el símplex de llamada 146.520 aparecía como frecuencia «de emergencia».
+- **Faltaba** el mapa, la auditoría, la conservación de datos, el simulador y las pruebas automáticas.
+
+**Servidor** (`inc/emergencias/`)
+- **Roles**: administrador, coordinador, operador de comunicaciones, responsable de recursos, observador
+  y usuario de simulación.
+  - Con cuenta de WordPress, cada usuario ve solo las operaciones de su organización.
+  - Sin cuenta, se entra con claves dictadas por radio: la de operadores o la de coordinación (distintas,
+    guardadas como hash), o con invitaciones con rol, vencimiento y número de usos.
+- **Sesiones por dispositivo**: con token aleatorio guardado solo como hash, vencen y se revocan una por una.
+- **Esquema único** (`assets/emergencias/esquema.json`): lo valida el servidor por tipo, campo y rol.
+  Lo inválido se rechaza con su motivo.
+- **Auditoría** de todas las acciones sensibles.
+- **Conservación**: 90 días después del cierre, los datos de personas se reducen a iniciales.
+- **Lista pública**: solo muestra operaciones de organizaciones verificadas.
+- **API REST** `rau-em/v1`, documentada; sus respuestas no se guardan en caché.
+- **Directorio de frecuencias** por categoría, con fuente, jurisdicción, condiciones y fecha de
+  verificación. Editarlo exige fuente y queda auditado. La categoría institucional queda vacía a
+  propósito, por falta de fuente oficial.
+- **Herramientas → Centro de mando**: organizaciones, operaciones, conservación, restauración de
+  respaldos y auditoría.
+
+**Aplicación**
+- **Dashboard** con filtros: lugar, incidente, prioridad, estado, organización y periodo.
+  - Cada cifra abre su vista y muestra su hora de actualización y la calidad del dato (confirmado,
+    reportado, vencido).
+  - «Atención ahora» y, en computador, el mapa junto a la actividad reciente.
+- **Incidentes con ciclo completo**:
+  - Verificación por coordinación; prioridad del reporte separada de la prioridad de despacho.
+  - Responsable, decisiones, acciones pendientes, vínculos a mensajes y recursos, e historial.
+  - Duplicados sugeridos por distancia, hora, tipo y texto, que fusiona una persona.
+  - Exportación CAP en estado borrador o ejercicio.
+- **Centro de comunicaciones**:
+  - Modelo de mensaje independiente del medio.
+  - Estados creado → en cola → enviado → recibido por nodo → entregado → confirmado, cada uno con su
+    evidencia.
+  - Intentos y errores registrados, y formatos para leer por radio, radiograma e ICS-213 (adaptación no
+    oficial).
+  - Procedimientos alternativos y estado explícito de cada transporte: solo voz y CW manual están activos.
+- **Estaciones y enlaces**:
+  - Estados disponible (verificada), reportada, no verificada, degradada, fuera de servicio y desconocida.
+  - Una ventana de vigencia configurable; pruebas de enlace, pase de lista y repetidoras con antigüedad.
+- **Plan de comunicaciones** en versiones: borrador → propuesto → aprobado por un responsable.
+  Imprimible y exportable.
+- **Recursos y personal**: solicitud, aprobación, asignación, desplazamiento, despliegue y liberación con
+  resultado. Se muestra la última ubicación conocida, sin seguimiento en tiempo real.
+- **Mapa operativo** (Leaflet 1.9.4 servido desde el tema):
+  - Diez capas; precisión exacta, aproximada o solo de municipio; procedencia y verificación en cada punto.
+  - Búsqueda de coordenadas, locator, elementos propios y lugares (Nominatim, a pedido).
+  - Se crean incidentes o puntos desde el mapa y se exporta GeoJSON.
+  - Sin internet, muestra el contorno de Colombia (Natural Earth) y los mosaicos ya vistos.
+- **Informes**:
+  - SITREP desde los registros, con fecha de corte, fuentes, responsable, limitaciones y pendientes;
+    sin cifras estimadas.
+  - Informe de cierre con lecciones aprendidas.
+  - Calidad de datos: conflictos, duplicados, datos vencidos y vacíos.
+  - Exportación a CSV, GeoJSON y JSON; PDF con la impresión del navegador.
+- **Modo de campo**:
+  - Instalable como aplicación; modo compacto y modo sol.
+  - Cola visible de pendientes y rechazados, reintentos con espera creciente y estado del almacenamiento.
+  - Conflictos detectados (dos cambios simultáneos sobre lo mismo) que se resuelven a mano.
+- **Administración**: sesiones, revocación, invitaciones, cambio de claves, cierre y respaldo.
+- **Simulador**:
+  - Nueve escenarios con inyecciones por tiempos y datos ficticios «SIM…».
+  - Mide tiempos de respuesta; aislado de toda operación real.
+- **Accesibilidad**: enlace para saltar al contenido, foco atrapado en los diálogos, etiquetas, avisos
+  en vivo y atajos (/ n m e Alt+1…9 ?).
+
+**Pruebas** (ver EMERGENCIAS.md)
+- Núcleo: 18 pruebas.
+- API: 13 pruebas.
+- Cuentas, organizaciones, conservación y directorio: 17 comprobaciones.
+- De punta a punta en Chromium: 15 pruebas, con dos operadores, corte de internet, recarga, observador,
+  revocación, mapa y simulador.
+
+---
+
 ## 19.52.0 — Centro de Mando de Emergencias (/emergencias/)
 
 Una aplicación nueva e independiente para operar comunicaciones de emergencia, abierta a

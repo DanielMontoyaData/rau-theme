@@ -1,876 +1,581 @@
-/* Centro de Mando de Emergencias — RAU
+/* Centro de Mando de Emergencias — aplicación (estructura, sincronización, inicio, campo y administración).
  *
- * Todo vive en el teléfono (localStorage) y funciona sin internet. Cada cosa que se registra es un
- * evento con un identificador único que nunca se modifica: el estado (estaciones, mensajes, personas…)
- * se calcula recorriendo los eventos en orden. Así los registros de varios operadores se combinan sin
- * conflictos, y un teléfono que estuvo horas sin señal entrega lo suyo al volver.
+ * Archivos: em-core.js (lógica), em-db.js (IndexedDB), em.js (esto), em-vistas.js (vistas operativas),
+ * em-mapa.js (mapa), em-sim.js (simulador). Todos comparten window.RauEm.
+ *
+ * Reglas de la interfaz:
+ *  - Nada se da por transmitido mientras esté solo en el dispositivo: cada registro muestra si está
+ *    pendiente, guardado en el servidor o rechazado (con el motivo).
+ *  - Los permisos se comprueban en el servidor; aquí solo se ocultan los botones que el rol no puede usar.
+ *  - Lo simulado lleva siempre la franja de SIMULACRO y vive en operaciones aparte.
  */
 (function(){
 'use strict';
-var C = window.RAU_EM || {};
-var $ = function(s, el){ return (el||document).querySelector(s); };
-var $$ = function(s, el){ return Array.prototype.slice.call((el||document).querySelectorAll(s)); };
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-function ind(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9\/]/g,'').slice(0,20); }
+var C = window.RAU_EM || {}, core = window.RauEmCore, DB = window.RauEmDB;
+core.usarEsquema(C.esquema);
+var E = window.RauEm = { C:C, core:core, db:DB, VISTAS:{}, VIVO:{}, op:null, eventos:[], S:core.reducir([]), yo:{ind:'', nombre:''}, cuenta:null, actor:null, ventana:60, filtros:{}, vista:'tablero', params:{} };
 
-/* ── Datos fijos ─────────────────────────────────────────────────────────── */
-var PRECEDENCIAS = {
-	E:{n:'Emergencia', d:'Peligro para la vida. Va antes que todo.', o:0},
-	P:{n:'Prioridad',  d:'Importante y con plazo: oficial, heridos, muertes.', o:1},
-	B:{n:'Bienestar',  d:'Personas en la zona: «estoy bien», búsquedas.', o:2},
-	R:{n:'Rutina',     d:'Lo demás. En emergencia, al final o no se pasa.', o:3}
+/* ── Utilidades de interfaz ──────────────────────────────────────────────── */
+var $ = E.$ = function(s, el){ return (el||document).querySelector(s); };
+var $$ = E.$$ = function(s, el){ return Array.prototype.slice.call((el||document).querySelectorAll(s)); };
+var esc = E.esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+E.el = function(html){ var d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstElementChild; };
+E.dos = function(n){ return (n<10?'0':'')+n; };
+E.horaLocal = function(ts){ var d=new Date(ts); return E.dos(d.getHours())+':'+E.dos(d.getMinutes()); };
+E.hz = function(ts){ return ts ? core.horaZ(ts) : '—'; };
+E.edadMin = function(ts){ return Math.max(0, Math.floor((Date.now()-ts)/60000)); };
+E.haceTxt = function(ts){ if(!ts) return 'nunca'; var m=E.edadMin(ts); return m<1?'ahora':m<60?'hace '+m+' min':m<1440?'hace '+Math.floor(m/60)+' h '+(m%60)+' min':'hace '+Math.floor(m/1440)+' d'; };
+E.pill = function(c, t, titulo){ return '<span class="em-pill '+c+'"'+(titulo?' title="'+esc(titulo)+'"':'')+'>'+esc(t)+'</span>'; };
+E.calidad = function(q){ return E.pill({confirmado:'ok', reportado:'aviso', estimado:'aviso', vencido:'apagado', desconocido:'apagado'}[q]||'apagado', core.et('calidad', q)); };
+E.puede = function(p){ return !!(E.actor && E.actor.permisos && E.actor.permisos.indexOf(p)>=0); };
+E.esSim = function(){ return !!(E.op && E.op.tipo==='simulacro'); };
+E.chips = function(nombre, opciones, valor, clases){
+	return '<div class="em-chips" role="radiogroup">'+Object.keys(opciones).map(function(k){
+		return '<label class="em-chip '+((clases&&clases[k])||'')+'"><input type="radio" name="'+nombre+'" value="'+esc(k)+'"'+(k===valor?' checked':'')+'><span>'+esc(opciones[k])+'</span></label>';
+	}).join('')+'</div>';
 };
-var HX = {'':'Ninguna', HXA:'HXA · llamar por cobrar hasta… km', HXB:'HXB · anular si no se entrega en… h', HXC:'HXC · informar fecha y hora de entrega', HXD:'HXD · informar quién lo recibió y cuándo', HXE:'HXE · pedir respuesta al destinatario', HXF:'HXF · entregar en la fecha…', HXG:'HXG · entregar sin llamada de larga distancia'};
-var ESTADOS_EST = { bien:{n:'Bien', c:'ok'}, apoyo:{n:'Necesita apoyo', c:'aviso'}, urgente:{n:'Urgente', c:'peligro'}, fuera:{n:'Fuera de la red', c:'apagado'} };
-var ENERGIA = { red:'Red eléctrica', bateria:'Batería', generador:'Generador', solar:'Solar', vehiculo:'Vehículo' };
-var ESTADOS_MSG = { pendiente:'Pendiente', recibido:'Recibido', retransmitido:'Retransmitido', entregado:'Entregado', anulado:'Anulado' };
-var ESTADOS_PER = { bien:{n:'Está bien', c:'ok'}, herido:{n:'Herido', c:'aviso'}, albergue:{n:'En albergue', c:'ok'}, sinnoticias:{n:'Sin noticias', c:'peligro'}, buscado:{n:'Lo buscan', c:'aviso'}, encontrado:{n:'Encontrado', c:'ok'} };
-var ESTADOS_REPE = { aire:{n:'En el aire', c:'ok'}, bateria:{n:'Con batería', c:'aviso'}, generador:{n:'Con generador', c:'aviso'}, caida:{n:'Caída', c:'peligro'} };
-var FUNCIONES = ['Mando (estación de control)','Táctico local','Logística','Salud','Bienestar','Enlace nacional HF','Enlace con autoridades','Otro'];
-var RECURSOS = ['Radio VHF/UHF','Radio HF','Batería','Generador','Panel solar','Antena','Vehículo','Persona/operador','Otro'];
-var FON = {A:'Alfa',B:'Bravo',C:'Charlie',D:'Delta',E:'Echo',F:'Foxtrot',G:'Golf',H:'Hotel',I:'India',J:'Juliett',K:'Kilo',L:'Lima',M:'Mike',N:'November',O:'Oscar',P:'Papa',Q:'Quebec',R:'Romeo',S:'Sierra',T:'Tango',U:'Uniform',V:'Victor',W:'Whiskey',X:'X-ray',Y:'Yankee',Z:'Zulu',
-	'0':'Cero','1':'Uno','2':'Dos','3':'Tres','4':'Cuatro','5':'Cinco','6':'Seis','7':'Siete','8':'Ocho','9':'Nueve','/':'barra'};
-var MESES = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-var MESES_LARGOS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-var PREPARACION = [
-	{g:'Mi maletín (72 horas)', dias:90, items:['Radio portátil con batería cargada','Batería de repuesto y cargador de carro','Antena de repuesto o de mayor ganancia','Lista de frecuencias impresa (esta página, «Imprimir»)','Libreta, lápiz y formularios de mensaje','Linterna o frontal con pilas','Agua y comida para 3 días','Botiquín, silbato y medicamentos propios','Documentos en bolsa plástica','Batería externa para el teléfono']},
-	{g:'Mi estación', dias:30, items:['Batería probada con carga real (no solo el voltímetro)','Generador encendido y probado con carga','Transferencia al generador probada (falló en las repetidoras en el sismo de 2026)','Antena de HF para cubrir Colombia (dipolo bajo, NVIS) lista para armar','Memorias del radio: 146.520 y las repetidoras de la zona','Este centro de mando abierto una vez con internet (para que funcione sin él)']},
-	{g:'Coordinación', dias:180, items:['Sé quién es la estación de control de mi zona','Conozco al consejo municipal o departamental de gestión del riesgo','Participé en la última malla o simulacro','Mi familia sabe a dónde ir y cómo reportarse']}
-];
+E.opciones = function(obj, valor, vacio){ return (vacio!==undefined?'<option value="">'+esc(vacio)+'</option>':'')+Object.keys(obj).map(function(k){ return '<option value="'+esc(k)+'"'+(k===valor?' selected':'')+'>'+esc(obj[k])+'</option>'; }).join(''); };
+E.valorDe = function(form, nombre){ var x=form.querySelector('[name="'+nombre+'"]:checked'); return x?x.value:''; };
+E.incidentesOpciones = function(sel){ return '<option value="">— Ninguno —</option>'+Object.keys(E.S.inc).map(function(k){ var x=E.S.inc[k]; return x.fusionadoEn?'':'<option value="'+x.id+'"'+(x.id===sel?' selected':'')+'>'+esc(x.titulo)+' · '+esc(core.et('prio',x.prio))+'</option>'; }).join(''); };
 
-/* ── Estado local ────────────────────────────────────────────────────────── */
-var LS = 'rau_em_v1';
-var db = (function(){ try { return JSON.parse(localStorage.getItem(LS)) || null; } catch(e){ return null; } })() || {};
-db.yo = db.yo || {ind:'', nombre:''};
-db.incs = db.incs || {};       // código → {codigo, nombre, tipo, zona, estado, token, local}
-db.ev = db.ev || {};           // código → [eventos]
-db.cursor = db.cursor || {};   // código → último id del servidor ya recibido
-db.prep = db.prep || {};       // casilla de preparación → fecha de revisión
-db.intervalo = db.intervalo || 30;
-var errorGuardar = false;
-function guardar(){
-	try { localStorage.setItem(LS, JSON.stringify(db)); errorGuardar=false; }
-	catch(e){ if(!errorGuardar){ errorGuardar=true; aviso('El teléfono no tiene espacio para guardar. Exporta un respaldo (Más → Exportar) cuanto antes.', 'peligro'); } }
-}
-function uuid(){
-	if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
-	var s=''; for(var i=0;i<32;i++){ s+=Math.floor(Math.random()*16).toString(16); if(i===7||i===11||i===15||i===19) s+='-'; } return s;
-}
-function inc(){ return db.actual && db.incs[db.actual] ? db.incs[db.actual] : null; }
-function eventos(){ return inc() ? (db.ev[db.actual] = db.ev[db.actual] || []) : []; }
-function registrar(tipo, d){
-	if(!inc()) return null;
-	var e = {u:uuid(), t:tipo, a:db.yo.ind, ts:Date.now(), d:d, s:0};
-	eventos().push(e); guardar(); recalcular(); refrescar(); sincronizarPronto();
-	return e;
-}
-
-/* ── Estado calculado a partir de los eventos ───────────────────────────── */
-var S = {};
-function recalcular(){
-	var lista = eventos().slice().sort(function(a,b){ return a.ts-b.ts || (a.u<b.u?-1:1); });
-	S = {est:{}, msgs:{}, plan:{}, per:{}, rec:{}, repe:{}, dir:{}, notas:[], todo:lista, cerrado:false};
-	lista.forEach(function(e){
-		var d=e.d||{}, x;
-		switch(e.t){
-		case 'checkin':
-			x = S.est[d.ind] = S.est[d.ind] || {ind:d.ind, primero:e.ts, sinresp:0, hist:[]};
-			['nombre','ubic','lat','lng','grid','energia','estado','trafico','nota'].forEach(function(k){ if(d[k]!==undefined && d[k]!=='') x[k]=d[k]; });
-			x.ultimo=e.ts; x.sinresp=0; x.por=e.a; x.hist.push(e); break;
-		case 'contacto':
-			x = S.est[d.ind]; if(!x) break;
-			if(d.estado) x.estado=d.estado; if(d.trafico!==undefined) x.trafico=d.trafico; if(d.nota) x.nota=d.nota;
-			x.ultimo=e.ts; x.sinresp=0; x.hist.push(e); break;
-		case 'sinresp':
-			x = S.est[d.ind]; if(!x) break; x.sinresp++; x.intento=e.ts; x.hist.push(e); break;
-		case 'msg':
-			S.msgs[e.u] = {u:e.u, d:d, a:e.a, ts:e.ts, est:d.estadoInicial||'pendiente', hist:[]}; break;
-		case 'msgest':
-			x = S.msgs[d.m]; if(!x) break; x.est=d.e; x.hist.push({e:d.e, a:e.a, ts:e.ts, a_quien:d.aq, n:d.n}); break;
-		case 'nota': S.notas.push(e); break;
-		case 'plan': S.plan[e.u]={u:e.u, d:d, a:e.a, ts:e.ts}; break;
-		case 'planx': delete S.plan[d.p]; break;
-		case 'persona': S.per[e.u]={u:e.u, d:d, a:e.a, ts:e.ts, est:d.estado, hist:[]}; break;
-		case 'personaact':
-			x = S.per[d.p]; if(!x) break; if(d.estado) x.est=d.estado; if(d.ubic) x.d.ubic=d.ubic; x.hist.push({ts:e.ts, a:e.a, estado:d.estado, n:d.n}); x.act=e.ts; break;
-		case 'recurso': S.rec[e.u]={u:e.u, d:d, a:e.a, ts:e.ts}; break;
-		case 'recursox': delete S.rec[d.p]; break;
-		case 'repe': S.repe[d.r]={r:d.r, e:d.e, n:d.n, ts:e.ts, a:e.a}; break;
-		case 'dir': S.dir[e.u]={u:e.u, d:d, a:e.a, ts:e.ts}; break;
-		case 'dirx': delete S.dir[d.p]; break;
-		case 'inc': if(d.estado==='cerrado') S.cerrado=true; if(d.estado==='abierto') S.cerrado=false; break;
-		}
-	});
-}
-// Minutos desde el último contacto, y si ya se pasó del intervalo de reporte
-function edad(ts){ return Math.max(0, Math.floor((Date.now()-ts)/60000)); }
-function haceTxt(ts){ var m=edad(ts); return m<1?'ahora':m<60?'hace '+m+' min':m<1440?'hace '+Math.floor(m/60)+' h '+(m%60)+' min':'hace '+Math.floor(m/1440)+' d'; }
-function silenciosa(x){ return x.estado!=='fuera' && edad(x.ultimo) >= db.intervalo; }
-
-/* ── Hora y formatos ─────────────────────────────────────────────────────── */
-function dos(n){ return (n<10?'0':'')+n; }
-function horaZ(ts){ var d=new Date(ts); return dos(d.getUTCHours())+dos(d.getUTCMinutes())+'Z'; }
-function fechaZ(ts){ var d=new Date(ts); return d.getUTCDate()+' '+MESES[d.getUTCMonth()]; }
-function horaLocal(ts){ var d=new Date(ts); return dos(d.getHours())+':'+dos(d.getMinutes()); }
-function fonetico(s){ return String(s||'').toUpperCase().split('').map(function(c){ return FON[c]||c; }).join(' '); }
-function palabras(t){ return String(t||'').trim().split(/\s+/).filter(Boolean).length; }
-// Maidenhead de 6 caracteres a partir de latitud y longitud
-function locator(lat, lng){
-	var x=lng+180, y=lat+90, A='ABCDEFGHIJKLMNOPQRSTUVWX';
-	var a=Math.floor(x/20), b=Math.floor(y/10), c=Math.floor((x%20)/2), d=Math.floor(y%10), e=Math.floor((x%2)*12), f=Math.floor((y%1)*24);
-	return A[a]+A[b]+c+d+A[e].toLowerCase()+A[f].toLowerCase();
-}
-function distancia(a1,o1,a2,o2){ var R=6371, r=Math.PI/180, da=(a2-a1)*r, dO=(o2-o1)*r, x=Math.sin(da/2)*Math.sin(da/2)+Math.cos(a1*r)*Math.cos(a2*r)*Math.sin(dO/2)*Math.sin(dO/2); return 2*R*Math.asin(Math.sqrt(x)); }
-
-/* ── Avisos y modales ────────────────────────────────────────────────────── */
-function aviso(t, tipo){
+E.aviso = function(t, tipo){
 	var el=$('#em-toast'); if(!el) return;
-	el.textContent=t; el.className='em-toast is-on '+(tipo||''); clearTimeout(aviso.t);
-	aviso.t=setTimeout(function(){ el.className='em-toast'; }, tipo==='peligro'?9000:3500);
-}
-function modal(titulo, html, alAbrir){
-	var m=$('#em-modal'); $('#em-modal-t').textContent=titulo; $('#em-modal-c').innerHTML=html; m.hidden=false;
-	document.body.classList.add('em-con-modal'); if(alAbrir) alAbrir($('#em-modal-c'));
-	var f=$('input,textarea,select,button', $('#em-modal-c')); if(f && f.tagName!=='BUTTON') f.focus();
-}
-function cerrarModal(){ $('#em-modal').hidden=true; document.body.classList.remove('em-con-modal'); }
-function copiar(t){
-	(navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ aviso('Copiado.'); }, function(){
-		modal('Copia este texto', '<textarea class="em-campo em-copia" rows="12" readonly>'+esc(t)+'</textarea>', function(c){ var x=$('textarea',c); x.select(); });
-	});
-}
-function descargar(nombre, texto, tipo){
-	var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([texto], {type:tipo||'text/plain'})); a.download=nombre;
-	document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
-}
-
-/* ── Sincronización ──────────────────────────────────────────────────────── */
-var sync = {enCurso:false, ultimo:0, error:'', t:null};
-function post(datos){
-	var b=new URLSearchParams(); Object.keys(datos).forEach(function(k){ b.append(k, datos[k]); });
-	return fetch(C.ajax, {method:'POST', body:b, credentials:'same-origin'}).then(function(r){ return r.json(); });
-}
-function pendientes(){ return eventos().filter(function(e){ return !e.s; }); }
-function sincronizarPronto(){ clearTimeout(sync.t); sync.t=setTimeout(sincronizar, 800); }
-function sincronizar(){
-	var i=inc(); if(!i || i.local || !i.token || sync.enCurso) return;
-	if(navigator.onLine===false){ pintarSync(); return; }
-	sync.enCurso=true; pintarSync();
-	var cod=i.codigo, pend=pendientes().slice(0,200);
-	post({action:'rau_em_sync', codigo:cod, token:i.token, desde:db.cursor[cod]||0, eventos:JSON.stringify(pend.map(function(e){ return {u:e.u,t:e.t,a:e.a,ts:e.ts,d:e.d}; }))})
-	.then(function(j){
-		sync.enCurso=false;
-		if(!j.success){
-			sync.error=(j.data && j.data.msg)||'El servidor no aceptó la sincronización.';
-			if(j.data && j.data.auth){ i.token=''; guardar(); aviso(sync.error, 'peligro'); }
-			pintarSync(); return;
-		}
-		var lista=db.ev[cod]=db.ev[cod]||[], porU={};
-		lista.forEach(function(e){ porU[e.u]=e; });
-		j.data.guardados.forEach(function(u){ if(porU[u] && !porU[u].s) porU[u].s=-1; });
-		var hubo=false;
-		j.data.eventos.forEach(function(e){
-			if(porU[e.u]) porU[e.u].s=e.s; else { lista.push(e); porU[e.u]=e; hubo=true; }
-			db.cursor[cod]=Math.max(db.cursor[cod]||0, e.s);
+	el.textContent=t; el.className='em-toast is-on '+(tipo||''); clearTimeout(E.aviso.t);
+	E.aviso.t=setTimeout(function(){ el.className='em-toast'; }, tipo==='peligro'?9000:4000);
+};
+var focoPrevio=null;
+E.modal = function(titulo, html, alAbrir, ancho){
+	var m=$('#em-modal'); if(m.hidden) focoPrevio=document.activeElement;
+	$('#em-modal-t').textContent=titulo; $('#em-modal-c').innerHTML=html; m.hidden=false; $('.em-modal-caja',m).classList.toggle('ancho', !!ancho);
+	document.body.classList.add('em-con-modal');
+	if(alAbrir) alAbrir($('#em-modal-c'));
+	var f=$('input:not([type=hidden]):not([readonly]),textarea,select', $('#em-modal-c')) || $('#em-modal-x'); if(f) f.focus();
+};
+E.cerrarModal = function(){ var m=$('#em-modal'); if(m.hidden) return; m.hidden=true; document.body.classList.remove('em-con-modal'); if(focoPrevio && focoPrevio.focus && document.body.contains(focoPrevio)) try { focoPrevio.focus(); } catch(e){} };
+/* Confirmación para lo destructivo o lo que no se puede deshacer */
+E.confirmar = function(titulo, texto, boton, peligro){
+	return new Promise(function(ok){
+		E.modal(titulo, '<p>'+esc(texto)+'</p><div class="em-acciones"><button type="button" class="em-btn '+(peligro?'peligro':'primario')+'" id="cf-si">'+esc(boton||'Confirmar')+'</button><button type="button" class="em-btn" id="cf-no">Cancelar</button></div>', function(c){
+			$('#cf-si',c).addEventListener('click', function(){ E.cerrarModal(); ok(true); });
+			$('#cf-no',c).addEventListener('click', function(){ E.cerrarModal(); ok(false); });
 		});
-		var inf=j.data.incidente; ['nombre','tipo','zona','estado','creador'].forEach(function(k){ i[k]=inf[k]; });
-		sync.ultimo=Date.now(); sync.error=''; guardar();
-		if(hubo){ recalcular(); refrescar(); }
+	});
+};
+E.copiar = function(t){
+	(navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ E.aviso('Copiado.'); }, function(){
+		E.modal('Copia este texto', '<textarea class="em-campo em-copia" rows="14" readonly>'+esc(t)+'</textarea>', function(c){ $('textarea',c).select(); });
+	});
+};
+E.descargar = function(nombre, texto, tipo){
+	var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([texto], {type:tipo||'text/plain;charset=utf-8'})); a.download=nombre;
+	document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+};
+/* Imprime un texto en una página aparte (para «Guardar como PDF» del navegador) */
+E.imprimir = function(titulo, texto){
+	var w=window.open('', '_blank'); if(!w){ E.aviso('El navegador bloqueó la ventana de impresión.', 'aviso'); return; }
+	w.document.write('<!doctype html><meta charset="utf-8"><title>'+esc(titulo)+'</title><style>body{font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:2cm;white-space:pre-wrap}h1{font:700 16px system-ui}</style><h1>'+esc(titulo)+'</h1>'+esc(texto));
+	w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 300);
+};
+E.nombreArchivo = function(base, ext){ return base+'-'+(E.op?E.op.codigo:'')+'-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'')+'.'+ext; };
+
+/* ── Servidor ────────────────────────────────────────────────────────────── */
+E.rest = function(ruta, opts){
+	opts=opts||{};
+	var h={'Content-Type':'application/json'};
+	if(opts.token) h['X-RAU-EM-Token']=opts.token;
+	else if(E.op && E.op.token && opts.token!==false) h['X-RAU-EM-Token']=E.op.token;
+	if(C.nonce) h['X-WP-Nonce']=C.nonce;
+	return fetch(C.rest+ruta, {method:opts.metodo||'GET', headers:h, credentials:'same-origin', cache:'no-store', body:opts.cuerpo?JSON.stringify(opts.cuerpo):undefined})
+		.then(function(r){ return r.json().catch(function(){ return null; }).then(function(j){ return {estado:r.status, j:j}; }); });
+};
+
+/* ── Registrar: validar, guardar en el dispositivo, encolar para el servidor ── */
+E.registrar = function(tipo, d, opts){
+	opts=opts||{};
+	if(!E.op){ E.aviso('Primero entra a una operación.', 'aviso'); return null; }
+	d=core.limpiar(d);
+	if(d.base===undefined){ var b=core.baseDe(E.S, tipo, d); if(b) d.base=b; }
+	var err=core.validar({t:tipo, d:d}, {permisos:E.actor?E.actor.permisos:[], sim:E.esSim()});
+	if(err){ E.aviso('No se registró: '+err, 'peligro'); return null; }
+	var e={u:core.uuid(), t:tipo, a:E.yo.ind, ts:Date.now(), d:d, s:0};
+	E.eventos.push(e);
+	DB.guardarEventos(E.op.codigo, [e]).catch(function(){ E.aviso('No se pudo guardar en el dispositivo. Exporta un respaldo.', 'peligro'); });
+	E.recalcular(); E.refrescar(); E.sincronizarPronto();
+	return e;
+};
+E.recalcular = function(){ E.S = core.reducir(E.eventos); };
+// En una operación local no hay servidor: nada está «pendiente de enviar»
+E.pendientes = function(){ if(E.op && E.op.local) return []; return E.eventos.filter(function(e){ return e.s===0; }); };
+E.rechazados = function(){ return E.eventos.filter(function(e){ return e.s==='r' && !e.descartado; }); };
+
+/* ── Sincronización con reintentos ───────────────────────────────────────── */
+var sync = E.sync = {enCurso:false, ultimo:0, error:'', reintento:0, espera:5000, t:null, tr:null};
+E.sincronizarPronto = function(){ clearTimeout(sync.t); sync.t=setTimeout(E.sincronizar, 700); };
+E.sincronizar = function(){
+	var op=E.op; if(!op || op.local || sync.enCurso) return Promise.resolve();
+	if(!op.token && !(E.actor && E.actor.cuenta)) return Promise.resolve();
+	if(navigator.onLine===false){ sync.error='Sin internet'; pintarSync(); return Promise.resolve(); }
+	sync.enCurso=true; pintarSync();
+	var cod=op.codigo, porU={}; E.eventos.forEach(function(e){ porU[e.u]=e; });
+	function enviar(){
+		var pend=E.pendientes().slice(0, 50); if(!pend.length) return Promise.resolve();
+		return E.rest('operaciones/'+cod+'/eventos', {metodo:'POST', cuerpo:{eventos:pend.map(function(e){ return {u:e.u, t:e.t, ts:e.ts, d:e.d}; })}}).then(function(r){
+			if(r.estado===401) throw {auth:true, msg:(r.j&&r.j.error)||'Sin acceso'};
+			if(r.estado===403) throw {msg:(r.j&&r.j.error)||'Tu rol no permite registrar'};
+			if(r.estado>=400) throw {msg:(r.j&&r.j.error)||('Error '+r.estado)};
+			var cambiados=[];
+			r.j.resultados.forEach(function(x){ var e=porU[x.u]; if(!e) return; if(x.ok){ e.s=x.s; delete e.err; } else { e.s='r'; e.err=x.error; } cambiados.push(e); });
+			return DB.guardarEventos(cod, cambiados).then(function(){ if(E.pendientes().length && cambiados.length) return enviar(); });
+		});
+	}
+	function traer(){
+		return E.rest('operaciones/'+cod+'/eventos?desde='+(op.cursor||0)).then(function(r){
+			if(r.estado===401) throw {auth:true, msg:(r.j&&r.j.error)||'Sin acceso'};
+			if(r.estado>=400) throw {msg:(r.j&&r.j.error)||('Error '+r.estado)};
+			var nuevos=[];
+			r.j.eventos.forEach(function(x){
+				var e=porU[x.u];
+				if(e){ if(e.s!==x.s || e.a!==x.a){ e.s=x.s; e.a=x.a; e.srv=x.srv; nuevos.push(e); } }
+				else { e={u:x.u, t:x.t, a:x.a, ts:x.ts, d:x.d||{}, s:x.s, srv:x.srv, rol:x.rol}; E.eventos.push(e); porU[e.u]=e; nuevos.push(e); }
+				op.cursor=Math.max(op.cursor||0, x.s);
+			});
+			['nombre','tipo','zona','estado'].forEach(function(k){ if(r.j.operacion[k]!==undefined) op[k]=r.j.operacion[k]; });
+			op.org=r.j.operacion.org; op.actor=E.actor=r.j.actor;
+			return DB.guardarEventos(cod, nuevos).then(function(){ return DB.guardarOp(op); }).then(function(){ if(r.j.mas) return traer(); });
+		});
+	}
+	return enviar().then(traer).then(function(){
+		sync.enCurso=false; sync.ultimo=Date.now(); sync.error=''; sync.reintento=0; sync.espera=5000;
+		E.recalcular(); E.refrescar();
+	}).catch(function(err){
+		sync.enCurso=false;
+		if(err && err.auth){ op.token=''; DB.guardarOp(op); sync.error='Sin acceso: vuelve a entrar'; E.aviso('La sesión ya no es válida (revocada o vencida). Vuelve a entrar con el código y una clave. Tus registros pendientes siguen guardados.', 'peligro'); }
+		else {
+			sync.error=(err && err.msg) || 'Sin conexión con el servidor';
+			// Reintento con espera creciente: 5 s, 10 s, 20 s… hasta 2 min
+			sync.reintento=Date.now()+sync.espera; clearTimeout(sync.tr); sync.tr=setTimeout(E.sincronizar, sync.espera); sync.espera=Math.min(sync.espera*2, 120000);
+		}
 		pintarSync();
-		if(j.data.mas || pendientes().length) setTimeout(sincronizar, 300);
-	}).catch(function(){ sync.enCurso=false; sync.error='Sin conexión con el servidor'; pintarSync(); });
-}
-setInterval(function(){ if(document.visibilityState==='visible') sincronizar(); }, 15000);
-window.addEventListener('online', function(){ pintarSync(); sincronizar(); });
-window.addEventListener('offline', pintarSync);
+	});
+};
+setInterval(function(){ if(document.visibilityState==='visible' && E.op && !E.op.local && !sync.reintento) E.sincronizar(); }, 15000);
+window.addEventListener('online', function(){ sync.espera=5000; sync.reintento=0; pintarSync(); E.sincronizar(); });
+window.addEventListener('offline', function(){ pintarSync(); });
 
-/* ── Alertas (sismos, GDACS) y bandas que oye el receptor HK4RAU ────────── */
-function cargarAlertas(){
-	fetch(C.ajax+'?action=rau_em_alertas', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
-		if(!j.success) return; db.alertas=j.data; db.alertas.recibido=Date.now(); guardar(); refrescar();
-	}).catch(function(){});
+function pintarSync(){
+	var b=$('#em-sync'); if(!b) return; var op=E.op, p=op?E.pendientes().length:0, r=op?E.rechazados().length:0;
+	if(!op){ b.hidden=true; return; } b.hidden=false;
+	var cls, t;
+	if(op.local){ cls='apagado'; t='Solo en este dispositivo'; }
+	else if(!op.token && !(E.actor && E.actor.cuenta)){ cls='peligro'; t='Sin acceso: toca para entrar'+(p?' · '+p+' sin enviar':''); }
+	else if(navigator.onLine===false){ cls='aviso'; t='Sin internet'+(p?' · '+p+' sin enviar':''); }
+	else if(sync.enCurso){ cls='ok'; t='Sincronizando…'+(p?' '+p+' por enviar':''); }
+	else if(sync.error){ cls='aviso'; t=sync.error+(p?' · '+p+' sin enviar':'')+(sync.reintento>Date.now()?' · reintento en '+Math.ceil((sync.reintento-Date.now())/1000)+' s':''); }
+	else { cls=p?'aviso':'ok'; t=p ? p+' sin enviar' : (sync.ultimo ? 'Al día · '+E.horaLocal(sync.ultimo) : 'En línea'); }
+	if(r){ cls='peligro'; t+=' · '+r+' rechazados'; }
+	b.className='em-sync '+cls; b.textContent=t;
+	b.setAttribute('aria-label', 'Estado de sincronización: '+t);
 }
+E.pintarSync = pintarSync;
+setInterval(function(){ if(sync.reintento>Date.now()) pintarSync(); else if(sync.reintento){ sync.reintento=0; } }, 1000);
 
-/* ── Interfaz: estructura ────────────────────────────────────────────────── */
-var VISTAS = [
-	['tablero','Tablero','◉'], ['red','Red','📡'], ['mensajes','Mensajes','✉'], ['bitacora','Bitácora','☰'],
-	['plan','Plan de frecuencias','⌁'], ['personas','Bienestar','♥'], ['recursos','Recursos','⚙'], ['directorio','Directorio','☎'], ['herramientas','Herramientas','✎'], ['mas','Más','…']
-];
-var vista = 'tablero';
+/* ── Estructura de la página ─────────────────────────────────────────────── */
+var GRUPOS = [['Operación',['tablero','mapa','incidentes','comunicaciones','estaciones','plan','recursos']],['Registro e informes',['bitacora','informes','personas','directorio']],['Campo y administración',['campo','herramientas','simulador','admin']]];
+var MOVIL = ['tablero','incidentes','comunicaciones','estaciones','mas'];
+E.registrarVista = function(id, def){ E.VISTAS[id]=def; };
 function armar(){
-	var app=$('#em-app');
-	app.innerHTML =
-		'<header class="em-cab">'
-		+'<a class="em-marca" href="'+esc(C.sitio)+'" title="Volver a hk4rau.com">RAU</a>'
+	$('#em-app').innerHTML =
+		'<a class="em-saltar" href="#em-main">Saltar al contenido</a>'
+		+'<header class="em-cab"><a class="em-marca" href="'+esc(C.sitio)+'" title="Volver a hk4rau.com" aria-label="HK4RAU: volver al sitio">RAU</a>'
 		+'<div class="em-titulo" id="em-titulo"></div>'
-		+'<div class="em-reloj"><strong id="em-utc">--:--Z</strong><span id="em-hora-local">--:-- local</span></div>'
-		+'<button type="button" class="em-sync" id="em-sync" aria-live="polite"></button>'
-		+'</header>'
+		+'<form class="em-buscar-cab" id="em-buscar-f" role="search"><label class="sr-only" for="em-buscar">Buscar en la operación</label><input id="em-buscar" type="search" placeholder="Buscar ( / )" autocomplete="off"></form>'
+		+'<div class="em-reloj" aria-label="Hora"><strong id="em-utc">--:--Z</strong><span id="em-hora-local">--:-- local</span></div>'
+		+'<button type="button" class="em-sync" id="em-sync" aria-live="polite"></button></header>'
 		+'<div class="em-franja" id="em-franja" hidden></div>'
-		+'<div class="em-cuerpo"><nav class="em-nav" id="em-nav" aria-label="Secciones"></nav><main class="em-main" id="em-main"></main></div>'
+		+'<div class="em-cuerpo"><nav class="em-nav" id="em-nav" aria-label="Secciones del centro de mando"></nav><main class="em-main" id="em-main" tabindex="-1"></main></div>'
 		+'<div class="em-toast" id="em-toast" role="status" aria-live="polite"></div>'
 		+'<div class="em-modal" id="em-modal" hidden><div class="em-modal-caja" role="dialog" aria-modal="true" aria-labelledby="em-modal-t"><div class="em-modal-cab"><h2 id="em-modal-t"></h2><button type="button" class="em-x" id="em-modal-x" aria-label="Cerrar">×</button></div><div id="em-modal-c"></div></div></div>';
-	$('#em-modal-x').addEventListener('click', cerrarModal);
-	$('#em-modal').addEventListener('click', function(e){ if(e.target.id==='em-modal') cerrarModal(); });
-	document.addEventListener('keydown', function(e){ if(e.key==='Escape' && !$('#em-modal').hidden) cerrarModal(); });
-	$('#em-sync').addEventListener('click', function(){ if(inc() && !inc().local){ if(!inc().token) pedirClave(inc().codigo); else sincronizar(); } });
-	$('#em-nav').addEventListener('click', function(e){ var b=e.target.closest('[data-v]'); if(b) ir(b.dataset.v); });
-	$('#em-main').addEventListener('click', function(e){ var b=e.target.closest('[data-ir]'); if(b){ e.preventDefault(); ir(b.dataset.ir); } });
+	$('#em-modal-x').addEventListener('click', E.cerrarModal);
+	$('#em-modal').addEventListener('click', function(e){ if(e.target.id==='em-modal') E.cerrarModal(); });
+	$('#em-modal').addEventListener('keydown', function(e){
+		if(e.key==='Escape'){ E.cerrarModal(); return; }
+		if(e.key!=='Tab') return; // el foco no sale del diálogo
+		var f=$$('button,input,select,textarea,a[href]', $('#em-modal')).filter(function(x){ return !x.disabled && x.offsetParent!==null; }); if(!f.length) return;
+		if(e.shiftKey && document.activeElement===f[0]){ e.preventDefault(); f[f.length-1].focus(); } else if(!e.shiftKey && document.activeElement===f[f.length-1]){ e.preventDefault(); f[0].focus(); }
+	});
+	$('#em-sync').addEventListener('click', function(){ if(!E.op || E.op.local) return; if(!E.op.token && !(E.actor&&E.actor.cuenta)) pedirEntrada(E.op.codigo); else { sync.espera=5000; E.sincronizar(); } });
+	$('#em-nav').addEventListener('click', function(e){ var b=e.target.closest('[data-v]'); if(b) E.ir(b.dataset.v); });
+	document.addEventListener('click', function(e){ var b=e.target.closest('[data-ir]'); if(b && !b.closest('#em-nav')){ e.preventDefault(); var p={}; if(b.dataset.id) p.id=b.dataset.id; if(b.dataset.filtro) p.filtro=b.dataset.filtro; E.cerrarModal(); E.ir(b.dataset.ir, p); } });
+	$('#em-buscar-f').addEventListener('submit', function(e){ e.preventDefault(); buscar($('#em-buscar').value); });
+	document.addEventListener('keydown', atajos);
 	setInterval(reloj, 1000); reloj();
 }
-function reloj(){ var n=Date.now(); $('#em-utc').textContent=horaZ(n).replace(/(\d\d)(\d\d)Z/,'$1:$2Z'); $('#em-hora-local').textContent=horaLocal(n)+' local'; }
-function pintarSync(){
-	var b=$('#em-sync'); if(!b) return; var i=inc(), p=i?pendientes().length:0;
-	if(!i){ b.hidden=true; return; } b.hidden=false;
-	var cls, t;
-	if(i.local){ cls='apagado'; t='Solo en este teléfono'; }
-	else if(!i.token){ cls='peligro'; t='Sin acceso: toca para entrar'; }
-	else if(navigator.onLine===false){ cls='aviso'; t='Sin internet'+(p?' · '+p+' por enviar':''); }
-	else if(sync.enCurso){ cls='ok'; t='Sincronizando…'; }
-	else if(sync.error){ cls='aviso'; t=sync.error+(p?' · '+p+' por enviar':''); }
-	else { cls='ok'; t=p ? p+' por enviar' : (sync.ultimo ? 'Al día · '+horaLocal(sync.ultimo) : 'En línea'); }
-	b.className='em-sync '+cls; b.textContent=t;
-}
+function reloj(){ var n=Date.now(); $('#em-utc').textContent=core.horaZ(n).replace(/(\d\d)(\d\d)Z/,'$1:$2Z'); $('#em-hora-local').textContent=E.horaLocal(n)+' local'; }
 function pintarCabecera(){
-	var i=inc(), t=$('#em-titulo'), fr=$('#em-franja');
-	if(!i){ t.innerHTML='<strong>Centro de Mando de Emergencias</strong><span>Radioaficionados de Colombia</span>'; fr.hidden=true; }
+	var op=E.op, t=$('#em-titulo'), fr=$('#em-franja');
+	$('#em-buscar-f').hidden=!op;
+	if(!op){ t.innerHTML='<strong>Centro de Mando de Emergencias</strong><span>HK4RAU · radioaficionados de Colombia</span>'; fr.hidden=true; }
 	else {
-		t.innerHTML='<strong>'+esc(i.nombre)+'</strong><span>'+(i.local?'Sin conexión':'Código <b class="em-mono">'+esc(i.codigo)+'</b>')+(i.zona?' · '+esc(i.zona):'')+'</span>';
-		var sim=i.tipo==='simulacro', cer=S.cerrado||i.estado==='cerrado';
+		t.innerHTML='<strong>'+esc(op.nombre)+'</strong><span>'+(op.local?'Solo en este dispositivo':'Código <b class="em-mono">'+esc(op.codigo)+'</b>')+(op.zona?' · '+esc(op.zona):'')+(E.actor?' · '+esc((C.roles&&C.roles[E.actor.rol])||E.actor.rol):'')+'</span>';
+		var sim=op.tipo==='simulacro', cer=E.S.cerrada||op.estado==='cerrado';
 		fr.hidden=!sim && !cer; fr.className='em-franja'+(sim?' simulacro':'')+(cer?' cerrado':'');
-		fr.innerHTML='<span>'+(sim?'SIMULACRO · EJERCICIO · NO ES UNA EMERGENCIA REAL':'')+(sim&&cer?' · ':'')+(cer?'INCIDENTE CERRADO':'')+'</span>';
+		fr.innerHTML='<span>'+(sim?'SIMULACRO · EJERCICIO · NO ES UNA EMERGENCIA REAL':'')+(sim&&cer?' · ':'')+(cer?'OPERACIÓN CERRADA':'')+'</span>';
 	}
-	var nav=$('#em-nav');
-	nav.innerHTML = i ? VISTAS.map(function(v){ return '<button type="button" data-v="'+v[0]+'" class="em-nav-b'+(vista===v[0]?' is-on':'')+(['tablero','red','mensajes','bitacora','mas'].indexOf(v[0])<0?' em-solo-ancho':'')+'"'+(vista===v[0]?' aria-current="page"':'')+'><span aria-hidden="true">'+v[2]+'</span>'+v[1]+'<i class="em-cuenta" data-cuenta="'+v[0]+'"></i></button>'; }).join('') : '';
-	nav.hidden=!i;
+	var nav=$('#em-nav'); nav.hidden=!op;
+	if(op) nav.innerHTML = GRUPOS.map(function(g){ return '<p class="em-nav-g">'+esc(g[0])+'</p>'+g[1].map(botonNav).join(''); }).join('')+botonNav('mas');
 	pintarCuentas();
 }
+function botonNav(id){
+	var v=E.VISTAS[id]; if(!v) return '';
+	return '<button type="button" data-v="'+id+'" class="em-nav-b'+(E.vista===id?' is-on':'')+(MOVIL.indexOf(id)<0?' em-solo-ancho':'')+(id==='mas'?' em-solo-movil':'')+'"'+(E.vista===id?' aria-current="page"':'')+'><span aria-hidden="true">'+v.icono+'</span>'+esc(v.nombre)+'<i class="em-cuenta" data-cuenta="'+id+'" hidden></i></button>';
+}
 function pintarCuentas(){
-	if(!inc()) return;
-	var at=atencion().length, msg=Object.keys(S.msgs).filter(function(k){ return S.msgs[k].est==='pendiente'||S.msgs[k].est==='recibido'; }).length;
-	$$('[data-cuenta]').forEach(function(el){ var n=el.dataset.cuenta==='tablero'?at:el.dataset.cuenta==='mensajes'?msg:0; el.textContent=n||''; el.hidden=!n; });
+	if(!E.op) return;
+	var I=core.indicadores(E.S, {}, Date.now(), E.ventana), c={tablero:I.vencidos.length+I.conflictos+I.duplicados, incidentes:I.incidentes.porPrio.critica, comunicaciones:I.mensajes.emergencia, campo:E.pendientes().length+E.rechazados().length};
+	$$('[data-cuenta]').forEach(function(el){ var n=c[el.dataset.cuenta]||0; el.textContent=n||''; el.hidden=!n; });
 }
-function ir(v){
-	vista=v; if(inc()) try { sessionStorage.setItem('rau_em_vista', v); } catch(e){}
+E.ir = function(v, params){
+	if(!E.VISTAS[v]) v='tablero';
+	E.vista=v; E.params=params||{};
+	try { sessionStorage.setItem('rau_em_vista', v); } catch(e){}
 	pintarCabecera(); pintarVista(); window.scrollTo(0,0);
-}
-var VISTA_FN = {};
-function pintarVista(){
-	var m=$('#em-main');
-	if(!db.yo.ind){ m.innerHTML=''; m.appendChild(vistaIdentidad()); return; }
-	if(!inc()){ m.innerHTML=''; m.appendChild(vistaInicio()); return; }
-	m.innerHTML=''; m.appendChild((VISTA_FN[vista]||VISTA_FN.tablero)());
-}
-// Solo las partes que cambian con los datos; los formularios abiertos no se tocan
-function refrescar(){
-	pintarCabecera(); pintarSync();
-	$$('[data-vivo]').forEach(function(el){ var f=VIVO[el.dataset.vivo]; if(f) el.innerHTML=f(el); });
-}
-var VIVO = {};
-function el(html){ var d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
-function chips(nombre, opciones, valor){
-	return '<div class="em-chips" role="radiogroup">'+Object.keys(opciones).map(function(k){
-		var o=opciones[k], n=typeof o==='string'?o:o.n, c=typeof o==='string'?'':o.c||'';
-		return '<label class="em-chip '+c+'"><input type="radio" name="'+nombre+'" value="'+esc(k)+'"'+(k===valor?' checked':'')+'><span>'+esc(n)+'</span></label>';
-	}).join('')+'</div>';
-}
-function valorDe(form, nombre){ var x=form.querySelector('[name="'+nombre+'"]:checked'); return x?x.value:''; }
-function pill(c, t){ return '<span class="em-pill '+c+'">'+esc(t)+'</span>'; }
-
-/* ── Primera vez: mi indicativo ──────────────────────────────────────────── */
-function vistaIdentidad(){
-	var v=el('<section class="em-bienvenida"><h1>Centro de Mando de Emergencias</h1>'
-		+'<p>Para radioaficionados de toda Colombia: lleva la red de estaciones, los mensajes formales, el plan de frecuencias y el bienestar de las personas en un incidente. <strong>Funciona sin internet</strong>: lo que registras queda en este teléfono y se comparte con los demás operadores cuando hay señal.</p>'
-		+'<form class="em-tarjeta em-form" id="em-yo"><h2>¿Quién opera este teléfono?</h2>'
-		+'<label>Tu indicativo<input class="em-campo em-mono em-grande" name="ind" required autocomplete="off" autocapitalize="characters" placeholder="HK4ABC" value="'+esc(db.yo.ind)+'"></label>'
-		+'<label>Tu nombre (opcional)<input class="em-campo" name="nombre" autocomplete="name" value="'+esc(db.yo.nombre)+'"></label>'
-		+'<button class="em-btn primario">Continuar</button></form>'
-		+'<p class="em-nota">Ábrelo una vez con internet y quedará guardado para usarlo sin conexión. En el celular, «Agregar a la pantalla de inicio» lo deja como una aplicación.</p></section>');
-	$('#em-yo', v).addEventListener('submit', function(e){ e.preventDefault(); var x=ind(this.ind.value); if(x.length<3){ aviso('Escribe tu indicativo.','aviso'); return; } db.yo={ind:x, nombre:this.nombre.value.trim()}; guardar(); pintarCabecera(); pintarVista(); });
-	return v;
-}
-
-/* ── Inicio: guardia, incidentes, alertas, frecuencias, preparación ─────── */
-function vistaInicio(){
-	var mios=Object.keys(db.incs).map(function(k){ return db.incs[k]; });
-	var v=el('<div class="em-grid-inicio">'
-		+'<section class="em-tarjeta em-hero"><p class="em-sup">Guardia · '+esc(db.yo.ind)+' <button type="button" class="em-link" id="em-cambiar-yo">cambiar</button></p>'
-		+'<h1>¿Hay una emergencia?</h1><p>Actívala aquí y dicta el código y la clave de red por radio: cada operador que se una registra estaciones y mensajes en el mismo tablero.</p>'
-		+'<div class="em-acciones"><button type="button" class="em-btn peligro em-grande" id="em-activar">🚨 Activar incidente</button>'
-		+'<button type="button" class="em-btn" id="em-unirme">Unirme con código y clave</button>'
-		+'<button type="button" class="em-btn" id="em-simulacro">Hacer un simulacro</button>'
-		+'<button type="button" class="em-btn" id="em-local">Trabajar sin conexión</button></div></section>'
-		+'<section class="em-tarjeta"><h2>Incidentes abiertos en Colombia</h2><div data-vivo="abiertos">'+VIVO.abiertos()+'</div></section>'
-		+(mios.length ? '<section class="em-tarjeta"><h2>En este teléfono</h2><div class="em-lista">'+mios.sort(function(a,b){ return (b.visto||0)-(a.visto||0); }).map(function(i){
-			return '<button type="button" class="em-fila em-fila-btn" data-retomar="'+esc(i.codigo)+'"><span><strong>'+esc(i.nombre)+'</strong><small>'+(i.local?'Sin conexión':esc(i.codigo))+' · '+(db.ev[i.codigo]||[]).length+' registros'+(i.tipo==='simulacro'?' · simulacro':'')+'</small></span><span>Abrir →</span></button>'; }).join('')+'</div></section>' : '')
-		+'<section class="em-tarjeta"><h2>Ahora mismo</h2><div data-vivo="alertas">'+VIVO.alertas()+'</div></section>'
-		+'<section class="em-tarjeta"><h2>Frecuencias nacionales</h2>'+tablaFrecuencias()+'</section>'
-		+'<section class="em-tarjeta"><h2>Preparación</h2><p class="em-nota">Lo que falló en el sismo de agosto de 2026 fue la energía: generadores que no arrancaron y transferencias que no cambiaron. Revisa esto antes, no durante.</p><div data-vivo="prep">'+VIVO.prep()+'</div>'
-		+'<p class="em-nota"><a href="'+esc(C.turnos)+'">Turnos de guardia</a> · <a href="'+esc(C.checkin)+'">Check-in de la malla</a></p></section>'
-		+'<section class="em-tarjeta"><h2>Teléfonos</h2>'+telefonos()+'</section>'
-		+'</div>');
-	$('#em-cambiar-yo', v).addEventListener('click', function(){ db.yo.ind=''; pintarVista(); });
-	$('#em-activar', v).addEventListener('click', function(){ formCrear('real'); });
-	$('#em-simulacro', v).addEventListener('click', function(){ formCrear('simulacro'); });
-	$('#em-unirme', v).addEventListener('click', function(){ pedirClave(''); });
-	$('#em-local', v).addEventListener('click', function(){
-		modal('Trabajar sin conexión', '<form class="em-form" id="f-local"><p>Todo queda en este teléfono. Puedes pasar los registros a otro con «Exportar» e «Importar».</p><label>Nombre<input class="em-campo" name="nombre" required placeholder="Ej.: Inundación Dosquebradas"></label><label class="em-check"><input type="checkbox" name="sim"> Es un simulacro</label><button class="em-btn primario">Empezar</button></form>', function(c){
-			$('#f-local',c).addEventListener('submit', function(e){ e.preventDefault(); var cod='LOCAL-'+uuid().slice(0,6).toUpperCase(); db.incs[cod]={codigo:cod, nombre:this.nombre.value.trim(), tipo:this.sim.checked?'simulacro':'real', zona:'', estado:'abierto', local:true, creador:db.yo.ind}; entrar(cod); cerrarModal(); });
-		});
-	});
-	v.addEventListener('click', function(e){
-		var r=e.target.closest('[data-retomar]'); if(r) entrar(r.dataset.retomar);
-		var u=e.target.closest('[data-unir]'); if(u){ if(db.incs[u.dataset.unir] && db.incs[u.dataset.unir].token) entrar(u.dataset.unir); else pedirClave(u.dataset.unir); }
-	});
-	cargarAbiertos();
-	return v;
-}
-var abiertos=null;
-function cargarAbiertos(){
-	fetch(C.ajax+'?action=rau_em_lista', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){ abiertos=j.success?j.data:[]; refrescar(); }).catch(function(){ abiertos='sin'; refrescar(); });
-}
-VIVO.abiertos = function(){
-	if(abiertos===null) return '<p class="em-nota">Consultando…</p>';
-	if(abiertos==='sin') return '<p class="em-nota">Sin conexión: no se puede consultar. Si te dictaron un código y una clave, únete apenas haya señal.</p>';
-	if(!abiertos.length) return '<p class="em-nota">No hay incidentes abiertos en este momento.</p>';
-	return '<div class="em-lista">'+abiertos.map(function(i){ return '<div class="em-fila"><span><strong>'+esc(i.nombre)+'</strong> '+(i.tipo==='simulacro'?pill('aviso','Simulacro'):pill('peligro','Real'))+'<small>'+esc(i.zona||'Sin zona')+' · abrió '+esc(i.creador)+' · actividad '+haceTxt(i.actividad*1000)+'</small></span><button type="button" class="em-btn" data-unir="'+esc(i.codigo)+'">Unirme</button></div>'; }).join('')+'</div>';
+	var m=$('#em-main'); if(m && E.op) try { m.focus({preventScroll:true}); } catch(e){}
 };
-function claveSugerida(){ var p=['CONDOR','CEIBA','GUADUA','PALMA','NEVADO','TOLIMA','CAFETO','ORQUIDEA','COLIBRI','FRAILEJON','YARUMO','SAMAN']; return p[Math.floor(Math.random()*p.length)]+'-'+(10+Math.floor(Math.random()*90)); }
-function formCrear(tipo){
-	var sim=tipo==='simulacro';
-	modal(sim?'Nuevo simulacro':'Activar un incidente', '<form class="em-form" id="f-crear">'
-		+'<label>Nombre<input class="em-campo" name="nombre" required placeholder="'+(sim?'Ej.: Simulacro nacional de octubre':'Ej.: Sismo Eje Cafetero')+'"></label>'
-		+'<label>Zona<input class="em-campo" name="zona" placeholder="Municipio, departamento"></label>'
-		+'<label>Clave de red<input class="em-campo em-mono" name="clave" required minlength="4" value="'+claveSugerida()+'"><small>Fácil de dictar por radio. Quien la tenga podrá registrar en este incidente.</small></label>'
-		+'<button class="em-btn '+(sim?'primario':'peligro')+'">'+(sim?'Crear simulacro':'Activar incidente')+'</button><p class="em-nota" id="f-crear-msg"></p></form>', function(c){
-		$('#f-crear',c).addEventListener('submit', function(e){
-			e.preventDefault(); var f=this, b=$('button',f); b.disabled=true; $('#f-crear-msg').textContent='Creando…';
-			post({action:'rau_em_crear', nombre:f.nombre.value, zona:f.zona.value, tipo:tipo, indicativo:db.yo.ind, clave:f.clave.value}).then(function(j){
-				b.disabled=false;
-				if(!j.success){ $('#f-crear-msg').textContent=j.data||'No se pudo crear.'; return; }
-				var i=j.data.incidente; i.token=j.data.token; db.incs[i.codigo]=i; entrar(i.codigo);
-				registrar('inc', {estado:'abierto', nota:'Incidente activado por '+db.yo.ind});
-				modal('Dicta esto por radio', '<p class="em-dictar">Código <strong class="em-mono">'+esc(i.codigo)+'</strong><br><small>'+fonetico(i.codigo)+'</small></p><p class="em-dictar">Clave <strong class="em-mono">'+esc(f.clave.value)+'</strong></p><p>Cada operador entra a <strong>'+esc(location.host)+'/emergencias</strong>, toca «Unirme con código y clave» y escribe ambos. El código también aparece en la cabecera.</p><button type="button" class="em-btn primario" id="ok-dictar">Entendido</button>', function(c2){ $('#ok-dictar',c2).addEventListener('click', cerrarModal); });
-			}).catch(function(){ b.disabled=false; $('#f-crear-msg').textContent='Sin conexión: no se puede crear en el servidor. Usa «Trabajar sin conexión» y exporta los registros después.'; });
-		});
-	});
+function pintarVista(){
+	var m=$('#em-main'); m.innerHTML='';
+	if(!E.yo.ind){ m.appendChild(vistaIdentidad()); return; }
+	if(!E.op){ m.appendChild(vistaInicio()); return; }
+	var v=E.VISTAS[E.vista]||E.VISTAS.tablero;
+	m.appendChild(v.fn(E.params||{}));
+	if(v.alMontar) v.alMontar(E.params||{});
 }
-function pedirClave(codigo){
-	modal('Unirme a un incidente', '<form class="em-form" id="f-unir"><label>Código<input class="em-campo em-mono em-grande" name="codigo" required value="'+esc(codigo)+'" autocapitalize="characters" autocomplete="off"></label>'
-		+'<label>Clave de red<input class="em-campo em-mono" name="clave" required autocomplete="off"></label><button class="em-btn primario">Entrar</button><p class="em-nota" id="f-unir-msg">La da la estación de control por radio.</p></form>', function(c){
-		$('#f-unir',c).addEventListener('submit', function(e){
-			e.preventDefault(); var f=this; $('#f-unir-msg').textContent='Verificando…';
-			post({action:'rau_em_entrar', codigo:f.codigo.value, clave:f.clave.value}).then(function(j){
-				if(!j.success){ $('#f-unir-msg').textContent=j.data||'No se pudo entrar.'; return; }
-				var i=j.data.incidente, prev=db.incs[i.codigo]||{}; i.token=j.data.token; i.visto=prev.visto; db.incs[i.codigo]=i; cerrarModal(); entrar(i.codigo);
-			}).catch(function(){ $('#f-unir-msg').textContent='Sin conexión. Inténtalo cuando haya señal; mientras tanto puedes «Trabajar sin conexión».'; });
-		});
-	});
-}
-function entrar(cod){
-	db.actual=cod; db.incs[cod].visto=Date.now(); db.ev[cod]=db.ev[cod]||[]; guardar(); recalcular();
-	vista='tablero'; sync.error=''; pintarCabecera(); pintarVista(); pintarSync(); sincronizar();
-}
-function salir(){ db.actual=''; guardar(); vista='tablero'; pintarCabecera(); pintarVista(); pintarSync(); }
+/* Solo cambia lo que depende de los datos; los formularios abiertos no se tocan */
+E.refrescar = function(){
+	pintarCabecera(); pintarSync();
+	$$('[data-vivo]').forEach(function(el){ var f=E.VIVO[el.dataset.vivo]; if(f) el.innerHTML=f(el); });
+	E.alRefrescar.forEach(function(f){ try { f(); } catch(e){} });
+};
+E.alRefrescar=[];
 
-VIVO.prep = function(){
+/* Atajos de teclado: / buscar · n incidente · m mensaje · e estación · Alt+1…9 secciones · ? ayuda */
+function atajos(e){
+	if(!$('#em-modal').hidden || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || e.ctrlKey || e.metaKey) return;
+	if(!E.op) return;
+	var orden=['tablero','mapa','incidentes','comunicaciones','estaciones','plan','recursos','bitacora','informes'];
+	if(e.altKey && /^[1-9]$/.test(e.key)){ e.preventDefault(); E.ir(orden[+e.key-1]); return; }
+	if(e.altKey) return;
+	if(e.key==='/'){ e.preventDefault(); var b=$('#em-buscar'); if(b && b.offsetParent) b.focus(); else buscar(''); }
+	else if(e.key==='n' && E.formIncidente){ e.preventDefault(); E.formIncidente(); }
+	else if(e.key==='m' && E.formMensaje){ e.preventDefault(); E.formMensaje(); }
+	else if(e.key==='e' && E.formEstacion){ e.preventDefault(); E.formEstacion(); }
+	else if(e.key==='?'){ e.preventDefault(); E.modal('Atajos de teclado', '<table class="em-tabla"><tbody><tr><td class="em-mono">/</td><td>Buscar</td></tr><tr><td class="em-mono">n</td><td>Nuevo incidente</td></tr><tr><td class="em-mono">m</td><td>Nuevo mensaje</td></tr><tr><td class="em-mono">e</td><td>Registrar estación</td></tr><tr><td class="em-mono">Alt + 1…9</td><td>Tablero, mapa, incidentes, comunicaciones, estaciones, plan, recursos, bitácora, informes</td></tr><tr><td class="em-mono">Esc</td><td>Cerrar ventana</td></tr></tbody></table>'); }
+}
+
+/* Búsqueda rápida en la operación */
+function buscar(q){
+	q=core.normalizar(q); var S=E.S, r=[];
+	function ve(t){ return !q || core.normalizar(t).indexOf(q)>=0; }
+	Object.keys(S.inc).forEach(function(k){ var x=S.inc[k]; if(ve(x.titulo+' '+x.lugar+' '+x.desc+' '+x.fuente)) r.push(['incidentes', x.id, '⚠ '+x.titulo, core.et('prio',x.prio)+' · '+core.et('verif',x.verif)+' · '+(x.lugar||'')]); });
+	Object.keys(S.est).forEach(function(k){ var x=S.est[k]; if(ve(x.ind+' '+(x.nombre||'')+' '+(x.lugar||'')+' '+(x.org||''))) r.push(['estaciones', x.ind, '📡 '+x.ind, (x.nombre||'')+' '+(x.lugar||'')]); });
+	Object.keys(S.msgs).forEach(function(k){ var x=S.msgs[k]; if(ve(x.d.para+' '+x.d.texto+' '+(x.d.origen||'')+' '+(x.d.num||''))) r.push(['comunicaciones', x.id, '✉ N.º '+(x.d.num||'')+' para '+x.d.para, core.et('msg_est',x.estado)]); });
+	Object.keys(S.rec).forEach(function(k){ var x=S.rec[k]; if(ve(x.desc+' '+x.cod+' '+x.resp+' '+(x.ubic?x.ubic.lugar:''))) r.push(['recursos', x.id, '⚙ '+x.desc, core.et('rec_est',x.estado)]); });
+	Object.keys(S.personas).forEach(function(k){ var x=S.personas[k]; if(q && ve(x.d.nombre+' '+(x.d.ubic||''))) r.push(['personas', x.id, '♥ '+x.d.nombre, core.et('persona_e',x.estado)]); });
+	E.modal('Buscar', '<form id="bq-f" role="search"><label class="sr-only" for="bq">Buscar</label><input class="em-campo" id="bq" type="search" value="'+esc(q)+'" placeholder="Incidente, indicativo, lugar, mensaje…"></form><p class="em-nota" role="status">'+r.length+' resultados</p><div class="em-lista">'+r.slice(0,60).map(function(x){ return '<button type="button" class="em-fila em-fila-btn" data-ir="'+x[0]+'" data-id="'+esc(x[1])+'"><span><strong>'+esc(x[2])+'</strong><small>'+esc(x[3])+'</small></span><span aria-hidden="true">→</span></button>'; }).join('')+'</div>', function(c){
+		$('#bq-f',c).addEventListener('submit', function(ev){ ev.preventDefault(); buscar($('#bq',c).value); });
+	});
+}
+
+/* ── Identidad, operaciones, entrada ─────────────────────────────────────── */
+function vistaIdentidad(){
+	var v=E.el('<section class="em-bienvenida"><h1>Centro de Mando de Emergencias</h1>'
+		+'<p>Coordinación de comunicaciones de emergencia para radioaficionados y organizaciones de respuesta: incidentes, mensajes con trazabilidad, estaciones, recursos, plan de comunicaciones e informes. <strong>Funciona sin internet</strong>: lo que registras queda en este dispositivo y se comparte cuando hay señal.</p>'
+		+'<form class="em-tarjeta em-form" id="em-yo" novalidate><h2>¿Quién opera este dispositivo?</h2>'
+		+'<label>Tu indicativo<input class="em-campo em-mono em-grande" name="ind" required autocomplete="off" autocapitalize="characters" placeholder="HK4ABC" value="'+esc(E.yo.ind)+'" aria-describedby="yo-err"></label><p class="em-error" id="yo-err" role="alert"></p>'
+		+'<label>Tu nombre (opcional)<input class="em-campo" name="nombre" autocomplete="name" value="'+esc(E.yo.nombre)+'"></label>'
+		+'<button class="em-btn primario em-grande">Continuar</button></form>'
+		+'<p class="em-nota">Esta plataforma apoya la coordinación entre operadores. No reemplaza los sistemas oficiales de atención ni la línea 123.</p></section>');
+	$('#em-yo', v).addEventListener('submit', function(e){
+		e.preventDefault(); var x=core.indicativo(this.ind.value);
+		if(x.length<3){ $('#yo-err',v).textContent='Escribe tu indicativo (al menos 3 caracteres).'; this.ind.focus(); return; }
+		E.yo={ind:x, nombre:this.nombre.value.trim()}; DB.kvSet('yo', E.yo); pintarCabecera(); pintarVista();
+	});
+	return v;
+}
+function vistaInicio(){
+	var c=E.cuenta;
+	var v=E.el('<div class="em-grid-inicio">'
+		+'<section class="em-tarjeta em-hero"><p class="em-sup">Guardia · '+esc(E.yo.ind)+' <button type="button" class="em-link" id="in-yo">cambiar</button></p>'
+		+'<h1>Centro de mando</h1><p>Activa una operación y dicta por radio el código y la <strong>clave de operadores</strong>. La clave de coordinación es solo para quien coordina.</p>'
+		+'<div class="em-acciones"><button type="button" class="em-btn peligro em-grande" id="in-activar">Activar operación real</button>'
+		+'<button type="button" class="em-btn em-grande" id="in-unirme">Unirme con código y clave</button>'
+		+'<button type="button" class="em-btn em-grande" id="in-sim">Simulacro y entrenamiento</button>'
+		+'<button type="button" class="em-btn" id="in-local">Trabajar sin conexión</button></div>'
+		+'<p class="em-nota">'+(c?'Cuenta: <b>'+esc(c.login)+'</b> · '+esc((C.roles||{})[c.rol]||c.rol)+(c.org?' · '+esc(c.org.nombre):' · sin organización'):'¿Tienes cuenta de coordinador u operador? <a href="'+esc(C.login)+'">Entra con tu cuenta</a> para ver las operaciones de tu organización.')+'</p></section>'
+		+'<section class="em-tarjeta"><h2>Operaciones abiertas</h2><div data-vivo="abiertas">'+E.VIVO.abiertas()+'</div></section>'
+		+'<section class="em-tarjeta"><h2>En este dispositivo</h2><div data-vivo="mias">'+E.VIVO.mias()+'</div></section>'
+		+'<section class="em-tarjeta"><h2>Ahora mismo</h2><div data-vivo="alertas">'+(E.VIVO.alertas?E.VIVO.alertas():'')+'</div></section>'
+		+'<section class="em-tarjeta"><h2>Frecuencias</h2><div data-vivo="frecuencias">'+(E.VIVO.frecuencias?E.VIVO.frecuencias():'')+'</div></section>'
+		+'<section class="em-tarjeta"><h2>Preparación</h2><p class="em-nota">En el sismo de agosto de 2026 fallaron generadores y transferencias automáticas en repetidoras. Revisa esto antes, no durante.</p><div data-vivo="prep">'+E.VIVO.prep()+'</div><p class="em-nota"><a href="'+esc(C.turnos)+'">Turnos de guardia</a> · <a href="'+esc(C.checkin)+'">Check-in de la malla</a></p></section>'
+		+'<section class="em-tarjeta"><h2>Teléfonos</h2>'+E.telefonos()+'</section></div>');
+	$('#in-yo',v).addEventListener('click', function(){ E.yo.ind=''; pintarVista(); });
+	$('#in-activar',v).addEventListener('click', function(){ formCrear('real'); });
+	$('#in-sim',v).addEventListener('click', function(){ if(E.abrirSimulador) E.abrirSimulador(); else formCrear('simulacro'); });
+	$('#in-unirme',v).addEventListener('click', function(){ pedirEntrada(''); });
+	$('#in-local',v).addEventListener('click', function(){ formLocal(false); });
+	v.addEventListener('click', function(e){
+		var r=e.target.closest('[data-abrir]'); if(r) E.entrar(r.dataset.abrir);
+		var u=e.target.closest('[data-unir]'); if(u) pedirEntrada(u.dataset.unir, u.dataset.cuenta==='1');
+		var b=e.target.closest('[data-olvidar]'); if(b) E.confirmar('Olvidar en este dispositivo', 'Se borran de este dispositivo los registros de «'+b.dataset.nombre+'». Lo que ya está en el servidor no se toca. Lo que esté pendiente de enviar se pierde.', 'Olvidar', true).then(function(si){ if(si) DB.borrarOp(b.dataset.olvidar).then(cargarMias); });
+	});
+	cargarAbiertas(); cargarMias();
+	return v;
+}
+var abiertas=null, mias=[];
+function cargarAbiertas(){
+	E.rest('operaciones', {token:false}).then(function(r){ abiertas=r.estado===200?r.j:[]; E.refrescar(); }).catch(function(){ abiertas='sin'; E.refrescar(); });
+}
+function cargarMias(){ DB.ops().then(function(l){ mias=l.sort(function(a,b){ return (b.visto||0)-(a.visto||0); }); E.refrescar(); }); }
+E.VIVO.abiertas = function(){
+	if(abiertas===null) return '<p class="em-nota">Consultando…</p>';
+	if(abiertas==='sin') return '<p class="em-nota">Sin conexión: no se pueden consultar. Si te dictaron un código y una clave, únete apenas haya señal.</p>';
+	if(!abiertas.length) return '<p class="em-nota">No hay operaciones abiertas públicas. Las de organizaciones sin verificar solo se ven con su código.</p>';
+	return '<div class="em-lista">'+abiertas.map(function(o){ return '<div class="em-fila"><span><strong>'+esc(o.nombre)+'</strong> '+(o.tipo==='simulacro'?E.pill('aviso','Simulacro'):E.pill('peligro','Real'))+(o.estado==='cerrado'?' '+E.pill('apagado','Cerrada'):'')+'<small>'+esc(o.zona||'Sin zona')+(o.org?' · '+esc(o.org.sigla||o.org.nombre):'')+' · actividad '+E.haceTxt(o.actividad*1000)+'</small></span><button type="button" class="em-btn" data-unir="'+esc(o.codigo)+'"'+(o.mia?' data-cuenta="1"':'')+'>'+(o.mia?'Abrir':'Unirme')+'</button></div>'; }).join('')+'</div>';
+};
+E.VIVO.mias = function(){
+	if(!mias.length) return '<p class="em-nota">Ninguna todavía.</p>';
+	return '<div class="em-lista">'+mias.map(function(o){ return '<div class="em-fila"><span><strong>'+esc(o.nombre)+'</strong> '+(o.tipo==='simulacro'?E.pill('aviso','Simulacro'):'')+(o.local?' '+E.pill('apagado','Sin servidor'):'')+'<small>'+(o.local?'Solo en este dispositivo':esc(o.codigo)+(o.token||(o.actor&&o.actor.cuenta)?'':' · hay que volver a entrar'))+(o.visto?' · abierta '+E.haceTxt(o.visto):'')+'</small></span><span class="em-acciones"><button type="button" class="em-btn" data-abrir="'+esc(o.codigo)+'">Abrir</button><button type="button" class="em-x" data-olvidar="'+esc(o.codigo)+'" data-nombre="'+esc(o.nombre)+'" aria-label="Olvidar «'+esc(o.nombre)+'» en este dispositivo">×</button></span></div>'; }).join('')+'</div>';
+};
+function claveSugerida(n){ var p=['CONDOR','CEIBA','GUADUA','PALMA','NEVADO','TOLIMA','CAFETO','ORQUIDEA','COLIBRI','FRAILEJON','YARUMO','SAMAN','QUINDIO','MACANA']; var s=p[Math.floor(Math.random()*p.length)]; for(var i=0;i<(n||1);i++) s+='-'+(10+Math.floor(Math.random()*90)); return s; }
+/* Crea una operación en el servidor. alCrear(op) se llama después de entrar (lo usa el simulador). */
+function formCrear(tipo, prefijo, alCrear){
+	var sim=tipo==='simulacro';
+	E.modal(sim?'Nuevo simulacro':'Activar una operación real', '<form class="em-form" id="f-crear" novalidate>'
+		+(sim?'':'<p class="em-aviso">Úsala solo para una emergencia real. Para practicar, crea un simulacro: queda separado y marcado.</p>')
+		+'<label>Nombre<input class="em-campo" name="nombre" required minlength="3" value="'+esc(prefijo||'')+'" placeholder="'+(sim?'Ej.: Simulacro de sismo, octubre':'Ej.: Lluvias en Risaralda')+'"></label>'
+		+'<label>Zona<input class="em-campo" name="zona" placeholder="Municipios, departamento"></label>'
+		+'<label>Clave de operadores<input class="em-campo em-mono" name="clave" required minlength="6" value="'+claveSugerida(1)+'"><small>Se dicta por radio a los operadores. Mínimo 6 caracteres.</small></label>'
+		+'<label>Clave de coordinación<input class="em-campo em-mono" name="clave_coord" required minlength="8" value="'+claveSugerida(2)+'"><small>Solo para quien coordina: verifica, prioriza, cierra, revoca accesos. Distinta de la anterior; no la dictes en la red abierta.</small></label>'
+		+'<button class="em-btn '+(sim?'primario':'peligro')+' em-grande">'+(sim?'Crear simulacro':'Activar operación')+'</button><p class="em-error" id="f-crear-msg" role="alert"></p></form>', function(c){
+		$('#f-crear',c).addEventListener('submit', function(e){
+			e.preventDefault(); var f=this, b=$('button',f), msg=$('#f-crear-msg',c);
+			if(f.nombre.value.trim().length<3){ msg.textContent='Ponle un nombre de al menos 3 letras.'; f.nombre.focus(); return; }
+			if(f.clave.value.length<6 || f.clave_coord.value.length<8 || f.clave.value===f.clave_coord.value){ msg.textContent='Las claves deben tener al menos 6 y 8 caracteres, y ser distintas.'; return; }
+			b.disabled=true; msg.textContent='Creando…';
+			E.rest('operaciones', {metodo:'POST', token:false, cuerpo:{nombre:f.nombre.value, zona:f.zona.value, tipo:tipo, indicativo:E.yo.ind, clave:f.clave.value, clave_coord:f.clave_coord.value, org_id:(E.cuenta&&E.cuenta.org)?E.cuenta.org.id:0}}).then(function(r){
+				b.disabled=false;
+				if(r.estado!==200){ msg.textContent=(r.j&&r.j.error)||'No se pudo crear.'; return; }
+				var o=r.j.operacion, op={codigo:o.codigo, nombre:o.nombre, tipo:o.tipo, zona:o.zona, estado:o.estado, org:o.org, token:r.j.token, actor:r.j.actor, cursor:0, local:false};
+				var clave=f.clave.value, ccoord=f.clave_coord.value;
+				DB.guardarOp(op).then(function(){ return E.entrar(o.codigo); }).then(function(){
+					if(alCrear){ E.cerrarModal(); alCrear(op); return; }
+					E.modal('Dicta esto por radio', '<p class="em-dictar">Código <strong class="em-mono">'+esc(o.codigo)+'</strong><br><small>'+core.fonetico(o.codigo)+'</small></p><p class="em-dictar">Clave de operadores <strong class="em-mono">'+esc(clave)+'</strong></p><p>Cada operador entra a <strong>'+esc(location.host)+'/emergencias</strong>, toca «Unirme con código y clave» y escribe ambos.</p><p class="em-aviso">Guarda la clave de coordinación: <b class="em-mono">'+esc(ccoord)+'</b>. No se puede recuperar; un coordinador con cuenta o con esta clave puede cambiarla en Administración.</p><button type="button" class="em-btn primario" id="ok-dictar">Entendido</button>', function(c2){ $('#ok-dictar',c2).addEventListener('click', E.cerrarModal); });
+				});
+			}).catch(function(){ b.disabled=false; msg.textContent='Sin conexión: no se puede crear en el servidor. Usa «Trabajar sin conexión» y exporta los registros después.'; });
+		});
+	});
+}
+E.formCrear = formCrear;
+function formLocal(sim, nombre, alCrear){
+	E.modal('Trabajar sin conexión', '<form class="em-form" id="f-local"><p class="em-aviso">Modo de un solo dispositivo: <b>no es un sistema multiusuario</b> ni tiene control de acceso. Los registros se pasan a otro dispositivo exportando un respaldo. Úsalo cuando no hay servidor.</p><label>Nombre<input class="em-campo" name="nombre" required value="'+esc(nombre||'')+'" placeholder="Ej.: Corte total, Dosquebradas"></label><label class="em-check"><input type="checkbox" name="sim"'+(sim?' checked':'')+'> Es un simulacro</label><button class="em-btn primario">Empezar</button></form>', function(c){
+		$('#f-local',c).addEventListener('submit', function(e){
+			e.preventDefault(); if(this.nombre.value.trim().length<3) return;
+			var cod='LOCAL'+core.uuid().replace(/-/g,'').slice(0,6).toUpperCase();
+			var op={codigo:cod, nombre:this.nombre.value.trim(), tipo:this.sim.checked?'simulacro':'real', zona:'', estado:'abierto', local:true, cursor:0, actor:{rol:'local', permisos:['ver','operar','recursos','coordinar'], nombre:E.yo.ind}};
+			DB.guardarOp(op).then(function(){ E.cerrarModal(); return E.entrar(cod); }).then(function(){ if(alCrear) alCrear(op); });
+		});
+	});
+}
+E.formLocal = formLocal;
+function pedirEntrada(codigo, conCuenta){
+	if(conCuenta){
+		E.rest('operaciones/'+codigo, {token:false}).then(function(r){
+			if(r.estado!==200){ E.aviso((r.j&&r.j.error)||'Sin acceso', 'aviso'); return; }
+			var o=r.j.operacion; DB.op(o.codigo).then(function(prev){ prev=prev||{cursor:0}; var op=Object.assign(prev, {codigo:o.codigo, nombre:o.nombre, tipo:o.tipo, zona:o.zona, estado:o.estado, org:o.org, actor:r.j.actor, local:false}); return DB.guardarOp(op); }).then(function(){ E.entrar(o.codigo); });
+		}).catch(function(){ E.aviso('Sin conexión.', 'aviso'); });
+		return;
+	}
+	E.modal('Unirme a una operación', '<form class="em-form" id="f-unir" novalidate><label>Código<input class="em-campo em-mono em-grande" name="codigo" required value="'+esc(codigo)+'" autocapitalize="characters" autocomplete="off"></label>'
+		+'<label>Clave<input class="em-campo em-mono" name="clave" required autocomplete="off"></label><p class="em-nota">La da la estación de control por radio. La clave define tu rol: operador, coordinación o una invitación (observador, recursos).</p><button class="em-btn primario em-grande">Entrar como '+esc(E.yo.ind)+'</button><p class="em-error" id="f-unir-msg" role="alert"></p></form>', function(c){
+		$('#f-unir',c).addEventListener('submit', function(e){
+			e.preventDefault(); var f=this, msg=$('#f-unir-msg',c), cod=f.codigo.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+			if(cod.length<4 || !f.clave.value){ msg.textContent='Escribe el código y la clave.'; return; }
+			msg.textContent='Verificando…';
+			E.rest('operaciones/'+cod+'/sesion', {metodo:'POST', token:false, cuerpo:{clave:f.clave.value, indicativo:E.yo.ind, nombre:E.yo.nombre}}).then(function(r){
+				if(r.estado!==200){ msg.textContent=(r.j&&r.j.error)||'No se pudo entrar.'; return; }
+				var o=r.j.operacion;
+				DB.op(o.codigo).then(function(prev){ prev=prev||{cursor:0}; var op=Object.assign(prev, {codigo:o.codigo, nombre:o.nombre, tipo:o.tipo, zona:o.zona, estado:o.estado, org:o.org, token:r.j.token, actor:r.j.actor, local:false}); return DB.guardarOp(op); })
+					.then(function(){ E.cerrarModal(); return E.entrar(o.codigo); }).then(function(){ E.aviso('Entraste como '+((C.roles||{})[r.j.actor.rol]||r.j.actor.rol)+'.'); });
+			}).catch(function(){ msg.textContent='Sin conexión. Inténtalo cuando haya señal; mientras tanto puedes trabajar sin conexión.'; });
+		});
+	});
+}
+E.pedirEntrada = pedirEntrada;
+E.entrar = function(cod){
+	return Promise.all([DB.op(cod), DB.eventos(cod)]).then(function(r){
+		var op=r[0]; if(!op){ E.aviso('No se encontró esa operación en el dispositivo.', 'aviso'); return; }
+		E.op=op; E.actor=op.actor||null; E.eventos=(r[1]||[]).filter(function(e){ return !e.descartado; }); op.visto=Date.now(); DB.guardarOp(op);
+		try { sessionStorage.setItem('rau_em_op', cod); } catch(e){}
+		sync.error=''; sync.espera=5000; sync.reintento=0; E.recalcular();
+		var v='tablero'; try { v=sessionStorage.getItem('rau_em_vista')||'tablero'; } catch(e){}
+		E.ir(v); pintarSync();
+		E.alEntrar.forEach(function(f){ try { f(); } catch(e){} });
+		if(!op.local) return E.sincronizar();
+	});
+};
+E.alEntrar=[];
+E.salir = function(){ E.op=null; E.actor=null; E.eventos=[]; E.recalcular(); try { sessionStorage.removeItem('rau_em_op'); } catch(e){} E.vista='tablero'; pintarCabecera(); pintarVista(); pintarSync(); cargarMias(); };
+
+/* ── Preparación (en el dispositivo) ─────────────────────────────────────── */
+var PREPARACION = [
+	{g:'Mi maletín (72 horas)', dias:90, items:['Radio portátil con batería cargada','Batería de repuesto y cargador de carro','Antena de repuesto o de más ganancia','Lista de frecuencias impresa','Libreta, lápiz y formularios de mensaje','Linterna con pilas','Agua y comida para 3 días','Botiquín y medicamentos propios','Documentos en bolsa plástica','Batería externa para el teléfono']},
+	{g:'Mi estación', dias:30, items:['Batería probada con carga real','Generador probado con carga','Transferencia al generador probada','Antena de HF para cubrir Colombia (dipolo bajo, NVIS) lista para armar','Memorias del radio programadas (llamada y repetidoras de la zona)','Este centro de mando abierto una vez con internet en este dispositivo']},
+	{g:'Coordinación', dias:180, items:['Sé quién es la estación de control de mi zona','Conozco al consejo de gestión del riesgo de mi municipio','Participé en el último simulacro','Mi familia sabe a dónde ir y cómo reportarse']}
+];
+E.prep={};
+E.VIVO.prep = function(){
 	return PREPARACION.map(function(g, gi){
-		return '<details class="em-prep"><summary>'+esc(g.g)+' <span class="em-prep-n" data-prep-n="'+gi+'"></span></summary><ul>'+g.items.map(function(t, ii){
-			var k=gi+'.'+ii, f=db.prep[k], vencido=f && (Date.now()-f)>g.dias*864e5;
+		return '<details class="em-prep"><summary>'+esc(g.g)+'</summary><ul>'+g.items.map(function(t, ii){
+			var k=gi+'.'+ii, f=E.prep[k], vencido=f && (Date.now()-f)>g.dias*864e5;
 			return '<li><label class="em-check"><input type="checkbox" data-prep="'+k+'"'+(f&&!vencido?' checked':'')+'> <span>'+esc(t)+(f?'<small class="'+(vencido?'em-rojo':'')+'"> · revisado '+new Date(f).toLocaleDateString('es-CO')+(vencido?' (revisar de nuevo)':'')+'</small>':'')+'</span></label></li>';
 		}).join('')+'</ul></details>';
 	}).join('');
 };
-document.addEventListener('change', function(e){
-	var k=e.target.dataset && e.target.dataset.prep; if(!k) return;
-	if(e.target.checked) db.prep[k]=Date.now(); else delete db.prep[k]; guardar();
-});
-function telefonos(){
+document.addEventListener('change', function(e){ var k=e.target.dataset && e.target.dataset.prep; if(!k) return; if(e.target.checked) E.prep[k]=Date.now(); else delete E.prep[k]; DB.kvSet('prep', E.prep); });
+E.telefonos = function(){
 	return '<div class="em-tels"><a href="tel:123"><strong>123</strong>Línea única de emergencias</a><a href="tel:132"><strong>132</strong>Cruz Roja</a><a href="tel:144"><strong>144</strong>Defensa Civil</a><a href="tel:119"><strong>119</strong>Bomberos</a></div>';
-}
-function tablaFrecuencias(){
-	return '<table class="em-tabla"><tbody>'+(C.frec||[]).map(function(f){ return '<tr><td class="em-f">'+esc(f.f)+'</td><td class="em-nw">'+esc(f.b)+' · '+esc(f.m)+'</td><td>'+esc(f.uso)+'</td></tr>'; }).join('')+'</tbody></table>'
-		+'<p class="em-nota">Centros de actividad de la IARU Región 2 que activó la Liga Colombiana de Radioaficionados en el sismo de agosto de 2026 (reportes de la ARRL y la IARU): el tráfico puede estar hasta ±20 kHz alrededor.</p>';
-}
-
-/* Recomendación de banda: dentro de Colombia (hasta ~600 km) se usa onda de cielo casi vertical
-   (NVIS); de día 40 m, de noche 80 m. Lo que oye el receptor de HK4RAU dice qué bandas abren lejos. */
-function recomendacionBanda(){
-	var h=new Date().getUTCHours()-5; if(h<0) h+=24;
-	var dia=h>=7 && h<18, o=db.alertas && db.alertas.oido;
-	var r='<p><strong>Dentro de Colombia:</strong> '+(dia?'40 m (7.060). De día la onda de cielo vuelve cerca.':'80 m (3.985). De noche 40 m salta lejos y deja de oírse a 100–500 km.')+'</p>';
-	if(o && o.bandas){
-		var b=['40m','20m','15m','10m'].map(function(k){ var x=o.bandas[k]; return k.replace('m',' m')+': '+(x&&x.n?'<strong>abierta</strong> ('+x.n+' estaciones, hasta '+Math.round(x.lejos/100)/10+' mil km)':'sin estaciones'); }).join(' · ');
-		r+='<p><strong>Hacia afuera</strong> (lo que oye el receptor HK4RAU en '+esc(o.lugar||'Colombia')+', últimos 30 min): '+b+'.</p>';
-	}
-	return r;
-}
-VIVO.alertas = function(){
-	var a=db.alertas && db.alertas.alertas, h='';
-	if(!db.alertas) return '<p class="em-nota">Cargando alertas… (necesita internet)</p>'+recomendacionBanda();
-	h+=recomendacionBanda();
-	if(a && a.gdacs && a.gdacs.length) h+='<h3>Alertas de desastre (GDACS)</h3><div class="em-lista">'+a.gdacs.slice(0,4).map(function(g){ return '<div class="em-fila"><span>'+pill(g.nivel==='red'?'peligro':g.nivel==='orange'?'aviso':'ok', g.nivel==='red'?'Roja':g.nivel==='orange'?'Naranja':'Verde')+' <strong>'+esc(g.tipo)+'</strong> '+esc(g.nombre)+'<small>desde '+new Date(g.desde*1000).toLocaleDateString('es-CO')+'</small></span>'+(g.url?'<a href="'+esc(g.url)+'" target="_blank" rel="noopener">Ver</a>':'')+'</div>'; }).join('')+'</div>';
-	if(a && a.sismos){
-		var s=a.sismos.slice(0,6);
-		h+='<h3>Sismos de magnitud 3,5 o más, últimos 7 días (USGS)</h3>'+(s.length?'<div class="em-lista">'+s.map(function(x){ return '<div class="em-fila"><span><strong class="em-mag'+(x.m>=6?' em-rojo':x.m>=5?' em-ambar':'')+'">M'+x.m.toFixed(1)+'</strong> '+esc(x.lugar)+'<small>'+haceTxt(x.t*1000)+' · '+x.prof+' km de profundidad</small></span><a href="'+esc(x.url)+'" target="_blank" rel="noopener">Ver</a></div>'; }).join('')+'</div>':'<p class="em-nota">Ninguno en Colombia y alrededores.</p>');
-	}
-	h+='<p class="em-nota">Datos de '+haceTxt(db.alertas.recibido)+(navigator.onLine===false?' · sin internet, se muestra lo último guardado':'')+'. El Servicio Geológico Colombiano no publica sus datos para otras aplicaciones; confirma en sgc.gov.co.</p>';
-	return h;
 };
 
-/* ── Tablero ─────────────────────────────────────────────────────────────── */
-function atencion(){
-	var l=[];
-	Object.keys(S.est).forEach(function(k){ var x=S.est[k];
-		if(x.estado==='urgente') l.push({o:0, c:'peligro', t:x.ind+' reporta URGENCIA'+(x.nota?': '+x.nota:''), ir:'red'});
-		else if(x.estado==='apoyo') l.push({o:2, c:'aviso', t:x.ind+' necesita apoyo'+(x.nota?': '+x.nota:''), ir:'red'});
-		if(silenciosa(x)) l.push({o:3, c:'aviso', t:x.ind+' sin contacto '+haceTxt(x.ultimo)+(x.sinresp?' · '+x.sinresp+' llamadas sin respuesta':''), ir:'red'});
-	});
-	Object.keys(S.msgs).forEach(function(k){ var m=S.msgs[k];
-		if((m.est==='pendiente'||m.est==='recibido') && (m.d.prec==='E'||m.d.prec==='P')) l.push({o:m.d.prec==='E'?1:4, c:m.d.prec==='E'?'peligro':'aviso', t:'Mensaje '+PRECEDENCIAS[m.d.prec].n.toUpperCase()+' n.º '+m.d.num+' de '+m.d.origen+' sin entregar', ir:'mensajes'});
-	});
-	Object.keys(S.repe).forEach(function(k){ if(S.repe[k].e==='caida') l.push({o:5, c:'peligro', t:'Repetidora caída: '+k, ir:'plan'}); });
-	return l.sort(function(a,b){ return a.o-b.o; });
-}
-VIVO.atencion = function(){
-	var l=atencion();
-	return l.length ? '<div class="em-lista">'+l.map(function(x){ return '<button type="button" class="em-fila em-fila-btn em-borde-'+x.c+'" data-ir="'+x.ir+'"><span>'+esc(x.t)+'</span><span>→</span></button>'; }).join('')+'</div>' : '<p class="em-ok-grande">Nada pendiente.</p>';
-};
-VIVO.resumen = function(){
-	var e=Object.keys(S.est).map(function(k){ return S.est[k]; }), act=e.filter(function(x){ return x.estado!=='fuera' && !silenciosa(x); }).length;
-	var msgs=Object.keys(S.msgs).map(function(k){ return S.msgs[k]; }), pend=msgs.filter(function(m){ return m.est==='pendiente'||m.est==='recibido'; });
-	var per=Object.keys(S.per).map(function(k){ return S.per[k]; });
-	var rep=Object.keys(S.repe).map(function(k){ return S.repe[k]; });
-	function caja(n, t, sub, irA, c){ return '<button type="button" class="em-cifra '+(c||'')+'" data-ir="'+irA+'"><strong>'+n+'</strong><span>'+t+'</span><small>'+sub+'</small></button>'; }
-	return caja(act+'/'+e.length, 'Estaciones activas', e.filter(silenciosa).length+' sin contacto', 'red', e.some(function(x){ return x.estado==='urgente'; })?'peligro':'')
-		+caja(pend.length, 'Mensajes por entregar', ['E','P','B','R'].map(function(p){ var n=pend.filter(function(m){ return m.d.prec===p; }).length; return n?n+' '+PRECEDENCIAS[p].n.toLowerCase():''; }).filter(Boolean).join(' · ')||'ninguno', 'mensajes', pend.some(function(m){ return m.d.prec==='E'; })?'peligro':'')
-		+caja(per.length, 'Personas registradas', per.filter(function(p){ return p.est==='sinnoticias'||p.est==='buscado'; }).length+' sin noticias o buscadas', 'personas')
-		+caja(rep.filter(function(r){ return r.e!=='caida'; }).length+'/'+rep.length, 'Repetidoras en el aire', (rep.length?rep.filter(function(r){ return r.e==='caida'; }).length+' caídas':'sin reportes todavía'), 'plan', rep.some(function(r){ return r.e==='caida'; })?'aviso':'');
-};
-function describir(e){
-	var d=e.d||{};
-	switch(e.t){
-	case 'checkin': return 'Registró a <b>'+esc(d.ind)+'</b>'+(d.ubic?' en '+esc(d.ubic):'')+(d.estado?' · '+esc((ESTADOS_EST[d.estado]||{}).n||d.estado):'')+(d.energia?' · '+esc(ENERGIA[d.energia]||d.energia):'')+(d.trafico?' · '+d.trafico+' mensajes':'')+(d.nota?' — '+esc(d.nota):'');
-	case 'contacto': return 'Contacto con <b>'+esc(d.ind)+'</b>'+(d.estado?' · '+esc((ESTADOS_EST[d.estado]||{}).n||''):'')+(d.nota?' — '+esc(d.nota):'');
-	case 'sinresp': return '<b>'+esc(d.ind)+'</b> no respondió';
-	case 'msg': return 'Mensaje '+esc((PRECEDENCIAS[d.prec]||{}).n||'')+' n.º '+esc(d.num)+' de <b>'+esc(d.origen)+'</b> para '+esc(d.para)+(d.estadoInicial==='recibido'?' (recibido)':'');
-	case 'msgest': var m=S.msgs[d.m]; return 'Mensaje n.º '+esc(m?m.d.num:'?')+' de '+esc(m?m.d.origen:'?')+': '+esc(ESTADOS_MSG[d.e]||d.e)+(d.aq?' a '+esc(d.aq):'')+(d.n?' — '+esc(d.n):'');
-	case 'nota': return '<span class="em-tipo-nota">'+esc(d.tipo||'Nota')+'</span> '+esc(d.texto);
-	case 'plan': return 'Plan: '+esc(d.funcion)+' en '+esc(d.f)+' '+esc(d.modo||'');
-	case 'planx': return 'Plan: se quitó una asignación';
-	case 'persona': return 'Bienestar: <b>'+esc(d.nombre)+'</b> · '+esc((ESTADOS_PER[d.estado]||{}).n||'')+(d.ubic?' · '+esc(d.ubic):'');
-	case 'personaact': var p=S.per[d.p]; return 'Bienestar: '+esc(p?p.d.nombre:'?')+' → '+esc((ESTADOS_PER[d.estado]||{}).n||'')+(d.n?' — '+esc(d.n):'');
-	case 'recurso': return 'Recurso: '+esc(d.cant||1)+' × '+esc(d.tipo)+' '+esc(d.desc||'')+(d.donde?' en '+esc(d.donde):'');
-	case 'recursox': return 'Recurso retirado';
-	case 'repe': return 'Repetidora '+esc(d.r)+': '+esc((ESTADOS_REPE[d.e]||{}).n||d.e)+(d.n?' — '+esc(d.n):'');
-	case 'dir': return 'Directorio: '+esc(d.nombre)+' ('+esc(d.funcion||'')+')';
-	case 'dirx': return 'Directorio: se quitó un contacto';
-	case 'inc': return d.estado==='cerrado'?'<b>Incidente cerrado</b>'+(d.nota?' — '+esc(d.nota):''):esc(d.nota||'Incidente abierto');
-	}
-	return esc(e.t);
-}
-function filaBitacora(e){ return '<li><time>'+horaZ(e.ts)+'</time><span class="em-autor">'+esc(e.a)+'</span><span>'+describir(e)+'</span>'+(e.s?'':'<i class="em-pend" title="Todavía no se envió al servidor">●</i>')+'</li>'; }
-VIVO.ultimos = function(){ var l=S.todo.slice(-8).reverse(); return l.length?'<ol class="em-bit">'+l.map(filaBitacora).join('')+'</ol>':'<p class="em-nota">Todavía no hay registros.</p>'; };
-VISTA_FN.tablero = function(){
-	var v=el('<div class="em-tablero">'
-		+'<section class="em-resumen" data-vivo="resumen">'+VIVO.resumen()+'</section>'
-		+'<section class="em-tarjeta em-atencion"><h2>Atención ahora</h2><div data-vivo="atencion">'+VIVO.atencion()+'</div></section>'
-		+'<section class="em-tarjeta"><h2>Acciones rápidas</h2><div class="em-acciones">'
-		+'<button type="button" class="em-btn primario em-grande" data-accion="checkin">+ Registrar estación</button>'
-		+'<button type="button" class="em-btn em-grande" data-accion="lista">Pasar lista</button>'
-		+'<button type="button" class="em-btn em-grande" data-accion="msg">+ Mensaje</button>'
-		+'<button type="button" class="em-btn em-grande" data-accion="nota">+ Nota en la bitácora</button></div></section>'
-		+'<section class="em-tarjeta"><h2>Últimos registros</h2><div data-vivo="ultimos">'+VIVO.ultimos()+'</div><button type="button" class="em-link" data-ir="bitacora">Ver toda la bitácora →</button></section>'
-		+'<section class="em-tarjeta"><h2>Bandas y alertas</h2><div data-vivo="alertas">'+VIVO.alertas()+'</div></section>'
-		+'</div>');
-	v.addEventListener('click', function(e){ var b=e.target.closest('[data-accion]'); if(!b) return;
-		({checkin:function(){ formEstacion(); }, lista:function(){ ir('red'); setTimeout(pasarLista, 50); }, msg:function(){ formMensaje(); }, nota:function(){ formNota(); }})[b.dataset.accion](); });
-	return v;
-};
-
-/* ── Red: estaciones, pase de lista ──────────────────────────────────────── */
-function formEstacion(pre){
-	var x=pre||{};
-	modal(pre?'Actualizar '+pre.ind:'Registrar estación', '<form class="em-form" id="f-est">'
-		+'<label>Indicativo<input class="em-campo em-mono em-grande" name="ind" required autocomplete="off" autocapitalize="characters" value="'+esc(x.ind||'')+'"'+(pre?' readonly':'')+'></label>'
-		+'<div class="em-dos"><label>Nombre o función<input class="em-campo" name="nombre" value="'+esc(x.nombre||'')+'" placeholder="Ej.: Bomberos Dosquebradas"></label>'
-		+'<label>Ubicación<span class="em-con-boton"><input class="em-campo" name="ubic" value="'+esc(x.ubic||'')+'" placeholder="Municipio, sitio"><button type="button" class="em-btn" id="f-est-gps" title="Usar el GPS de este teléfono (solo si la estación eres tú)">📍</button></span></label></div>'
-		+'<input type="hidden" name="lat" value="'+esc(x.lat||'')+'"><input type="hidden" name="lng" value="'+esc(x.lng||'')+'"><input type="hidden" name="grid" value="'+esc(x.grid||'')+'">'
-		+'<fieldset><legend>Estado</legend>'+chips('estado', ESTADOS_EST, x.estado||'bien')+'</fieldset>'
-		+'<fieldset><legend>Energía</legend>'+chips('energia', ENERGIA, x.energia||'')+'</fieldset>'
-		+'<div class="em-dos"><label>Mensajes que tiene para pasar<input class="em-campo" type="number" min="0" max="99" name="trafico" value="'+esc(x.trafico||0)+'"></label>'
-		+'<label>Nota<input class="em-campo" name="nota" value="" placeholder="Ej.: sin agua, vía cerrada"></label></div>'
-		+'<button class="em-btn primario em-grande">'+(pre?'Guardar':'Registrar')+'</button></form>', function(c){
-		var f=$('#f-est',c);
-		f.ind.addEventListener('input', function(){ var y=ind(this.value); if(y!==this.value) this.value=y; });
-		$('#f-est-gps',c).addEventListener('click', function(){
-			if(!navigator.geolocation){ aviso('Este teléfono no tiene GPS disponible.','aviso'); return; }
-			aviso('Buscando posición…');
-			navigator.geolocation.getCurrentPosition(function(p){ var la=p.coords.latitude, lo=p.coords.longitude; f.lat.value=la.toFixed(4); f.lng.value=lo.toFixed(4); f.grid.value=locator(la,lo); if(!f.ubic.value) f.ubic.value=f.grid.value; aviso('Posición: '+f.grid.value); }, function(){ aviso('No se pudo leer el GPS.','aviso'); }, {enableHighAccuracy:true, timeout:15000});
-		});
-		f.addEventListener('submit', function(e){
-			e.preventDefault(); var i=ind(f.ind.value); if(i.length<3){ aviso('Falta el indicativo.','aviso'); return; }
-			var d={ind:i, nombre:f.nombre.value.trim(), ubic:f.ubic.value.trim(), estado:valorDe(f,'estado'), energia:valorDe(f,'energia'), trafico:+f.trafico.value||0, nota:f.nota.value.trim()};
-			if(f.lat.value){ d.lat=+f.lat.value; d.lng=+f.lng.value; d.grid=f.grid.value; }
-			registrar('checkin', d); cerrarModal(); aviso(i+' registrada.', d.estado==='urgente'?'peligro':'');
-		});
-	});
-}
-var filtroRed='todas';
-VIVO.estaciones = function(){
-	var l=Object.keys(S.est).map(function(k){ return S.est[k]; });
-	var orden={urgente:0, apoyo:1, bien:2, fuera:4};
-	l.sort(function(a,b){ return (orden[a.estado]||2)-(orden[b.estado]||2) || (silenciosa(b)-silenciosa(a)) || a.ultimo-b.ultimo; });
-	if(filtroRed==='atencion') l=l.filter(function(x){ return x.estado==='urgente'||x.estado==='apoyo'||silenciosa(x); });
-	if(!l.length) return '<p class="em-nota">'+(filtroRed==='atencion'?'Ninguna estación necesita atención.':'Todavía no hay estaciones. Registra la primera con «+ Registrar estación».')+'</p>';
-	return '<div class="em-estaciones">'+l.map(function(x){
-		var es=ESTADOS_EST[x.estado]||ESTADOS_EST.bien, m=edad(x.ultimo), sil=silenciosa(x);
-		return '<article class="em-est em-borde-'+es.c+(lista.actual===x.ind?' is-lista':'')+'" data-est="'+esc(x.ind)+'">'
-			+'<div class="em-est-cab"><strong class="em-mono em-ind">'+esc(x.ind)+'</strong>'+pill(es.c, es.n)+(x.energia?pill('apagado', ENERGIA[x.energia]||x.energia):'')+(x.trafico?pill('aviso', x.trafico+' msj'):'')+'</div>'
-			+'<p>'+esc(x.nombre||'')+(x.nombre&&x.ubic?' · ':'')+esc(x.ubic||'')+(x.grid&&x.grid!==x.ubic?' <span class="em-mono">'+esc(x.grid)+'</span>':'')+'</p>'
-			+(x.nota?'<p class="em-nota-est">'+esc(x.nota)+'</p>':'')
-			+'<p class="em-edad '+(sil?'em-rojo':m>=db.intervalo/2?'em-ambar':'em-verde')+'">Último contacto '+haceTxt(x.ultimo)+' ('+horaZ(x.ultimo)+')'+(x.sinresp?' · '+x.sinresp+' sin respuesta':'')+'</p>'
-			+'<div class="em-est-acc"><button type="button" class="em-btn ok" data-est-acc="si">✓ Respondió</button><button type="button" class="em-btn" data-est-acc="no">✗ Sin respuesta</button><button type="button" class="em-btn" data-est-acc="editar">Editar</button><button type="button" class="em-btn" data-est-acc="msg">Mensaje</button></div>'
-			+'</article>';
-	}).join('')+'</div>';
-};
-var lista={cola:[], actual:''};
-function pasarLista(){
-	lista.cola=Object.keys(S.est).filter(function(k){ return S.est[k].estado!=='fuera'; }).sort(function(a,b){ return S.est[a].ultimo-S.est[b].ultimo; });
-	if(!lista.cola.length){ aviso('No hay estaciones para llamar.','aviso'); return; }
-	siguienteLista();
-}
-function siguienteLista(){
-	lista.actual=lista.cola.shift()||'';
-	if(!lista.actual){ aviso('Lista terminada.'); refrescar(); return; }
-	var x=S.est[lista.actual];
-	modal('Pase de lista · faltan '+lista.cola.length, '<p class="em-dictar"><strong class="em-mono">'+esc(x.ind)+'</strong><br><small>'+fonetico(x.ind)+'</small></p><p class="em-nota">Último contacto '+haceTxt(x.ultimo)+(x.ubic?' · '+esc(x.ubic):'')+'</p>'
-		+'<form class="em-form" id="f-lista"><fieldset><legend>Estado</legend>'+chips('estado', ESTADOS_EST, x.estado||'bien')+'</fieldset><label>Mensajes para pasar<input class="em-campo" type="number" min="0" name="trafico" value="'+(x.trafico||0)+'"></label><label>Nota<input class="em-campo" name="nota"></label>'
-		+'<div class="em-acciones"><button class="em-btn ok em-grande">✓ Respondió</button><button type="button" class="em-btn em-grande" id="f-lista-no">✗ Sin respuesta</button><button type="button" class="em-btn" id="f-lista-fin">Terminar</button></div></form>', function(c){
-		var f=$('#f-lista',c);
-		f.addEventListener('submit', function(e){ e.preventDefault(); registrar('contacto', {ind:x.ind, estado:valorDe(f,'estado'), trafico:+f.trafico.value||0, nota:f.nota.value.trim()}); siguienteLista(); });
-		$('#f-lista-no',c).addEventListener('click', function(){ registrar('sinresp', {ind:x.ind}); siguienteLista(); });
-		$('#f-lista-fin',c).addEventListener('click', function(){ lista.cola=[]; lista.actual=''; cerrarModal(); refrescar(); });
-	});
-}
-VISTA_FN.red = function(){
-	var v=el('<div><div class="em-barra"><h1>Red de estaciones</h1><div class="em-acciones"><button type="button" class="em-btn primario" id="r-nueva">+ Registrar estación</button><button type="button" class="em-btn" id="r-lista">Pasar lista</button></div></div>'
-		+'<div class="em-barra em-filtros"><div class="em-seg"><button type="button" data-f="todas" class="'+(filtroRed==='todas'?'is-on':'')+'">Todas</button><button type="button" data-f="atencion" class="'+(filtroRed==='atencion'?'is-on':'')+'">Necesitan atención</button></div>'
-		+'<label class="em-inline">Reporte esperado cada <select class="em-campo" id="r-int">'+[10,15,30,60,120].map(function(n){ return '<option value="'+n+'"'+(db.intervalo===n?' selected':'')+'>'+n+' min</option>'; }).join('')+'</select></label></div>'
-		+'<div data-vivo="estaciones">'+VIVO.estaciones()+'</div></div>');
-	$('#r-nueva',v).addEventListener('click', function(){ formEstacion(); });
-	$('#r-lista',v).addEventListener('click', pasarLista);
-	$('#r-int',v).addEventListener('change', function(){ db.intervalo=+this.value; guardar(); refrescar(); });
-	$$('.em-seg button',v).forEach(function(b){ b.addEventListener('click', function(){ filtroRed=b.dataset.f; $$('.em-seg button',v).forEach(function(x){ x.classList.toggle('is-on', x===b); }); refrescar(); }); });
-	v.addEventListener('click', function(e){
-		var b=e.target.closest('[data-est-acc]'); if(!b) return; var k=b.closest('[data-est]').dataset.est, x=S.est[k];
-		if(b.dataset.estAcc==='si') { registrar('contacto', {ind:k}); aviso(k+': contacto registrado.'); }
-		if(b.dataset.estAcc==='no') { registrar('sinresp', {ind:k}); }
-		if(b.dataset.estAcc==='editar') formEstacion(x);
-		if(b.dataset.estAcc==='msg') formMensaje({origen:k});
-	});
-	return v;
-};
-
-/* ── Mensajes formales: radiograma y SCI-213 ─────────────────────────────── */
-function siguienteNumero(){ var n=0; Object.keys(S.msgs).forEach(function(k){ var m=S.msgs[k]; if(m.a===db.yo.ind && m.d.origen===db.yo.ind) n=Math.max(n, +m.d.num||0); }); return n+1; }
-function formMensaje(pre){
-	pre=pre||{};
-	var sim=inc().tipo==='simulacro', ahora=Date.now(), origen=pre.origen||db.yo.ind;
-	modal('Nuevo mensaje', '<form class="em-form" id="f-msg">'
-		+'<div class="em-seg em-seg-ancho" id="f-msg-fmt"><button type="button" data-fmt="rg" class="is-on">Radiograma</button><button type="button" data-fmt="sci">SCI-213 (a organismos)</button></div>'
-		+'<fieldset><legend>Precedencia</legend>'+chips('prec', {E:{n:'Emergencia',c:'peligro'},P:{n:'Prioridad',c:'aviso'},B:{n:'Bienestar',c:'ok'},R:{n:'Rutina',c:''}}, pre.prec||'P')+'<small id="f-msg-prec"></small></fieldset>'
-		+'<label class="em-check"><input type="checkbox" name="prueba"'+(sim?' checked':'')+'> Mensaje de prueba (simulacro): se transmite como «PRUEBA»</label>'
-		+'<div class="em-tres"><label>Estación de origen<input class="em-campo em-mono" name="origen" value="'+esc(origen)+'" autocapitalize="characters"></label>'
-		+'<label>Número<input class="em-campo em-mono" name="num" inputmode="numeric" value="'+(origen===db.yo.ind?siguienteNumero():'')+'"></label>'
-		+'<label>Lugar de origen<input class="em-campo" name="lugar" value="'+esc(pre.lugar||'')+'" placeholder="Municipio"></label></div>'
-		+'<div class="em-solo-rg"><label>Instrucción de manejo<select class="em-campo" name="hx">'+Object.keys(HX).map(function(k){ return '<option value="'+k+'">'+esc(HX[k])+'</option>'; }).join('')+'</select></label></div>'
-		+'<div class="em-dos"><label><span class="em-solo-rg">Para (nombre y dirección)</span><span class="em-solo-sci">Para (nombre y cargo)</span><input class="em-campo" name="para" required></label>'
-		+'<label class="em-solo-rg">Teléfono del destinatario<input class="em-campo" name="tel" inputmode="tel"></label><label class="em-solo-sci">De (nombre y cargo)<input class="em-campo" name="de"></label></div>'
-		+'<label class="em-solo-sci">Asunto<input class="em-campo" name="asunto"></label>'
-		+'<label>Texto <small id="f-msg-ck">0 palabras</small><textarea class="em-campo em-mono" name="texto" rows="5" required placeholder="Corto y sin signos: PUNTO en vez de «.» · Máximo 25 palabras en un radiograma"></textarea></label>'
-		+'<label>Firma<input class="em-campo" name="firma" placeholder="Nombre y cargo de quien lo envía"></label>'
-		+'<label class="em-check"><input type="checkbox" name="recibido"'+(origen!==db.yo.ind?' checked':'')+'> Lo recibí de otra estación (no lo originé yo)</label>'
-		+'<button class="em-btn primario em-grande">Guardar mensaje</button></form>', function(c){
-		var f=$('#f-msg',c), fmt='rg';
-		function verFmt(){ $$('.em-solo-rg',c).forEach(function(x){ x.hidden=fmt!=='rg'; }); $$('.em-solo-sci',c).forEach(function(x){ x.hidden=fmt!=='sci'; }); }
-		$$('#f-msg-fmt button',c).forEach(function(b){ b.addEventListener('click', function(){ fmt=b.dataset.fmt; $$('#f-msg-fmt button',c).forEach(function(x){ x.classList.toggle('is-on', x===b); }); verFmt(); }); });
-		function verPrec(){ var p=PRECEDENCIAS[valorDe(f,'prec')]; $('#f-msg-prec',c).textContent=p?p.d:''; }
-		f.addEventListener('change', verPrec); verPrec(); verFmt();
-		f.texto.addEventListener('input', function(){ var n=palabras(this.value); $('#f-msg-ck',c).textContent=n+' palabras (cuenta o «check»)'+(fmt==='rg'&&n>25?' · largo para un radiograma':''); });
-		f.origen.addEventListener('input', function(){ var y=ind(this.value); if(y!==this.value) this.value=y; f.recibido.checked = y!==db.yo.ind; if(y===db.yo.ind && !f.num.value) f.num.value=siguienteNumero(); });
-		f.addEventListener('submit', function(e){
-			e.preventDefault();
-			var d={fmt:fmt, prec:valorDe(f,'prec'), prueba:f.prueba.checked, origen:ind(f.origen.value)||db.yo.ind, num:f.num.value.trim()||String(siguienteNumero()), lugar:f.lugar.value.trim(),
-				hx:fmt==='rg'?f.hx.value:'', para:f.para.value.trim(), tel:fmt==='rg'?f.tel.value.trim():'', de:fmt==='sci'?f.de.value.trim():'', asunto:fmt==='sci'?f.asunto.value.trim():'',
-				texto:f.texto.value.trim(), firma:f.firma.value.trim(), ck:palabras(f.texto.value), hora:horaZ(ahora), fecha:fechaZ(ahora), estadoInicial:f.recibido.checked?'recibido':'pendiente'};
-			var e2=registrar('msg', d); cerrarModal(); aviso('Mensaje n.º '+d.num+' guardado.'); if(e2) leerMensaje(e2.u);
-		});
-	});
-}
-function textoMensaje(m, hablado){
-	var d=m.d, p=PRECEDENCIAS[d.prec]||{n:''}, pr=(d.prueba?'PRUEBA ':'')+p.n.toUpperCase();
-	if(d.fmt==='sci'){
-		return 'FORMULARIO SCI-213 · MENSAJE GENERAL'+(d.prueba?' · PRUEBA':'')+'\nIncidente: '+inc().nombre+'\nPrecedencia: '+pr+'\nPara: '+d.para+'\nDe: '+(d.de||d.origen)+'\nAsunto: '+(d.asunto||'')+'\nFecha y hora: '+d.fecha+' '+d.hora+'\nMensaje: '+d.texto+'\nFirma: '+(d.firma||'')+'\nTransmitido por: '+d.origen+' n.º '+d.num;
-	}
-	if(hablado){
-		return 'Número '+d.num+', '+pr.toLowerCase()+(d.hx?', '+d.hx:'')+', estación de origen '+fonetico(d.origen)+', cuenta '+d.ck+(d.lugar?', '+d.lugar:'')+', hora '+d.hora.replace('Z',' zulú')+', '+d.fecha.replace(/^(\d+) (\w+)$/, function(x, dia, mes){ return dia+' de '+MESES_LARGOS[MESES.indexOf(mes)]; })+'.\n\nPara: '+d.para+(d.tel?', teléfono '+d.tel.split('').join(' '):'')+'.\n\nTexto: (pausa) '+d.texto+' (pausa) fin del texto.\n\nFirma: '+(d.firma||'sin firma')+'.\n\nCambio.';
-	}
-	return 'N.º '+d.num+' '+pr+(d.hx?' '+d.hx:'')+' '+d.origen+' CK '+d.ck+' '+(d.lugar||'')+' '+d.hora+' '+d.fecha+'\nPARA: '+d.para+(d.tel?' · TEL '+d.tel:'')+'\nBT\n'+d.texto.toUpperCase()+'\nBT\n'+(d.firma||'');
-}
-function leerMensaje(u){
-	var m=S.msgs[u]; if(!m) return;
-	modal('Mensaje n.º '+m.d.num+' · '+(PRECEDENCIAS[m.d.prec]||{}).n, '<div class="em-seg em-seg-ancho" id="lm-modo"><button type="button" data-m="0" class="is-on">Para leer por radio</button><button type="button" data-m="1">Formato escrito</button></div>'
-		+'<pre class="em-leer" id="lm-texto"></pre>'
-		+'<div class="em-acciones"><button type="button" class="em-btn" id="lm-copiar">Copiar</button>'
-		+(m.est!=='entregado'&&m.est!=='anulado'?'<button type="button" class="em-btn" data-msg-est="retransmitido">Retransmitido a…</button><button type="button" class="em-btn ok" data-msg-est="entregado">Entregado</button>':'')
-		+'</div><h3>Historial</h3><ol class="em-bit">'+[{ts:m.ts, a:m.a, e:m.d.estadoInicial||'pendiente'}].concat(m.hist).map(function(h){ return '<li><time>'+horaZ(h.ts)+'</time><span class="em-autor">'+esc(h.a)+'</span><span>'+esc(ESTADOS_MSG[h.e]||h.e)+(h.a_quien?' a '+esc(h.a_quien):'')+(h.n?' — '+esc(h.n):'')+'</span></li>'; }).join('')+'</ol>', function(c){
-		var modo=0; function pintar(){ $('#lm-texto',c).textContent=textoMensaje(m, !modo); }
-		$$('#lm-modo button',c).forEach(function(b){ b.addEventListener('click', function(){ modo=+b.dataset.m; $$('#lm-modo button',c).forEach(function(x){ x.classList.toggle('is-on', x===b); }); pintar(); }); });
-		pintar();
-		$('#lm-copiar',c).addEventListener('click', function(){ copiar(textoMensaje(m, false)); });
-		$$('[data-msg-est]',c).forEach(function(b){ b.addEventListener('click', function(){
-			var e=b.dataset.msgEst, aq='';
-			if(e==='retransmitido'){ aq=ind(prompt('¿A qué estación se lo pasaste?')||''); if(!aq) return; }
-			var n=e==='entregado'?(prompt('¿A quién se entregó y cómo? (opcional)')||''):'';
-			registrar('msgest', {m:u, e:e, aq:aq, n:n}); cerrarModal(); aviso('Mensaje n.º '+m.d.num+': '+ESTADOS_MSG[e].toLowerCase()+'.');
-		}); });
-	});
-}
-var filtroMsg='pendientes';
-VIVO.mensajes = function(){
-	var l=Object.keys(S.msgs).map(function(k){ return S.msgs[k]; });
-	if(filtroMsg==='pendientes') l=l.filter(function(m){ return m.est==='pendiente'||m.est==='recibido'||m.est==='retransmitido'; });
-	l.sort(function(a,b){ return ((PRECEDENCIAS[a.d.prec]||{o:9}).o-(PRECEDENCIAS[b.d.prec]||{o:9}).o) || a.ts-b.ts; });
-	if(!l.length) return '<p class="em-nota">'+(filtroMsg==='pendientes'?'No hay mensajes por entregar.':'Todavía no hay mensajes.')+'</p>';
-	return '<div class="em-lista">'+l.map(function(m){
-		var p=m.d.prec, c=p==='E'?'peligro':p==='P'?'aviso':p==='B'?'ok':'apagado';
-		return '<button type="button" class="em-msg em-borde-'+c+'" data-msg="'+m.u+'"><span class="em-msg-cab">'+pill(c, (m.d.prueba?'Prueba · ':'')+(PRECEDENCIAS[p]||{n:p}).n)+' <b class="em-mono">n.º '+esc(m.d.num)+'</b> de <b class="em-mono">'+esc(m.d.origen)+'</b> · '+esc(m.d.hora)+(m.d.fmt==='sci'?' · SCI-213':'')+'<span class="em-msg-est">'+esc(ESTADOS_MSG[m.est]||m.est)+'</span></span><span class="em-msg-para">Para '+esc(m.d.para)+'</span><span class="em-msg-txt">'+esc(m.d.texto)+'</span></button>';
-	}).join('')+'</div>';
-};
-VISTA_FN.mensajes = function(){
-	var v=el('<div><div class="em-barra"><h1>Mensajes</h1><button type="button" class="em-btn primario" id="m-nuevo">+ Mensaje</button></div>'
-		+'<div class="em-barra em-filtros"><div class="em-seg"><button type="button" data-f="pendientes" class="'+(filtroMsg==='pendientes'?'is-on':'')+'">Por entregar</button><button type="button" data-f="todos" class="'+(filtroMsg==='todos'?'is-on':'')+'">Todos</button></div><span class="em-nota">Ordenados por precedencia: emergencia, prioridad, bienestar, rutina.</span></div>'
-		+'<div data-vivo="mensajes">'+VIVO.mensajes()+'</div></div>');
-	$('#m-nuevo',v).addEventListener('click', function(){ formMensaje(); });
-	$$('.em-seg button',v).forEach(function(b){ b.addEventListener('click', function(){ filtroMsg=b.dataset.f; $$('.em-seg button',v).forEach(function(x){ x.classList.toggle('is-on', x===b); }); refrescar(); }); });
-	v.addEventListener('click', function(e){ var b=e.target.closest('[data-msg]'); if(b) leerMensaje(b.dataset.msg); });
-	return v;
-};
-
-/* ── Bitácora (SCI-214) ──────────────────────────────────────────────────── */
-function formNota(){
-	modal('Nota en la bitácora', '<form class="em-form" id="f-nota"><fieldset><legend>Tipo</legend>'+chips('tipo', {Novedad:'Novedad', Decisión:'Decisión', Solicitud:'Solicitud', Nota:'Nota'}, 'Novedad')+'</fieldset><label>Texto<textarea class="em-campo" name="texto" rows="3" required></textarea></label><button class="em-btn primario">Guardar</button></form>', function(c){
-		$('#f-nota',c).addEventListener('submit', function(e){ e.preventDefault(); registrar('nota', {tipo:valorDe(this,'tipo'), texto:this.texto.value.trim()}); cerrarModal(); });
-	});
-}
-var filtroBit='';
-VIVO.bitacora = function(){
-	var l=S.todo.slice().reverse();
-	if(filtroBit) l=l.filter(function(e){ return (e.a+' '+describir(e)).toUpperCase().indexOf(filtroBit.toUpperCase())>=0; });
-	return l.length?'<ol class="em-bit em-bit-larga">'+l.map(filaBitacora).join('')+'</ol>':'<p class="em-nota">Sin registros.</p>';
-};
-VISTA_FN.bitacora = function(){
-	var v=el('<div><div class="em-barra"><h1>Bitácora del incidente</h1><div class="em-acciones"><button type="button" class="em-btn primario" id="b-nota">+ Nota</button><button type="button" class="em-btn" id="b-sci">Exportar SCI-214</button></div></div>'
-		+'<label class="em-buscar"><input class="em-campo" type="search" id="b-buscar" placeholder="Buscar indicativo, lugar, palabra…" value="'+esc(filtroBit)+'"></label>'
-		+'<p class="em-nota">Todo lo que se registra en este incidente, de todos los operadores, en orden. Hora UTC. ● = todavía no llegó al servidor.</p><div data-vivo="bitacora">'+VIVO.bitacora()+'</div></div>');
-	$('#b-nota',v).addEventListener('click', formNota);
-	$('#b-sci',v).addEventListener('click', function(){ copiar(textoSci214()); });
-	$('#b-buscar',v).addEventListener('input', function(){ filtroBit=this.value; refrescar(); });
-	return v;
-};
-function textoPlano(html){ var d=document.createElement('div'); d.innerHTML=html; return d.textContent; }
-function textoSci214(){
-	var i=inc();
-	return 'FORMULARIO SCI-214 · REGISTRO DE ACTIVIDADES\nIncidente: '+i.nombre+(i.zona?' · '+i.zona:'')+(i.tipo==='simulacro'?' · SIMULACRO':'')+'\nCódigo: '+i.codigo+'\nGenerado por: '+db.yo.ind+' · '+new Date().toISOString().slice(0,16).replace('T',' ')+' UTC\n\n'
-		+S.todo.map(function(e){ return fechaZ(e.ts)+' '+horaZ(e.ts)+'  '+(e.a||'').padEnd(9)+' '+textoPlano(describir(e)); }).join('\n');
-}
-
-/* ── Plan de frecuencias (SCI-205) y repetidoras ─────────────────────────── */
-function repetidoras(){
-	var l=(C.repes||[]).map(function(r){ return {k:(r.c||r.n)+' '+r.f, n:r.n, f:r.f, extra:(r.o?(+r.o>0?'+':'')+r.o+' MHz':'')+(r.t?' · '+r.t+' Hz':''), l:r.l}; });
-	(C.reportadas||[]).forEach(function(r){ l.push({k:r.n+' '+r.f, n:r.n, f:r.f, extra:'confirmar tono', l:''}); });
-	Object.keys(S.repe).forEach(function(k){ if(!l.some(function(x){ return x.k===k; })) l.push({k:k, n:k, f:'', extra:'', l:''}); });
-	return l;
-}
-VIVO.plan = function(){
-	var a=Object.keys(S.plan).map(function(k){ return S.plan[k]; });
-	return a.length?'<table class="em-tabla"><thead><tr><th>Función</th><th>Frecuencia</th><th>Modo</th><th>Observaciones</th><th></th></tr></thead><tbody>'+a.map(function(p){ return '<tr><td>'+esc(p.d.funcion)+'</td><td class="em-f">'+esc(p.d.f)+'</td><td>'+esc(p.d.modo||'')+'</td><td>'+esc(p.d.obs||'')+'</td><td><button type="button" class="em-x" data-planx="'+p.u+'" aria-label="Quitar">×</button></td></tr>'; }).join('')+'</tbody></table>':'<p class="em-nota">Asigna qué frecuencia usa cada función. Lo ven todos los operadores del incidente.</p>';
-};
-VIVO.repes = function(){
-	return '<div class="em-lista">'+repetidoras().map(function(r){ var s=S.repe[r.k];
-		return '<div class="em-fila em-repe" data-repe="'+esc(r.k)+'"><span><strong class="em-mono">'+esc(r.f)+'</strong> '+esc(r.n)+'<small>'+esc(r.extra)+(r.l?' · '+esc(r.l):'')+(s?' · '+esc((ESTADOS_REPE[s.e]||{}).n)+' según '+esc(s.a)+' '+haceTxt(s.ts)+(s.n?' — '+esc(s.n):''):' · sin reporte')+'</small></span>'
-			+'<span class="em-chips em-chips-mini">'+Object.keys(ESTADOS_REPE).map(function(k){ return '<button type="button" class="em-chip '+ESTADOS_REPE[k].c+(s&&s.e===k?' is-on':'')+'" data-repe-e="'+k+'">'+ESTADOS_REPE[k].n+'</button>'; }).join('')+'</span></div>';
-	}).join('')+'</div>';
-};
-VISTA_FN.plan = function(){
-	var v=el('<div><div class="em-barra"><h1>Plan de comunicaciones</h1><div class="em-acciones"><button type="button" class="em-btn primario" id="p-nuevo">+ Asignar frecuencia</button><button type="button" class="em-btn" id="p-imp">Imprimir</button></div></div>'
-		+'<section class="em-tarjeta"><h2>Asignaciones del incidente (SCI-205)</h2><div data-vivo="plan">'+VIVO.plan()+'</div></section>'
-		+'<section class="em-tarjeta"><h2>Repetidoras</h2><p class="em-nota">Toca el estado cuando sepas cómo está. En el sismo de 2026 varias cayeron porque la transferencia al generador no funcionó.</p><div data-vivo="repes">'+VIVO.repes()+'</div><button type="button" class="em-link" id="p-otra">+ Otra repetidora</button></section>'
-		+'<section class="em-tarjeta"><h2>Frecuencias nacionales</h2>'+tablaFrecuencias()+'</section></div>');
-	$('#p-imp',v).addEventListener('click', function(){ window.print(); });
-	$('#p-otra',v).addEventListener('click', function(){ var n=prompt('Nombre y frecuencia de la repetidora (ej.: Cerro Tatamá 146.940)'); if(n) registrar('repe', {r:n.trim().slice(0,80), e:'aire', n:''}); });
-	$('#p-nuevo',v).addEventListener('click', function(){
-		modal('Asignar frecuencia', '<form class="em-form" id="f-plan"><label>Función<select class="em-campo" name="funcion">'+FUNCIONES.map(function(x){ return '<option>'+esc(x)+'</option>'; }).join('')+'</select></label>'
-			+'<div class="em-dos"><label>Frecuencia o canal<input class="em-campo em-mono" name="f" required placeholder="7.060 · 146.520 · Rep. Cerro…" list="f-plan-l"></label><label>Modo<select class="em-campo" name="modo"><option>FM</option><option>LSB</option><option>USB</option><option>Digital</option><option>EchoLink</option><option>Otro</option></select></label></div>'
-			+'<datalist id="f-plan-l">'+(C.frec||[]).map(function(x){ return '<option value="'+esc(x.f)+'">'; }).join('')+repetidoras().map(function(r){ return '<option value="'+esc(r.f+' '+r.n)+'">'; }).join('')+'</datalist>'
-			+'<label>Observaciones<input class="em-campo" name="obs" placeholder="Horario, tono, quién controla…"></label><button class="em-btn primario">Asignar</button></form>', function(c){
-			$('#f-plan',c).addEventListener('submit', function(e){ e.preventDefault(); registrar('plan', {funcion:this.funcion.value, f:this.f.value.trim(), modo:this.modo.value, obs:this.obs.value.trim()}); cerrarModal(); });
-		});
-	});
-	v.addEventListener('click', function(e){
-		var x=e.target.closest('[data-planx]'); if(x && confirm('¿Quitar esta asignación?')) registrar('planx', {p:x.dataset.planx});
-		var r=e.target.closest('[data-repe-e]'); if(r){ var k=r.closest('[data-repe]').dataset.repe, est=r.dataset.repeE; var n=est==='caida'||est==='bateria'?(prompt('Nota (opcional): causa, autonomía…')||''):''; registrar('repe', {r:k, e:est, n:n}); }
-	});
-	return v;
-};
-
-/* ── Bienestar: personas ─────────────────────────────────────────────────── */
-var filtroPer='';
-VIVO.personas = function(){
-	var l=Object.keys(S.per).map(function(k){ return S.per[k]; }).sort(function(a,b){ return (b.act||b.ts)-(a.act||a.ts); });
-	if(filtroPer){ var q=filtroPer.toUpperCase(); l=l.filter(function(p){ return (p.d.nombre+' '+(p.d.ubic||'')+' '+(p.d.contacto||'')).toUpperCase().indexOf(q)>=0; }); }
-	if(!l.length) return '<p class="em-nota">'+(filtroPer?'Nadie con ese nombre. Si lo buscan, regístralo como «Lo buscan».':'Todavía no hay personas registradas.')+'</p>';
-	return '<div class="em-lista">'+l.map(function(p){ var es=ESTADOS_PER[p.est]||{n:p.est,c:''};
-		return '<div class="em-fila em-per em-borde-'+es.c+'" data-per="'+p.u+'"><span><strong>'+esc(p.d.nombre)+'</strong> '+pill(es.c, es.n)+'<small>'+esc(p.d.ubic||'Ubicación desconocida')+(p.d.contacto?' · avisar a '+esc(p.d.contacto):'')+' · registró '+esc(p.a)+' '+haceTxt(p.ts)+'</small>'+(p.d.msg?'<em>«'+esc(p.d.msg)+'»</em>':'')+(p.hist.length?'<small>'+p.hist.map(function(h){ return horaZ(h.ts)+' '+esc((ESTADOS_PER[h.estado]||{}).n||'')+(h.n?' — '+esc(h.n):''); }).join(' · ')+'</small>':'')+'</span>'
-			+'<button type="button" class="em-btn" data-per-act>Actualizar</button></div>'; }).join('')+'</div>';
-};
-VISTA_FN.personas = function(){
-	var v=el('<div><div class="em-barra"><h1>Bienestar</h1><button type="button" class="em-btn primario" id="pe-nueva">+ Registrar persona</button></div>'
-		+'<p class="em-nota">«Estoy bien» y búsqueda de familiares. Solo lo ven quienes tienen la clave de red. No registres diagnósticos médicos ni números de documento.</p>'
-		+'<label class="em-buscar"><input class="em-campo" type="search" id="pe-buscar" placeholder="Buscar por nombre o lugar…" value="'+esc(filtroPer)+'"></label>'
-		+'<div data-vivo="personas">'+VIVO.personas()+'</div></div>');
-	$('#pe-buscar',v).addEventListener('input', function(){ filtroPer=this.value; refrescar(); });
-	$('#pe-nueva',v).addEventListener('click', function(){
-		modal('Registrar persona', '<form class="em-form" id="f-per"><label>Nombre completo<input class="em-campo" name="nombre" required></label><fieldset><legend>Estado</legend>'+chips('estado', ESTADOS_PER, 'bien')+'</fieldset>'
-			+'<label>Dónde está (o dónde se le vio por última vez)<input class="em-campo" name="ubic"></label><label>A quién avisar (nombre, ciudad, teléfono)<input class="em-campo" name="contacto"></label><label>Mensaje para la familia<input class="em-campo" name="msg" placeholder="Ej.: Estoy bien, en el albergue del coliseo"></label><button class="em-btn primario">Registrar</button></form>', function(c){
-			$('#f-per',c).addEventListener('submit', function(e){ e.preventDefault(); registrar('persona', {nombre:this.nombre.value.trim(), estado:valorDe(this,'estado'), ubic:this.ubic.value.trim(), contacto:this.contacto.value.trim(), msg:this.msg.value.trim()}); cerrarModal(); });
-		});
-	});
-	v.addEventListener('click', function(e){
-		var b=e.target.closest('[data-per-act]'); if(!b) return; var u=b.closest('[data-per]').dataset.per, p=S.per[u];
-		modal('Actualizar: '+p.d.nombre, '<form class="em-form" id="f-pa"><fieldset><legend>Estado</legend>'+chips('estado', ESTADOS_PER, p.est)+'</fieldset><label>Ubicación<input class="em-campo" name="ubic" value="'+esc(p.d.ubic||'')+'"></label><label>Nota<input class="em-campo" name="n" placeholder="Ej.: la familia ya fue avisada"></label><button class="em-btn primario">Guardar</button></form>', function(c){
-			$('#f-pa',c).addEventListener('submit', function(ev){ ev.preventDefault(); registrar('personaact', {p:u, estado:valorDe(this,'estado'), ubic:this.ubic.value.trim(), n:this.n.value.trim()}); cerrarModal(); });
-		});
-	});
-	return v;
-};
-
-/* ── Recursos ────────────────────────────────────────────────────────────── */
-VIVO.recursos = function(){
-	var l=Object.keys(S.rec).map(function(k){ return S.rec[k]; });
-	if(!l.length) return '<p class="em-nota">Radios, baterías, generadores, antenas, vehículos y personas disponibles. En el sismo de 2026 se entregaron 15 radios con doble batería a la gobernación: saber quién tiene qué ahorra horas.</p>';
-	return '<table class="em-tabla"><thead><tr><th>Recurso</th><th>Cant.</th><th>Dónde</th><th>Responsable</th><th>Estado</th><th></th></tr></thead><tbody>'+l.map(function(r){ return '<tr><td><strong>'+esc(r.d.tipo)+'</strong> '+esc(r.d.desc||'')+'</td><td>'+esc(r.d.cant||1)+'</td><td>'+esc(r.d.donde||'')+'</td><td>'+esc(r.d.resp||'')+'</td><td>'+esc(r.d.estado||'')+'</td><td><button type="button" class="em-x" data-recx="'+r.u+'" aria-label="Quitar">×</button></td></tr>'; }).join('')+'</tbody></table>';
-};
-VISTA_FN.recursos = function(){
-	var v=el('<div><div class="em-barra"><h1>Recursos</h1><button type="button" class="em-btn primario" id="re-nuevo">+ Recurso</button></div><section class="em-tarjeta" data-vivo="recursos">'+VIVO.recursos()+'</section></div>');
-	$('#re-nuevo',v).addEventListener('click', function(){
-		modal('Agregar recurso', '<form class="em-form" id="f-rec"><div class="em-dos"><label>Tipo<select class="em-campo" name="tipo">'+RECURSOS.map(function(x){ return '<option>'+esc(x)+'</option>'; }).join('')+'</select></label><label>Cantidad<input class="em-campo" type="number" min="1" name="cant" value="1"></label></div>'
-			+'<label>Descripción<input class="em-campo" name="desc" placeholder="Ej.: portátiles VHF con doble batería"></label><div class="em-dos"><label>Dónde está<input class="em-campo" name="donde"></label><label>Responsable<input class="em-campo" name="resp" value="'+esc(db.yo.ind)+'"></label></div>'
-			+'<fieldset><legend>Estado</legend>'+chips('estado', {Disponible:'Disponible', Asignado:'Asignado', 'En camino':'En camino', 'Se necesita':'Se necesita'}, 'Disponible')+'</fieldset><button class="em-btn primario">Agregar</button></form>', function(c){
-			$('#f-rec',c).addEventListener('submit', function(e){ e.preventDefault(); registrar('recurso', {tipo:this.tipo.value, cant:+this.cant.value||1, desc:this.desc.value.trim(), donde:this.donde.value.trim(), resp:this.resp.value.trim(), estado:valorDe(this,'estado')}); cerrarModal(); });
-		});
-	});
-	v.addEventListener('click', function(e){ var x=e.target.closest('[data-recx]'); if(x && confirm('¿Quitar este recurso?')) registrar('recursox', {p:x.dataset.recx}); });
-	return v;
-};
-
-/* ── Directorio ──────────────────────────────────────────────────────────── */
-VIVO.dir = function(){
-	var l=Object.keys(S.dir).map(function(k){ return S.dir[k]; });
-	return l.length?'<div class="em-lista">'+l.map(function(x){ return '<div class="em-fila"><span><strong>'+esc(x.d.nombre)+'</strong> · '+esc(x.d.funcion||'')+'<small>'+esc(x.d.contacto||'')+(x.d.nota?' · '+esc(x.d.nota):'')+'</small></span><button type="button" class="em-x" data-dirx="'+x.u+'" aria-label="Quitar">×</button></div>'; }).join('')+'</div>':'<p class="em-nota">Agrega los contactos de este incidente: puesto de mando unificado, consejo de gestión del riesgo, Cruz Roja local, albergues…</p>';
-};
-VISTA_FN.directorio = function(){
-	var v=el('<div><div class="em-barra"><h1>Directorio</h1><button type="button" class="em-btn primario" id="d-nuevo">+ Contacto</button></div>'
-		+'<section class="em-tarjeta"><h2>Contactos del incidente</h2><div data-vivo="dir">'+VIVO.dir()+'</div></section>'
-		+'<section class="em-tarjeta"><h2>Teléfonos nacionales</h2>'+telefonos()+'</section>'
-		+'<section class="em-tarjeta"><h2>Radioaficionados</h2><p>Liga Colombiana de Radioaficionados: coordina la red nacional de emergencia.<br>IARU Región 2: coordinación de emergencias de las Américas.<br>En el sismo de 2026 se enlazaron por EchoLink las repetidoras de Medellín, Cali, Armenia, Manizales y Popayán.</p></section></div>');
-	$('#d-nuevo',v).addEventListener('click', function(){
-		modal('Agregar contacto', '<form class="em-form" id="f-dir"><label>Nombre o entidad<input class="em-campo" name="nombre" required></label><label>Función<input class="em-campo" name="funcion" placeholder="Ej.: PMU, coordinador de albergues"></label><label>Cómo contactarlo<input class="em-campo" name="contacto" placeholder="Teléfono, frecuencia, indicativo"></label><label>Nota<input class="em-campo" name="nota"></label><button class="em-btn primario">Agregar</button></form>', function(c){
-			$('#f-dir',c).addEventListener('submit', function(e){ e.preventDefault(); registrar('dir', {nombre:this.nombre.value.trim(), funcion:this.funcion.value.trim(), contacto:this.contacto.value.trim(), nota:this.nota.value.trim()}); cerrarModal(); });
-		});
-	});
-	v.addEventListener('click', function(e){ var x=e.target.closest('[data-dirx]'); if(x && confirm('¿Quitar este contacto?')) registrar('dirx', {p:x.dataset.dirx}); });
-	return v;
-};
-
-/* ── Herramientas de campo ───────────────────────────────────────────────── */
-VISTA_FN.herramientas = function(){
-	var v=el('<div><h1>Herramientas de campo</h1><div class="em-grid2">'
-		+'<section class="em-tarjeta"><h2>¿Cuánto dura mi batería?</h2><form class="em-form" id="h-bat"><div class="em-tres"><label>Capacidad (Ah)<input class="em-campo" type="number" step="0.1" name="ah" value="7"></label><label>Consumo al recibir (A)<input class="em-campo" type="number" step="0.01" name="rx" value="0.4"></label><label>Consumo al transmitir (A)<input class="em-campo" type="number" step="0.1" name="tx" value="8"></label></div><label>Tiempo transmitiendo: <span id="h-bat-p">10</span>%<input type="range" name="pct" min="0" max="50" value="10"></label></form><p class="em-resultado" id="h-bat-r"></p><p class="em-nota">Se usa el 80 % de la capacidad: descargar una batería de plomo por completo la daña.</p></section>'
-		+'<section class="em-tarjeta"><h2>Antena para cubrir Colombia (NVIS)</h2><form class="em-form" id="h-nvis"><label>Frecuencia (MHz)<input class="em-campo" type="number" step="0.001" name="f" value="7.060"></label></form><p class="em-resultado" id="h-nvis-r"></p><p class="em-nota">Dipolo horizontal y bajo: la señal sube casi vertical y vuelve en un radio de 0 a 500 km, sin zona de silencio. Ideal para enlazar municipios cuando las repetidoras caen.</p></section>'
-		+'<section class="em-tarjeta"><h2>Deletreo fonético</h2><form class="em-form" id="h-fon"><input class="em-campo em-mono" name="t" placeholder="Escribe un indicativo o una palabra" autocapitalize="characters"></form><p class="em-resultado" id="h-fon-r"></p></section>'
-		+'<section class="em-tarjeta"><h2>Mi posición</h2><button type="button" class="em-btn" id="h-gps">📍 Leer GPS</button><p class="em-resultado" id="h-gps-r"></p><p class="em-nota">Funciona sin internet: el GPS no necesita datos.</p></section>'
+/* ── J. Modo de campo y operación sin conexión ───────────────────────────── */
+var instalar=null;
+window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); instalar=e; });
+E.registrarVista('campo', {nombre:'Campo y sin conexión', icono:'⛺', fn:function(){
+	var v=E.el('<div><h1>Modo de campo y sin conexión</h1><div class="em-grid2">'
+		+'<section class="em-tarjeta"><h2>Interfaz</h2><label class="em-check"><input type="checkbox" id="cp-compacto"'+(document.documentElement.classList.contains('em-compacto')?' checked':'')+'> <span>Modo compacto: botones grandes, solo lo esencial</span></label>'
+		+'<label class="em-check"><input type="checkbox" id="cp-sol"'+(document.documentElement.dataset.tema==='sol'?' checked':'')+'> <span>Modo sol: pantalla clara de alto contraste</span></label>'
+		+'<label class="em-inline">Un reporte o verificación vale <select class="em-campo" id="cp-ventana">'+[30,60,120,240].map(function(n){ return '<option value="'+n+'"'+(E.ventana===n?' selected':'')+'>'+n+' min</option>'; }).join('')+'</select></label>'
+		+'<div class="em-acciones"><button type="button" class="em-btn" id="cp-instalar">Instalar como aplicación</button></div><p class="em-nota" id="cp-instalar-n">En el celular también: menú del navegador → «Agregar a la pantalla de inicio».</p></section>'
+		+'<section class="em-tarjeta"><h2>Sincronización</h2><div data-vivo="cola">'+E.VIVO.cola()+'</div></section>'
+		+'<section class="em-tarjeta"><h2>Almacenamiento</h2><div id="cp-esp"><p class="em-nota">Calculando…</p></div><p class="em-aviso">Los datos de este dispositivo <b>no son un respaldo suficiente</b>: un teléfono se pierde, se moja o se borra. En una operación real, exporta respaldos con frecuencia (Informes → Exportar).</p></section>'
+		+'<section class="em-tarjeta"><h2>Qué funciona sin internet</h2><ul class="em-lista-txt"><li>Abrir esta página (después de una primera visita con internet).</li><li>Registrar incidentes, mensajes, estaciones, recursos y notas: quedan en cola y se envían solos al volver la señal.</li><li>Consultar lo ya descargado de la operación, el plan, el directorio de frecuencias y las herramientas.</li><li>El mapa con las capas de la operación sobre un contorno de Colombia guardado. El mapa base detallado necesita internet: solo se conservan los mosaicos ya vistos.</li></ul><p class="em-nota">No funciona sin internet: crear operaciones en el servidor, unirse, alertas en vivo, búsqueda de lugares.</p></section>'
 		+'</div></div>');
-	function bat(){ var f=$('#h-bat',v), p=+f.pct.value/100, a=(+f.rx.value)*(1-p)+(+f.tx.value)*p, h=a>0?(+f.ah.value)*0.8/a:0; $('#h-bat-p',v).textContent=f.pct.value; $('#h-bat-r',v).textContent=a>0?'Consumo medio '+a.toFixed(2)+' A → unas '+(h>=1?Math.floor(h)+' h '+Math.round((h%1)*60)+' min':Math.round(h*60)+' min'):''; }
-	$('#h-bat',v).addEventListener('input', bat); bat();
-	function nvis(){ var f=+$('#h-nvis',v).f.value; if(!(f>0)){ $('#h-nvis-r',v).textContent=''; return; } var mitad=142.5/f, alto=300/f; $('#h-nvis-r',v).innerHTML='Cada brazo: <strong>'+(mitad/2).toFixed(2)+' m</strong> (total '+mitad.toFixed(2)+' m)<br>Altura sobre el suelo: <strong>'+(alto*0.1).toFixed(1)+' a '+(alto*0.2).toFixed(1)+' m</strong> (0,1 a 0,2 longitudes de onda)'; }
-	$('#h-nvis',v).addEventListener('input', nvis); nvis();
-	$('#h-fon',v).addEventListener('input', function(){ $('#h-fon-r',v).textContent=fonetico(this.t.value); });
-	$('#h-fon',v).addEventListener('submit', function(e){ e.preventDefault(); });
-	$('#h-gps',v).addEventListener('click', function(){
-		var r=$('#h-gps-r',v); if(!navigator.geolocation){ r.textContent='Este teléfono no tiene GPS disponible.'; return; } r.textContent='Buscando…';
-		navigator.geolocation.getCurrentPosition(function(p){ var la=p.coords.latitude, lo=p.coords.longitude, cerca='';
-			(C.repes||[]).forEach(function(x){ var d=distancia(la,lo,x.lat,x.lng); if(!cerca||d<cerca.d) cerca={d:d, x:x}; });
-			r.innerHTML='Locator <strong class="em-mono">'+locator(la,lo)+'</strong><br>'+la.toFixed(5)+', '+lo.toFixed(5)+' (±'+Math.round(p.coords.accuracy)+' m)'+(cerca?'<br>Repetidora RAU más cercana: '+esc(cerca.x.n)+' '+esc(cerca.x.f)+' a '+Math.round(cerca.d)+' km':''); },
-			function(){ r.textContent='No se pudo leer el GPS. Revisa el permiso de ubicación.'; }, {enableHighAccuracy:true, timeout:20000});
+	$('#cp-compacto',v).addEventListener('change', function(){ document.documentElement.classList.toggle('em-compacto', this.checked); DB.kvSet('compacto', this.checked); });
+	$('#cp-sol',v).addEventListener('change', function(){ E.tema(this.checked?'sol':''); });
+	$('#cp-ventana',v).addEventListener('change', function(){ E.ventana=+this.value; DB.kvSet('ventana', E.ventana); E.refrescar(); });
+	$('#cp-instalar',v).addEventListener('click', function(){ if(instalar){ instalar.prompt(); instalar=null; } else $('#cp-instalar-n',v).textContent='Este navegador no ofrece la instalación directa (o ya está instalada). Usa «Agregar a la pantalla de inicio» en su menú.'; });
+	DB.espacio().then(function(s){
+		$('#cp-esp',v).innerHTML=(s.memoria?'<p class="em-error">Este navegador no permite guardar datos (modo privado): todo se pierde al cerrar la pestaña.</p>':'')
+			+'<p>Usado: '+(s.uso?(s.uso/1048576).toFixed(1)+' MB':'—')+(s.cuota?' de '+(s.cuota/1073741824).toFixed(1)+' GB disponibles':'')+'</p><p>'+(s.persistente?'El navegador se comprometió a no borrar estos datos por falta de espacio.':'El navegador podría borrar estos datos si se queda sin espacio.')+'</p>'
+			+(s.persistente||s.memoria?'':'<button type="button" class="em-btn" id="cp-persist">Pedir almacenamiento persistente</button>');
+		var b=$('#cp-persist',v); if(b) b.addEventListener('click', function(){ DB.pedirPersistencia().then(function(ok){ E.aviso(ok?'Concedido.':'El navegador no lo concedió.'); }); });
+	});
+	v.addEventListener('click', function(e){
+		if(e.target.id==='cp-sync'){ sync.espera=5000; sync.reintento=0; E.sincronizar(); return; }
+		var d=e.target.closest('[data-descartar]'); if(!d) return;
+		var ev=E.eventos.filter(function(x){ return x.u===d.dataset.descartar; })[0]; if(!ev) return;
+		E.confirmar('Descartar registro rechazado', 'Se quita de este dispositivo. El servidor nunca lo aceptó, así que nadie más lo tiene.', 'Descartar', true).then(function(si){
+			if(!si) return; ev.descartado=true; DB.guardarEventos(E.op.codigo, [ev]); E.eventos=E.eventos.filter(function(x){ return x!==ev; }); E.recalcular(); E.refrescar();
+		});
 	});
 	return v;
+}});
+E.VIVO.cola = function(){
+	var p=E.pendientes(), r=E.rechazados();
+	return '<p>'+(E.op.local?'Operación solo en este dispositivo: nada se envía.':navigator.onLine===false?'<b>Sin internet.</b> Lo registrado queda en cola.':'Con internet.')+'</p>'
+		+'<p>'+p.length+' registros sin enviar · '+E.eventos.filter(function(e){ return e.s>0; }).length+' guardados en el servidor'+(sync.ultimo?' · última sincronización '+E.horaLocal(sync.ultimo):'')+'</p>'
+		+(sync.error?'<p class="em-error">'+esc(sync.error)+'</p>':'')
+		+(p.length?'<details><summary>Ver los '+p.length+' pendientes</summary><ol class="em-bit">'+p.slice(-50).map(function(e){ return '<li><time>'+E.hz(e.ts)+'</time><span class="em-autor">'+esc(e.t)+'</span><span>'+(E.describir?E.describir(e):'')+'</span></li>'; }).join('')+'</ol></details>':'')
+		+(r.length?'<h3>Rechazados por el servidor</h3><div class="em-lista">'+r.map(function(e){ return '<div class="em-fila em-borde-peligro"><span><strong>'+esc(e.t)+'</strong> '+(E.describir?E.describir(e):'')+'<small class="em-rojo">'+esc(e.err||'')+'</small></span><button type="button" class="em-btn" data-descartar="'+e.u+'">Descartar</button></div>'; }).join('')+'</div>':'')
+		+(!E.op.local?'<button type="button" class="em-btn" id="cp-sync">Sincronizar ahora</button>':'');
 };
 
-/* ── Más: exportar, importar, cerrar, salir ──────────────────────────────── */
-function resumenTexto(){
-	var i=inc(), e=Object.keys(S.est).map(function(k){ return S.est[k]; }), m=Object.keys(S.msgs).map(function(k){ return S.msgs[k]; }), p=Object.keys(S.per).map(function(k){ return S.per[k]; });
-	return 'RESUMEN DE SITUACIÓN · '+i.nombre.toUpperCase()+(i.tipo==='simulacro'?' · SIMULACRO':'')+'\n'+new Date().toISOString().slice(0,16).replace('T',' ')+' UTC · elaboró '+db.yo.ind+'\n\n'
-		+'ESTACIONES ('+e.length+'):\n'+e.map(function(x){ return '- '+x.ind+' · '+(ESTADOS_EST[x.estado]||{n:''}).n+' · '+(x.ubic||'')+' · '+(ENERGIA[x.energia]||'')+' · último contacto '+horaZ(x.ultimo)+(x.nota?' · '+x.nota:''); }).join('\n')
-		+'\n\nMENSAJES: '+m.length+' en total, '+m.filter(function(x){ return x.est==='entregado'; }).length+' entregados, '+m.filter(function(x){ return x.est==='pendiente'||x.est==='recibido'; }).length+' por entregar.'
-		+'\n\nPERSONAS ('+p.length+'): '+Object.keys(ESTADOS_PER).map(function(k){ var n=p.filter(function(x){ return x.est===k; }).length; return n?ESTADOS_PER[k].n.toLowerCase()+': '+n:''; }).filter(Boolean).join(' · ')
-		+'\n\nREPETIDORAS: '+Object.keys(S.repe).map(function(k){ return k+' '+(ESTADOS_REPE[S.repe[k].e]||{n:''}).n.toLowerCase(); }).join(' · ')
-		+'\n\nATENCIÓN:\n'+atencion().map(function(x){ return '- '+x.t; }).join('\n');
-}
-VISTA_FN.mas = function(){
-	var i=inc();
-	var v=el('<div><h1>Más</h1><div class="em-grid2">'
-		+'<section class="em-tarjeta em-solo-movil"><h2>Secciones</h2><div class="em-acciones">'+VISTAS.slice(4,9).map(function(x){ return '<button type="button" class="em-btn em-grande" data-ir="'+x[0]+'">'+x[2]+' '+x[1]+'</button>'; }).join('')+'</div></section>'
-		+'<section class="em-tarjeta"><h2>Compartir y respaldar</h2><div class="em-acciones">'
-		+'<button type="button" class="em-btn" id="x-resumen">Resumen para la autoridad</button>'
-		+'<button type="button" class="em-btn" id="x-sci">Bitácora SCI-214</button>'
-		+'<button type="button" class="em-btn" id="x-json">Respaldo completo (archivo)</button>'
-		+'<label class="em-btn em-archivo">Importar respaldo<input type="file" id="x-imp" accept=".json,application/json"></label></div>'
-		+'<p class="em-nota">El respaldo sirve para pasar los registros a otro teléfono sin internet (por Bluetooth, cable o WhatsApp cuando vuelva la señal). Al importarlo se combinan sin duplicar.</p></section>'
-		+'<section class="em-tarjeta"><h2>Incidente</h2><p>'+esc(i.nombre)+' · '+(i.local?'solo en este teléfono':'código <b class="em-mono">'+esc(i.codigo)+'</b> <small>'+fonetico(i.codigo)+'</small>')+'</p><div class="em-acciones">'
-		+'<button type="button" class="em-btn" id="x-salir">Volver al inicio</button>'
-		+(S.cerrado?'<button type="button" class="em-btn" id="x-reabrir">Reabrir incidente</button>':'<button type="button" class="em-btn peligro" id="x-cerrar">Cerrar incidente</button>')+'</div></section>'
-		+'<section class="em-tarjeta"><h2>Este teléfono</h2><p>Operador: <b class="em-mono">'+esc(db.yo.ind)+'</b> · '+eventos().length+' registros de este incidente</p><div class="em-acciones"><button type="button" class="em-btn" id="x-sol">'+(document.documentElement.dataset.tema==='sol'?'Modo noche':'Modo sol (pantalla clara)')+'</button></div></section>'
+/* ── K. Administración, auditoría y seguridad ────────────────────────────── */
+E.registrarVista('admin', {nombre:'Administración', icono:'🔐', fn:function(){
+	var a=E.actor||{}, coord=E.puede('coordinar') && !E.op.local;
+	var v=E.el('<div><h1>Administración y seguridad</h1><div class="em-grid2">'
+		+'<section class="em-tarjeta"><h2>Mi acceso</h2><p>Operador: <b class="em-mono">'+esc(E.yo.ind)+'</b> · rol <b>'+esc((C.roles||{})[a.rol]||a.rol||'—')+'</b>'+(a.cuenta?' (cuenta del sitio)':E.op.local?'':' (sesión de este dispositivo)')+'</p><p class="em-nota">Permisos: '+esc((a.permisos||[]).join(', '))+'</p>'
+		+'<div class="em-acciones"><button type="button" class="em-btn" id="ad-salir">Volver al inicio</button>'+(!E.op.local&&E.op.token?'<button type="button" class="em-btn" id="ad-cerrar-ses">Cerrar mi sesión en este dispositivo</button>':'')+'</div></section>'
+		+(coord?'<section class="em-tarjeta"><h2>Accesos a la operación</h2><div id="ad-ses"><p class="em-nota">Cargando…</p></div></section>'
+			+'<section class="em-tarjeta"><h2>Invitar</h2><form class="em-form" id="ad-inv"><div class="em-tres"><label>Rol<select class="em-campo" name="rol"><option value="operador">Operador</option><option value="observador">Observador (sin datos de personas)</option><option value="recursos">Responsable de recursos</option></select></label><label>Vigencia (horas)<input class="em-campo" type="number" name="horas" min="1" max="168" value="24"></label><label>Usos<input class="em-campo" type="number" name="usos" min="1" max="50" value="1"></label></div><button class="em-btn primario">Crear invitación</button></form><p id="ad-inv-r" role="status"></p></section>'
+			+'<section class="em-tarjeta"><h2>Cambiar claves y revocar</h2><form class="em-form" id="ad-cl"><label>Nueva clave de operadores (opcional)<input class="em-campo em-mono" name="clave" minlength="6" autocomplete="off"></label><label>Nueva clave de coordinación (opcional)<input class="em-campo em-mono" name="clave_coord" minlength="8" autocomplete="off"></label><label class="em-check"><input type="checkbox" name="revocar"> <span>Revocar también todas las sesiones e invitaciones (menos la mía)</span></label><button class="em-btn peligro">Cambiar</button></form></section>'
+			+'<section class="em-tarjeta"><h2>Operación</h2><div class="em-acciones">'+(E.S.cerrada?'<button type="button" class="em-btn" id="ad-reabrir">Reabrir operación</button>':'<button type="button" class="em-btn peligro" id="ad-cerrar">Cerrar operación</button>')+'<button type="button" class="em-btn" id="ad-respaldo">Descargar respaldo del servidor</button></div><p class="em-nota">Cerrar no borra nada: impide nuevos registros operativos y deja escribir lecciones aprendidas. El borrado definitivo lo hace un administrador del sitio.</p></section>'
+			+'<section class="em-tarjeta em-ancho"><h2>Auditoría</h2><div id="ad-aud"><p class="em-nota">Cargando…</p></div></section>'
+		:(E.op.local?'<section class="em-tarjeta"><h2>Operación local</h2><p>Sin servidor no hay control de acceso: cualquiera con este dispositivo puede registrar. Para operar entre varias personas con permisos, crea la operación en el servidor.</p><div class="em-acciones">'+(E.S.cerrada?'<button type="button" class="em-btn" id="ad-reabrir">Reabrir</button>':'<button type="button" class="em-btn peligro" id="ad-cerrar">Cerrar operación</button>')+'</div></section>':'<section class="em-tarjeta"><p>Las funciones de administración de la operación son para coordinación.</p></section>'))
+		+(E.cuenta && (E.cuenta.rol==='admin'||E.cuenta.rol==='coordinador')?'<section class="em-tarjeta"><h2>Directorio de frecuencias</h2><p>Puedes corregir o agregar entradas (con fuente obligatoria) en Directorio. Cada cambio queda en la auditoría del sitio.</p><button type="button" class="em-btn" data-ir="directorio">Ir al directorio</button>'+(E.cuenta.rol==='admin'?' <a class="em-btn" href="'+esc(C.admin)+'">Panel del sitio</a>':'')+'</section>':'')
 		+'</div></div>');
-	$('#x-resumen',v).addEventListener('click', function(){ copiar(resumenTexto()); });
-	$('#x-sci',v).addEventListener('click', function(){ copiar(textoSci214()); });
-	$('#x-json',v).addEventListener('click', function(){ descargar('emergencia-'+i.codigo+'-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'')+'.json', JSON.stringify({rau_em:1, incidente:{codigo:i.codigo, nombre:i.nombre, tipo:i.tipo, zona:i.zona}, eventos:eventos().map(function(e){ return {u:e.u,t:e.t,a:e.a,ts:e.ts,d:e.d}; })}), 'application/json'); });
-	$('#x-imp',v).addEventListener('change', function(){
-		var f=this.files[0]; if(!f) return; var lector=new FileReader();
-		lector.onload=function(){ try {
-			var j=JSON.parse(lector.result); if(!j.rau_em || !Array.isArray(j.eventos)) throw 0;
-			var lista=eventos(), hay={}, n=0; lista.forEach(function(e){ hay[e.u]=1; });
-			j.eventos.forEach(function(e){ if(e && e.u && e.t && !hay[e.u]){ lista.push({u:e.u, t:e.t, a:e.a, ts:e.ts, d:e.d||{}, s:0}); hay[e.u]=1; n++; } });
-			guardar(); recalcular(); refrescar(); sincronizarPronto(); aviso(n+' registros nuevos importados de «'+(j.incidente&&j.incidente.nombre||'respaldo')+'».');
-		} catch(e){ aviso('Ese archivo no es un respaldo del centro de mando.','aviso'); } };
-		lector.readAsText(f);
+	$('#ad-salir',v).addEventListener('click', E.salir);
+	var cs=$('#ad-cerrar-ses',v); if(cs) cs.addEventListener('click', function(){ E.confirmar('Cerrar mi sesión', 'Este dispositivo deja de tener acceso a la operación. Lo pendiente de enviar se queda guardado hasta que vuelvas a entrar.', 'Cerrar sesión', true).then(function(si){ if(!si) return; E.rest('operaciones/'+E.op.codigo+'/salir', {metodo:'POST'}).catch(function(){}).then(function(){ E.op.token=''; DB.guardarOp(E.op); E.salir(); }); }); });
+	var cer=$('#ad-cerrar',v); if(cer) cer.addEventListener('click', function(){
+		E.modal('Cerrar operación', '<form class="em-form" id="f-cer"><p>Después de cerrarla solo se admiten lecciones aprendidas e informes, o reabrirla.</p><label>Nota de cierre<textarea class="em-campo" name="nota" rows="3"></textarea></label><button class="em-btn peligro">Cerrar operación</button></form>', function(c){ $('#f-cer',c).addEventListener('submit', function(e){ e.preventDefault(); if(E.registrar('op', {estado:'cerrado', nota:this.nota.value})){ E.cerrarModal(); E.ir('admin'); } }); });
 	});
-	$('#x-salir',v).addEventListener('click', salir);
-	var cer=$('#x-cerrar',v); if(cer) cer.addEventListener('click', function(){ var n=prompt('¿Cerrar el incidente? Los registros quedan guardados. Nota de cierre (opcional):'); if(n===null) return; registrar('inc', {estado:'cerrado', nota:n}); ir('mas'); });
-	var re=$('#x-reabrir',v); if(re) re.addEventListener('click', function(){ registrar('inc', {estado:'abierto', nota:'Incidente reabierto por '+db.yo.ind}); ir('mas'); });
-	$('#x-sol',v).addEventListener('click', function(){ tema(document.documentElement.dataset.tema==='sol'?'':'sol'); ir('mas'); });
+	var re=$('#ad-reabrir',v); if(re) re.addEventListener('click', function(){ if(E.registrar('op', {estado:'abierto', nota:'Reabierta por '+E.yo.ind})) E.ir('admin'); });
+	if(!coord) return v;
+	function cargarSes(){
+		E.rest('operaciones/'+E.op.codigo+'/sesiones').then(function(r){
+			if(r.estado!==200){ $('#ad-ses',v).innerHTML='<p class="em-error">'+esc((r.j&&r.j.error)||'No disponible')+'</p>'; return; }
+			$('#ad-ses',v).innerHTML='<table class="em-tabla"><thead><tr><th>Indicativo</th><th>Rol</th><th>Origen</th><th>Último uso</th><th></th></tr></thead><tbody>'+r.j.map(function(s){ return '<tr'+(s.revocado?' class="em-tenue"':'')+'><td class="em-mono">'+esc(s.indicativo)+'</td><td>'+esc((C.roles||{})[s.rol]||s.rol)+'</td><td>'+esc(s.origen)+'</td><td>'+E.haceTxt(s.ultimo*1000)+'</td><td>'+(s.revocado?'Revocada':'<button type="button" class="em-btn" data-revocar="'+s.id+'" data-ind="'+esc(s.indicativo)+'">Revocar</button>')+'</td></tr>'; }).join('')+'</tbody></table>';
+		}).catch(function(){ $('#ad-ses',v).innerHTML='<p class="em-nota">Sin conexión.</p>'; });
+		E.rest('operaciones/'+E.op.codigo+'/auditoria').then(function(r){
+			if(r.estado!==200) return;
+			$('#ad-aud',v).innerHTML=r.j.length?'<ol class="em-bit">'+r.j.slice(0,200).map(function(x){ return '<li><time>'+E.hz(x.ts*1000)+'</time><span class="em-autor">'+esc(x.actor)+'</span><span>'+esc(x.accion)+' '+esc(x.objeto)+' <small>'+esc(x.rol)+'</small></span></li>'; }).join('')+'</ol>':'<p class="em-nota">Sin acciones sensibles registradas.</p>';
+		}).catch(function(){ $('#ad-aud',v).innerHTML='<p class="em-nota">Sin conexión.</p>'; });
+	}
+	cargarSes();
+	v.addEventListener('click', function(e){
+		var b=e.target.closest('[data-revocar]'); if(!b) return;
+		E.confirmar('Revocar acceso', 'La sesión de '+b.dataset.ind+' deja de funcionar de inmediato. Lo que ya registró se conserva.', 'Revocar', true).then(function(si){
+			if(si) E.rest('operaciones/'+E.op.codigo+'/sesiones/'+b.dataset.revocar+'/revocar', {metodo:'POST'}).then(function(){ E.aviso('Acceso revocado.'); cargarSes(); });
+		});
+	});
+	$('#ad-inv',v).addEventListener('submit', function(e){
+		e.preventDefault(); var f=this;
+		E.rest('operaciones/'+E.op.codigo+'/invitaciones', {metodo:'POST', cuerpo:{rol:f.rol.value, horas:+f.horas.value, usos:+f.usos.value}}).then(function(r){
+			$('#ad-inv-r',v).innerHTML=r.estado===200?'Clave de invitación (se muestra una sola vez): <b class="em-mono em-grande">'+esc(r.j.clave)+'</b><br><small>Rol '+esc((C.roles||{})[r.j.rol])+' · vence '+new Date(r.j.expira*1000).toLocaleString('es-CO')+' · '+r.j.usos+' uso(s)</small>':'<span class="em-error">'+esc((r.j&&r.j.error)||'Error')+'</span>';
+		}).catch(function(){ E.aviso('Sin conexión.', 'aviso'); });
+	});
+	$('#ad-cl',v).addEventListener('submit', function(e){
+		e.preventDefault(); var f=this;
+		if(!f.clave.value && !f.clave_coord.value && !f.revocar.checked){ E.aviso('No hay nada que cambiar.', 'aviso'); return; }
+		E.confirmar('Cambiar claves', f.revocar.checked?'Todas las demás sesiones e invitaciones dejan de funcionar. Tendrás que dictar la clave nueva.':'Las sesiones abiertas siguen funcionando; la clave anterior ya no sirve para entrar.', 'Cambiar', true).then(function(si){
+			if(!si) return;
+			E.rest('operaciones/'+E.op.codigo+'/claves', {metodo:'POST', cuerpo:{clave:f.clave.value, clave_coord:f.clave_coord.value, revocar_sesiones:f.revocar.checked}}).then(function(r){
+				if(r.estado===200){ E.aviso('Claves cambiadas'+(r.j.sesiones_revocadas?' · '+r.j.sesiones_revocadas+' sesiones revocadas':'')+'.'); f.reset(); cargarSes(); } else E.aviso((r.j&&r.j.error)||'Error', 'peligro');
+			});
+		});
+	});
+	$('#ad-respaldo',v).addEventListener('click', function(){
+		E.rest('operaciones/'+E.op.codigo+'/respaldo').then(function(r){ if(r.estado===200) E.descargar(E.nombreArchivo('respaldo-servidor','json'), JSON.stringify(r.j), 'application/json'); else E.aviso((r.j&&r.j.error)||'Error', 'peligro'); }).catch(function(){ E.aviso('Sin conexión.', 'aviso'); });
+	});
 	return v;
-};
-function tema(t){ document.documentElement.dataset.tema=t; try { localStorage.setItem('rau_em_tema', t); } catch(e){} }
+}});
+
+/* Más (celular): el resto de secciones */
+E.registrarVista('mas', {nombre:'Más', icono:'☰', fn:function(){
+	var todas=[].concat.apply([], GRUPOS.map(function(g){ return g[1]; })).filter(function(id){ return MOVIL.indexOf(id)<0 && E.VISTAS[id]; });
+	var v=E.el('<div><h1>Más</h1><div class="em-acciones em-mas">'+todas.map(function(id){ var x=E.VISTAS[id]; return '<button type="button" class="em-btn em-grande" data-ir="'+id+'"><span aria-hidden="true">'+x.icono+'</span> '+esc(x.nombre)+'</button>'; }).join('')+'<button type="button" class="em-btn em-grande" id="mas-buscar">Buscar</button><button type="button" class="em-btn em-grande" id="mas-salir">Volver al inicio</button></div></div>');
+	$('#mas-buscar',v).addEventListener('click', function(){ buscar(''); });
+	$('#mas-salir',v).addEventListener('click', E.salir);
+	return v;
+}});
+
+E.tema = function(t){ document.documentElement.dataset.tema=t; DB.kvSet('tema', t); };
 
 /* ── Arranque ────────────────────────────────────────────────────────────── */
-try { tema(localStorage.getItem('rau_em_tema')||''); } catch(e){}
-armar();
-if(inc()){ recalcular(); try { vista=sessionStorage.getItem('rau_em_vista')||'tablero'; } catch(e){} }
-pintarCabecera(); pintarVista(); pintarSync();
-cargarAlertas(); setInterval(cargarAlertas, 5*60000);
-sincronizar();
-// Las edades («hace 12 min») y las estaciones que se quedan calladas cambian solas con el tiempo
-setInterval(function(){ if(document.visibilityState==='visible' && !$('#em-main').querySelector('input:focus,textarea:focus,select:focus')) refrescar(); }, 30000);
+function arrancar(){
+	armar();
+	DB.abrir().then(function(){ return Promise.all([DB.kvGet('yo'), DB.kvGet('prep'), DB.kvGet('tema'), DB.kvGet('compacto'), DB.kvGet('ventana'), DB.kvGet('cuenta')]); }).then(function(r){
+		if(r[0]) E.yo=r[0]; E.prep=r[1]||{}; if(r[2]) document.documentElement.dataset.tema=r[2]; if(r[3]) document.documentElement.classList.add('em-compacto'); if(r[4]) E.ventana=r[4]; E.cuenta=r[5]||null;
+		if(DB.enMemoria()) setTimeout(function(){ E.aviso('Este navegador no permite guardar datos: todo se pierde al cerrar. Exporta respaldos.', 'peligro'); }, 1500);
+		var cod=null; try { cod=sessionStorage.getItem('rau_em_op'); } catch(e){}
+		var q=new URLSearchParams(location.search).get('op');
+		pintarCabecera(); pintarVista();
+		E.alArrancar.forEach(function(f){ try { f(); } catch(e){} });
+		if(cod) E.entrar(cod);
+		else if(q && E.yo.ind) pedirEntrada(q);
+		// Cuenta de WordPress (si hay sesión iniciada en el sitio)
+		// Solo se redibuja el inicio: el formulario del indicativo no, para no borrar lo que la persona está escribiendo
+		E.rest('yo', {token:false}).then(function(x){ if(x.estado===200){ E.cuenta=x.j.usuario; DB.kvSet('cuenta', E.cuenta); if(!E.op && E.yo.ind && !$('#em-main').contains(document.activeElement)) pintarVista(); } }).catch(function(){});
+	});
+}
+E.alArrancar=[];
+document.addEventListener('DOMContentLoaded', arrancar);
 })();
