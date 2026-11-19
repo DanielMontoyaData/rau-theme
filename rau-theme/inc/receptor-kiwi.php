@@ -145,6 +145,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			<div class="rx-cw-cab">
 				<span class="rx-serigrafia">Decodificador SSTV</span><span id="rx-sstv-info">Esperando el tono VIS de comienzo de imagen…</span>
 				<button type="button" id="rx-sstv-guardar" class="rx-tecla rx-tecla-mini" disabled>Guardar imagen</button>
+				<button type="button" id="rx-sstv-publicar" class="rx-tecla rx-tecla-mini hidden" title="La imagen queda en la galería de la página del receptor durante 30 días">Publicar en la galería</button>
 			</div>
 			<canvas id="rx-sstv-cv" class="rx-sstv-cv" width="320" height="256" aria-label="Imagen SSTV recibida"></canvas>
 			<div id="rx-sstv-galeria" class="rx-sstv-galeria" aria-label="Imágenes anteriores"></div>
@@ -333,7 +334,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		var RECEPTORES=<?php echo wp_json_encode( array_values( (array) get_option( 'rau_receptores', array() ) ) ); ?>, SDR_HK4RAU=null;
 		var AJAX_RX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 		// Con sesión iniciada, lo que se decodifica en JS8 se comparte con el centro de mando (ver inc/js8-oido.php)
-		var JS8_API=<?php echo wp_json_encode( is_user_logged_in() ? array( 'url' => rest_url( 'rau/v1/js8' ), 'spots' => rest_url( 'rau/v1/spots' ), 'grab' => rest_url( 'rau/v1/grabaciones' ), 'nonce' => wp_create_nonce( 'wp_rest' ) ) : null ); ?>;
+		var JS8_API=<?php echo wp_json_encode( is_user_logged_in() ? array( 'url' => rest_url( 'rau/v1/js8' ), 'spots' => rest_url( 'rau/v1/spots' ), 'grab' => rest_url( 'rau/v1/grabaciones' ), 'sstv' => rest_url( 'rau/v1/sstv' ), 'nonce' => wp_create_nonce( 'wp_rest' ) ) : null ); ?>;
 		var PAGINA=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>;
 		var PLAN=<?php echo wp_json_encode( rau_receptor_plan() ); ?>;
 		/* Bandas de radioaficionado con sus segmentos de uso (plan IARU Región 2) y otras escuchas.
@@ -780,8 +781,9 @@ function rau_receptor_kiwi( $args = array() ) {
 			cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(o.img), o.ancho, o.alto), 0, 0);
 			if(o.linea>=o.alto){
 				var url=cv.toDataURL('image/png'), nombre='HK4RAU-SSTV-'+o.modo.replace(/ /g,'')+'-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'')+'.png';
-				sstvImgs.unshift({url:url, nombre:nombre}); if(sstvImgs.length>6) sstvImgs.pop();
+				sstvImgs.unshift({url:url, nombre:nombre, modo:o.modo, freq:st.freq, inicio:Date.now()}); if(sstvImgs.length>6) sstvImgs.pop();
 				$('rx-sstv-guardar').disabled=false;
+				if(JS8_API && JS8_API.sstv){ var pb=$('rx-sstv-publicar'); pb.classList.remove('hidden'); pb.disabled=false; pb.textContent='Publicar en la galería'; }
 				$('rx-sstv-galeria').innerHTML=sstvImgs.map(function(x, i){ return '<a href="'+x.url+'" download="'+x.nombre+'" title="Descargar"><img src="'+x.url+'" alt="Imagen SSTV '+(i+1)+'" width="80" height="64"></a>'; }).join('');
 			}
 		}
@@ -1221,6 +1223,17 @@ function rau_receptor_kiwi( $args = array() ) {
 		if($('rx-receptor')) $('rx-receptor').addEventListener('change', function(){ elegirReceptor(this.value); });
 		if($('rx-comparar')) $('rx-comparar').addEventListener('change', function(){ compararCon(this.value); });
 		$('rx-dig-borrar').addEventListener('click', function(){ if(st.dig) st.dig.reiniciar(); $('rx-dig-texto').textContent=''; });
+		$('rx-sstv-publicar').addEventListener('click', function(){
+			var x=sstvImgs[0], b=this; if(!x || !JS8_API) return;
+			b.disabled=true; b.textContent='Publicando…';
+			fetch(x.url).then(function(r){ return r.blob(); }).then(function(bl){
+				var fd=new FormData(); fd.append('imagen', bl, x.nombre); fd.append('modo', x.modo); fd.append('freq', x.freq); fd.append('inicio', x.inicio);
+				return fetch(JS8_API.sstv, {method:'POST', credentials:'same-origin', headers:{'X-WP-Nonce':JS8_API.nonce}, body:fd});
+			}).then(function(r){ return r.json(); }).then(function(j){
+				if(!j.url){ b.disabled=false; b.textContent='Publicar en la galería'; $('rx-sstv-info').textContent='No se pudo publicar: '+(j.error||'error'); return; }
+				b.textContent='Publicada ✓';
+			}).catch(function(){ b.disabled=false; b.textContent='Publicar en la galería'; });
+		});
 		$('rx-sstv-guardar').addEventListener('click', function(){ var x=sstvImgs[0]; if(!x) return; var a=document.createElement('a'); a.href=x.url; a.download=x.nombre; document.body.appendChild(a); a.click(); a.remove(); });
 		$('rx-ft-borrar').addEventListener('click', function(){ ftFilas=[]; pintarFt(); });
 		$('rx-ft-cq').addEventListener('change', pintarFt);

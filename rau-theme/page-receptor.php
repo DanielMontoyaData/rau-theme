@@ -24,6 +24,7 @@ require_once get_template_directory() . '/inc/receptor-kiwi.php';
 	</div>
 
 	<?php rau_receptor_kiwi(); ?>
+	<?php if ( function_exists( 'rau_receptor_aportes' ) ) rau_receptor_aportes(); ?>
 </section>
 
 <?php get_footer(); ?>

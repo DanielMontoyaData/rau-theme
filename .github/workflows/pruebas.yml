@@ -46,7 +46,10 @@ jobs:
       - name: Playwright con Chromium
         run: |
           npm install --no-save --no-package-lock playwright@1.56.1
-          npx playwright install --with-deps chromium
+          # Hasta 3 intentos; si la descarga no funciona, el Chrome que ya trae la máquina de GitHub
+          for i in 1 2 3; do npx playwright install --with-deps chromium && exit 0; sleep 20; done
+          echo "RAU_CHROMIUM=$(command -v google-chrome || command -v chromium)" >> "$GITHUB_ENV"
+          echo "NODE_OPTIONS=--import=$GITHUB_WORKSPACE/rau-theme/tests/ci/navegador.mjs" >> "$GITHUB_ENV"
       - name: WordPress de prueba con el tema
         run: bash rau-theme/tests/ci/montar-wp.sh "$RUNNER_TEMP/wp" rau-theme
       - name: Pruebas de integración y de navegador

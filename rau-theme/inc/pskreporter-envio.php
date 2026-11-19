@@ -32,6 +32,10 @@ function rau_psk_indicativo_valido( $c ) {
 }
 
 add_action( 'rest_api_init', function() {
+	register_rest_route( 'rau/v1', '/spots/resumen', array(
+		'methods' => 'GET', 'permission_callback' => '__return_true',
+		'callback' => function() { $r = rest_ensure_response( rau_psk_resumen() ); $r->header( 'Cache-Control', 'public, max-age=600' ); return $r; },
+	) );
 	register_rest_route( 'rau/v1', '/spots', array(
 		'methods'             => 'POST',
 		'permission_callback' => function() { return is_user_logged_in(); },
@@ -134,8 +138,43 @@ function rau_psk_enviar_cola( $ahora = null ) {
 	$est = array( 'id' => $id, 'seq' => $seq, 'enviados' => $n_env, 'ultimo' => $ahora, 'plantillas' => $ok && $plant ? $ahora : (int) ( $est['plantillas'] ?? 0 ),
 		'resultado' => $ok ? sprintf( '%d reportes enviados', $total ) : 'Error: ' . $error, 'cuando' => $ahora );
 	update_option( 'rau_psk_estado', $est, false );
-	if ( $ok ) update_option( RAU_PSK_COLA, array(), false );
+	if ( $ok ) { rau_psk_contar( $cola, $ahora ); update_option( RAU_PSK_COLA, array(), false ); }
 	return $total;
+}
+
+/* Estadísticas de lo enviado (30 días, por día): cuántos reportes, por banda y modo, y el más lejano.
+   Se muestran en el receptor para que se vea lo que aporta el club a la red. */
+function rau_psk_contar( $lote, $ahora = null ) {
+	$ahora = $ahora ?: time();
+	$st = get_option( 'rau_psk_stats', array() ); if ( ! is_array( $st ) ) $st = array();
+	$l = get_option( 'rau_sdr_lugar' ); $aqui = is_array( $l ) && isset( $l['lat'] ) ? array( (float) $l['lat'], (float) $l['lng'] ) : null;
+	foreach ( $lote as $x ) {
+		$dia = gmdate( 'Y-m-d', $x['t'] ?: $ahora );
+		if ( ! isset( $st[ $dia ] ) ) $st[ $dia ] = array( 'n' => 0, 'b' => array(), 'm' => array(), 'lejos' => null );
+		$d =& $st[ $dia ];
+		$d['n']++; $b = rau_psk_banda( $x['f'] ); $d['b'][ $b ] = ( $d['b'][ $b ] ?? 0 ) + 1; $d['m'][ $x['m'] ] = ( $d['m'][ $x['m'] ] ?? 0 ) + 1;
+		if ( $aqui && $x['g'] && function_exists( 'rau_prop_loc' ) && function_exists( 'rau_prop_km' ) ) {
+			$p = rau_prop_loc( $x['g'] );
+			if ( $p ) { $km = rau_prop_km( $aqui, $p ); if ( ! $d['lejos'] || $km > $d['lejos']['km'] ) $d['lejos'] = array( 'c' => $x['c'], 'km' => $km, 'b' => $b, 'm' => $x['m'] ); }
+		}
+		unset( $d );
+	}
+	ksort( $st ); $st = array_slice( $st, -30, null, true );
+	update_option( 'rau_psk_stats', $st, false );
+}
+function rau_psk_resumen( $dias = 30, $ahora = null ) {
+	$ahora = $ahora ?: time(); $desde = gmdate( 'Y-m-d', $ahora - ( $dias - 1 ) * DAY_IN_SECONDS );
+	$st = get_option( 'rau_psk_stats', array() ); $r = array( 'dias' => $dias, 'n' => 0, 'bandas' => array(), 'modos' => array(), 'lejos' => null, 'por_dia' => array() );
+	if ( ! is_array( $st ) ) return $r;
+	foreach ( $st as $dia => $d ) {
+		if ( $dia < $desde ) continue;
+		$r['n'] += $d['n']; $r['por_dia'][ $dia ] = $d['n'];
+		foreach ( $d['b'] as $b => $k ) $r['bandas'][ $b ] = ( $r['bandas'][ $b ] ?? 0 ) + $k;
+		foreach ( $d['m'] as $m => $k ) $r['modos'][ $m ] = ( $r['modos'][ $m ] ?? 0 ) + $k;
+		if ( $d['lejos'] && ( ! $r['lejos'] || $d['lejos']['km'] > $r['lejos']['km'] ) ) $r['lejos'] = $d['lejos'] + array( 'dia' => $dia );
+	}
+	arsort( $r['bandas'] ); arsort( $r['modos'] );
+	return $r;
 }
 /* UDP a report.pskreporter.info:4739, siempre desde el mismo puerto local si el servidor lo permite.
    El filtro rau_psk_udp permite interceptarlo (pruebas) o desactivarlo (devolviendo un texto de error). */
