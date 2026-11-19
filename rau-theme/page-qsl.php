@@ -12,6 +12,7 @@ $qsos = new WP_Query( array( 'post_type' => 'qso', 'posts_per_page' => 50, 'orde
 	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Registro de Contactos</p>
 	<h1 class="mb-2 max-w-2xl font-display text-3xl font-bold sm:text-4xl">Libro de Guardia Digital</h1>
 	<p class="mb-8 max-w-2xl text-muted-foreground">Bitácora de contactos (QSO) de la asociación y su confirmación vía QSL.</p>
+	<?php if ( function_exists( 'rau_libro_herramientas' ) ) rau_libro_herramientas(); ?>
 
 	<div class="overflow-hidden rounded-2xl border border-border/70 bg-card">
 		<div class="hidden grid-cols-12 gap-4 border-b border-border/70 px-6 py-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground md:grid">
@@ -30,6 +31,7 @@ $qsos = new WP_Query( array( 'post_type' => 'qso', 'posts_per_page' => 50, 'orde
 			<div class="md:col-span-3">
 				<?php if ( $confirmado ) : ?>
 					<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 text-emerald-400 bg-emerald-400/10 ring-emerald-400/30">Confirmado</span>
+					<?php $dip = (int) get_post_meta( get_the_ID(), 'diploma_id', true ); $dnum = $dip ? get_post_meta( $dip, 'numero', true ) : ''; if ( $dnum ) : ?><a class="ml-2 text-xs text-primary hover:underline" href="<?php echo esc_url( add_query_arg( 'verificar', $dnum, home_url( '/herramientas/diplomas/' ) ) ); ?>">Diploma</a><?php endif; ?>
 				<?php else : ?>
 					<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 text-amber-400 bg-amber-400/10 ring-amber-400/30">Pendiente</span>
 				<?php endif; ?>

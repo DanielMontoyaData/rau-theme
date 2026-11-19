@@ -4579,9 +4579,29 @@ rauOn('gain-dbd','input',function(){
 			+'<p class="mt-1 font-mono text-xs text-muted-foreground">'+fmt(it.fecha)+'</p>'
 			+'<div class="mt-2 flex items-center justify-between">'
 			+'<span class="font-mono text-sm font-bold text-primary">'+(it.faltan<=0?'¡Es este fin de semana!':'Faltan '+it.faltan+' días')+'</span>'
-			+'<a href="'+it.url+'" target="_blank" rel="noopener" class="text-xs font-medium text-primary hover:underline">Reglas →</a>'
+			+'<span class="flex items-center gap-3"><button type="button" class="concurso-ics text-xs font-medium text-muted-foreground hover:text-primary" data-i="'+items.indexOf(it)+'" title="Recordatorio un día antes en tu calendario">📅 Al calendario</button>'
+			+'<a href="'+it.url+'" target="_blank" rel="noopener" class="text-xs font-medium text-primary hover:underline">Reglas →</a></span>'
 			+'</div></div>';
-	}).join('');
+	}).join('')+'<p class="sm:col-span-2 text-xs text-muted-foreground">«Al calendario» descarga un evento de todo el fin de semana con aviso un día antes; sirve en Google Calendar, el calendario del celular y Outlook. La hora exacta de inicio está en las reglas de cada concurso. <button type="button" id="concursos-ics-todos" class="font-medium text-primary hover:underline">Descargar todos</button></p>';
+
+	/* Archivo .ics (RFC 5545): un evento por concurso, de sábado a domingo, con alarma el día anterior */
+	function d8(dt){ return dt.toISOString().slice(0,10).replace(/-/g,''); }
+	function vevento(it){
+		var fin=new Date(it.fecha.getTime()+2*86400000), sello=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
+		return ['BEGIN:VEVENT','UID:concurso-'+d8(it.fecha)+'-'+it.nombre.replace(/[^A-Za-z0-9]/g,'').toLowerCase()+'@hk4rau.com','DTSTAMP:'+sello,
+			'DTSTART;VALUE=DATE:'+d8(it.fecha),'DTEND;VALUE=DATE:'+d8(fin),'SUMMARY:'+it.nombre.replace(/[,;]/g,' '),'URL:'+it.url,
+			'DESCRIPTION:Concurso de radioafición. Revisa las reglas para la hora exacta: '+it.url,
+			'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Mañana empieza '+it.nombre.replace(/[,;]/g,' '),'TRIGGER:-P1D','END:VALARM','END:VEVENT'].join('\r\n');
+	}
+	function descargarIcs(lista, nombre){
+		var txt=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//RAU//Concursos//ES','CALSCALE:GREGORIAN'].concat(lista.map(vevento)).concat(['END:VCALENDAR']).join('\r\n');
+		var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt], {type:'text/calendar'})); a.download=nombre; document.body.appendChild(a); a.click(); a.remove();
+	}
+	listEl.addEventListener('click', function(e){
+		var b=e.target.closest('.concurso-ics'); if(b){ var it=items[+b.dataset.i]; descargarIcs([it], 'concurso-'+it.nombre.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'').toLowerCase()+'.ics'); return; }
+		if(e.target.id==='concursos-ics-todos') descargarIcs(items, 'concursos-radioaficion.ics');
+	});
+	window.rauConcursosIcs=function(){ return ['BEGIN:VCALENDAR'].concat(items.map(vevento)).join('\r\n'); };
 })();
 
 /* ── RECORDATORIO DE LICENCIA (localStorage, sin cuenta) ── */
@@ -4692,13 +4712,34 @@ rauOn('gain-dbd','input',function(){
 					+'<p class="text-sm text-muted-foreground">'+esc(d.nombre)+'</p>'
 					+(d.evento?'<p class="mt-1 text-xs text-muted-foreground">Actividad: '+esc(d.evento)+'</p>':'')
 					+(d.fecha?'<p class="text-xs text-muted-foreground">Fecha: '+esc(d.fecha)+'</p>':'')
+					+(d.auto?'<button type="button" id="dip-png" class="mt-3 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">⬇ Descargar el diploma (imagen)</button>':'')
 					+'</div>';
+				var bp=document.getElementById('dip-png'); if(bp) bp.addEventListener('click', function(){ diplomaPng(d); });
 			}).catch(function(e){ rauErr(e);
 				resultado.innerHTML='<div class="rounded-xl border border-rose-400/30 bg-rose-400/5 p-4 text-sm text-rose-400">No se pudo verificar. Intenta de nuevo.</div>';
 			});
 	}
 	buscarBtn.addEventListener('click', buscar);
 	input.addEventListener('keydown', function(e){ if(e.key==='Enter') buscar(); });
+	// Enlace directo: /herramientas/diplomas/?verificar=RAU-QSO-… («diploma» es la variable del tipo de contenido)
+	var dp=new URLSearchParams(location.search).get('verificar'); if(dp){ input.value=dp; buscar(); }
+	/* Diploma «Contacto con HK4RAU» en imagen (1600×1131, proporción A4 apaisada) */
+	function diplomaPng(d){
+		var c=document.createElement('canvas'); c.width=1600; c.height=1131; var g=c.getContext('2d');
+		g.fillStyle='#0b1220'; g.fillRect(0,0,1600,1131);
+		g.strokeStyle='#22d3ee'; g.lineWidth=6; g.strokeRect(40,40,1520,1051); g.lineWidth=2; g.strokeRect(62,62,1476,1007);
+		g.textAlign='center'; g.fillStyle='#22d3ee'; g.font='600 34px system-ui, sans-serif'; g.fillText('RADIOAFICIONADOS UNIDOS · HK4RAU', 800, 190);
+		g.fillStyle='#e6edf5'; g.font='700 78px system-ui, sans-serif'; g.fillText('Diploma de contacto', 800, 320);
+		g.font='400 34px system-ui, sans-serif'; g.fillStyle='#93a3b8'; g.fillText('Se otorga a la estación', 800, 420);
+		g.fillStyle='#ffffff'; g.font='800 120px ui-monospace, monospace'; g.fillText(String(d.nombre||''), 800, 560);
+		g.fillStyle='#e6edf5'; g.font='400 36px system-ui, sans-serif';
+		var t=String(d.evento||''), lin=[], w='';
+		t.split(' ').forEach(function(p){ var x=w?w+' '+p:p; if(g.measureText(x).width>1300){ lin.push(w); w=p; } else w=x; }); if(w) lin.push(w);
+		lin.forEach(function(l,i){ g.fillText(l, 800, 660+i*50); });
+		g.fillStyle='#93a3b8'; g.font='400 28px system-ui, sans-serif'; g.fillText('Emitido el '+(d.fecha||'')+' · N.º '+(d.numero||''), 800, 930);
+		g.fillText('Compruébalo en hk4rau.com → Herramientas → Verificador de Diplomas', 800, 980);
+		var a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download='diploma-'+String(d.numero||'rau')+'.png'; document.body.appendChild(a); a.click(); a.remove();
+	}
 })();
 
 /* ── MAIDENHEAD ── */

@@ -23,6 +23,7 @@ require get_template_directory() . '/inc/sstv-galeria.php';
 require get_template_directory() . '/inc/vigia-receptor.php';
 require get_template_directory() . '/inc/turnos.php';
 require get_template_directory() . '/inc/capacidades.php';
+require get_template_directory() . '/inc/libro-adif.php';
 
 /**
  * Configuración básica del tema
@@ -2518,6 +2519,8 @@ function rau_diploma_lookup() {
 		'nombre'  => get_post_meta( get_the_ID(), 'nombre', true ),
 		'evento'  => get_post_meta( get_the_ID(), 'evento', true ),
 		'fecha'   => get_post_meta( get_the_ID(), 'fecha', true ),
+		'numero'  => get_post_meta( get_the_ID(), 'numero', true ),
+		'auto'    => (bool) get_post_meta( get_the_ID(), 'qso_id', true ),
 	);
 	wp_reset_postdata();
 	wp_send_json_success( $data );

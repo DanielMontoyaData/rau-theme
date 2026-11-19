@@ -11,6 +11,8 @@ $diplomas = new WP_Query( array(
 	'post_status'    => 'publish',
 	'orderby'        => 'date',
 	'order'          => 'DESC',
+	// Los diplomas de contacto se emiten solos con cada QSO confirmado: se comprueban en el verificador
+	'meta_query'     => array( array( 'key' => 'qso_id', 'compare' => 'NOT EXISTS' ) ),
 ) );
 ?>
 <section class="mx-auto max-w-[96rem] px-4 sm:px-6 py-16">
