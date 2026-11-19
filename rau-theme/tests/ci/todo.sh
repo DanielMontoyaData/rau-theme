@@ -14,7 +14,7 @@ unidades)
 	;;
 integracion)
 	WP=${2:?ruta a wordpress}; export RAU_EM_BASE=${RAU_EM_BASE:-http://localhost:8099}
-	for f in tests/emergencias/avisos.php tests/emergencias/cuentas.php tests/radio/propagacion.php tests/radio/js8-oido.php tests/radio/pskreporter.php tests/radio/pronostico.php tests/radio/grabaciones.php tests/radio/sstv.php tests/radio/vigia.php tests/sitio/imagenes.php; do
+	for f in tests/emergencias/avisos.php tests/emergencias/cuentas.php tests/radio/propagacion.php tests/radio/js8-oido.php tests/radio/pskreporter.php tests/radio/pronostico.php tests/radio/grabaciones.php tests/radio/sstv.php tests/radio/vigia.php tests/sitio/imagenes.php tests/sitio/turnos.php; do
 		paso "$f" php "$f" "$WP/wp-load.php"
 	done
 	paso "tests/sitio/dos-pasos.php" php tests/sitio/dos-pasos.php "$WP/wp-load.php" "$RAU_EM_BASE"

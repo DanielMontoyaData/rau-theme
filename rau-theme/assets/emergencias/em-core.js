@@ -743,6 +743,23 @@ function paqueteLeer(texto){
 	}).catch(function(){ return {error:'No se pudo descomprimir el paquete.'}; });
 }
 
+/* Resumen público de una operación (tablero de solo lectura para autoridades y organismos de socorro):
+   incidentes vigentes y totales, estado de la red y de las estaciones, sin nombres de personas, notas,
+   mensajes, fuentes ni coordenadas exactas (se redondean a ~1 km). */
+function tableroPublico(S, op, ahora){
+	ahora=ahora||Date.now();
+	var I=indicadores(S, {}, ahora), red=S.red;
+	var r2=function(n){ return typeof n==='number' ? Math.round(n*100)/100 : undefined; };
+	var vig=Object.keys(S.inc).map(function(k){ return S.inc[k]; }).filter(incidenteActivo)
+		.sort(function(a,b){ return (ORDEN_PRIO.indexOf(a.prio)-ORDEN_PRIO.indexOf(b.prio)) || (b.act-a.act); }).slice(0,60)
+		.map(function(x){ return {tipo:x.tipo, titulo:String(x.titulo||'').slice(0,140), lugar:String(x.lugar||'').slice(0,120), prio:x.prio, verif:x.verif, estado:x.estado, recibido:x.recibido, act:x.act, lat:r2(x.lat), lng:r2(x.lng)}; });
+	var est=Object.keys(S.est).map(function(k){ return estadoEstacion(S.est[k], ahora); });
+	return {op:{nombre:String(op.nombre||'').slice(0,120), zona:String(op.zona||'').slice(0,120), tipo:op.tipo==='simulacro'?'simulacro':'real', estado:S.cerrada?'cerrado':'abierto'},
+		ts:ahora, porPrio:I.porPrio, porEstado:I.porEstado, porVerif:I.porVerif, vigentes:vig,
+		estaciones:{total:est.length, activas:est.filter(function(s){ return ['desconocido','fuera_servicio','no_verificado'].indexOf(s.e)<0; }).length},
+		red:red?{e:red.e, canal:String(red.canal||'').slice(0,80)}:null};
+}
+
 /* Comprueba la firma de un paquete leído contra las llaves conocidas (S.llaves).
    estado: 'valida' (la firmó la llave registrada de esa persona), 'invalida' (alterado o llave equivocada),
    'desconocida' (firmado, pero esa llave no está registrada en la operación de este dispositivo), 'sin_firma'. */
@@ -761,6 +778,6 @@ return { usarEsquema:usarEsquema, ET:ET, et:et, ORDEN_PRIO:ORDEN_PRIO, ORDEN_PRE
 	duplicados:duplicados, filtrarIncidentes:filtrarIncidentes, indicadores:indicadores, textoMensaje:textoMensaje, sitrep:sitrep, informeCierre:informeCierre,
 	geojson:geojson, csv:csv, cap:cap, mediana:mediana,
 	AJUSTES:AJUSTES, LIMITE_MSG:LIMITE_MSG, ajustes:ajustes, periodoActual:periodoActual, ultimoContacto:ultimoContacto, colaRed:colaRed, alarmas:alarmas, comando:comando,
-	puntosEntre:puntosEntre, perfilEnlace:perfilEnlace, relevo:relevo, ics309:ics309, crc32:crc32, paqueteCrear:paqueteCrear, paqueteLeer:paqueteLeer, paqueteVerificar:paqueteVerificar,
+	puntosEntre:puntosEntre, perfilEnlace:perfilEnlace, relevo:relevo, ics309:ics309, crc32:crc32, paqueteCrear:paqueteCrear, paqueteLeer:paqueteLeer, paqueteVerificar:paqueteVerificar, tableroPublico:tableroPublico,
 	llaveNueva:llaveNueva, llavePublica:llavePublica, llaveHuella:llaveHuella, firmarTexto:firmarTexto, verificarTexto:verificarTexto };
 });

@@ -12,6 +12,7 @@ $hoy = current_time( 'Y-m-d' );
 	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Red de Emergencia</p>
 	<h1 class="mb-2 max-w-2xl font-display text-3xl font-bold sm:text-4xl">Turnos de Guardia</h1>
 	<p class="mb-8 max-w-2xl text-muted-foreground">Quién está de turno para monitorear la Red de Emergencia cada semana.</p>
+	<?php if ( function_exists( 'rau_turno_tarjeta' ) ) rau_turno_tarjeta(); ?>
 
 	<div class="overflow-hidden rounded-2xl border border-border/70 bg-card">
 		<div class="hidden grid-cols-12 gap-4 border-b border-border/70 px-6 py-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground md:grid">

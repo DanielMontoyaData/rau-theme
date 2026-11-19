@@ -193,11 +193,40 @@ test('9. plan de comunicaciones: propuesta que se aprueba, imprimible', async ()
 	await coord.fill('#f-plan [name=objetivo]', 'Enlazar PMU de Pereira y Dosquebradas');
 	await coord.fill('#f-plan [name=resp]', 'HK6COO');
 	await coord.fill('#f-plan [name=canal_p]', '147.120 FM');
+	// La plantilla llena lo vacío sin pisar lo escrito
+	await coord.selectOption('#f-plan [name=plantilla]', 'deslizamiento');
+	assert.equal(await coord.inputValue('#f-plan [name=canal_p]'), '147.120 FM');
+	assert.match(await coord.inputValue('#f-plan [name=canal_a]'), /7\.060/);
+	assert.match(await coord.inputValue('#f-plan [name=mallas]'), /30 minutos/);
+	const antes = await coord.evaluate(() => Object.keys(RauEm.S.acciones).length);
 	await coord.click('#f-plan button');
+	assert.equal(await coord.evaluate(() => Object.keys(RauEm.S.acciones).length), antes + 5, 'su lista de verificación');
 	assert.match(await texto(coord, '[data-vivo=plan]'), /Borrador[\s\S]*no es una instrucción oficial/);
 	await coord.click('#pl-aprobar'); await modalListo(coord); await coord.fill('#f-pe [name=v]', 'HK6COO, coordinador'); await coord.click('#f-pe button');
 	assert.match(await texto(coord, '[data-vivo=plan]'), /Aprobado/);
 	await sincronizado(coord);
+});
+
+test('10b. tablero público: enlace de solo lectura sin datos personales, que se retira', async () => {
+	await coord.evaluate(() => RauEm.ir('informes'));
+	await coord.click('#em-main [role=tab][data-t=tablero]');
+	await coord.click('#tb-pub');
+	await coord.waitForSelector('#tb-est input');
+	const url = await coord.inputValue('#tb-est input');
+	assert.match(url, /\/tablero-emergencia\/[a-f0-9]{24}\/$/);
+	const ctx = await nav.newContext(); const pub = await ctx.newPage();
+	await pub.goto(url); await pub.waitForSelector('table, h1');
+	const txt = await pub.textContent('body');
+	assert.match(txt, /Incidentes vigentes/);
+	const S = await coord.evaluate(() => ({ titulos: Object.values(RauEm.S.inc).filter(RauEm.core.incidenteActivo).map(x => x.titulo), fuentes: Object.values(RauEm.S.inc).map(x => x.fuente).filter(Boolean), autores: [...new Set(RauEm.eventos.map(e => e.a))] }));
+	assert.ok(S.titulos.length && S.titulos.every(t => txt.includes(t)), 'muestra los incidentes vigentes');
+	assert.ok(S.fuentes.every(f => !txt.includes(f)), 'no muestra las fuentes');
+	assert.ok(S.autores.every(a => !txt.includes(a)), 'no muestra quién registró');
+	await coord.click('#tb-ret');
+	await coord.waitForSelector('#tb-pub');
+	await pub.reload(); assert.match(await pub.textContent('h1'), /no existe o ya no se publica/);
+	await ctx.close();
+	await coord.click('#em-main [role=tab][data-t=sitrep]');
 });
 
 test('10. SITREP generado de los registros, con corte, fuentes y limitaciones', async () => {

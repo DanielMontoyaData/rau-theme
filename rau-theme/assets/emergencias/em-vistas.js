@@ -5,7 +5,7 @@
  */
 (function(){
 'use strict';
-var E=window.RauEm, core=E.core, C=E.C, $=E.$, $$=E.$$, esc=E.esc, et=core.et;
+var E=window.RauEm, core=E.core, C=E.C, $=E.$, $$=E.$$, esc=E.esc, et=core.et, DB=E.db;
 var CLASE_PRIO={critica:'peligro', alta:'aviso', media:'ok', baja:'apagado'}, CLASE_VERIF={reportado:'aviso', en_verificacion:'aviso', verificado:'ok', descartado:'apagado'};
 var CLASE_EST={disponible:'ok', reportado_disponible:'aviso', no_verificado:'apagado', degradado:'aviso', fuera_servicio:'peligro', desconocido:'apagado'};
 var CLASE_MSG={creado:'apagado', en_cola:'aviso', enviado:'aviso', recibido_nodo:'aviso', entregado:'ok', confirmado:'ok', fallido:'peligro', anulado:'apagado'};
@@ -617,6 +617,38 @@ E.registrarVista('estaciones', {nombre:'Estaciones y enlaces', icono:'📡', fn:
 
 /* ── F. Plan de comunicaciones ───────────────────────────────────────────── */
 var CAMPOS_PLAN=[['objetivo','Objetivo de comunicaciones',true],['resp','Responsable',true],['estaciones','Estaciones participantes'],['canal_p','Canales principales',true],['canal_a','Canales alternos'],['modos','Modos disponibles'],['llamada','Procedimiento de llamada'],['mallas','Horarios de las mallas'],['formato','Formato de reporte'],['perdida','Procedimiento de pérdida de contacto'],['retrans','Procedimiento de retransmisión'],['energia','Autonomía energética reportada'],['restricciones','Restricciones y observaciones']];
+/* Plantillas por tipo de evento: llenan el plan de comunicaciones y proponen una lista de verificación.
+   Son un punto de partida para la red de radioaficionados (no reemplazan el plan de la autoridad): se
+   ajustan a la zona y cada cambio queda como una versión del plan. Las frecuencias son las que el sitio
+   ya publica (símplex de llamada 146.520 y los centros de actividad NVIS de 40 y 80 m). */
+var BASE_PLAN={
+	canal_p:'Repetidora de la zona (ver Directorio) · Símplex 146.520 MHz FM como respaldo local',
+	canal_a:'HF NVIS: 40 m de día (centro de actividad 7.060 LSB), 80 m de noche (3.985 LSB) · Módem RAU o paquetes por QR si no hay voz',
+	modos:'FM, LSB; datos: módem RAU, JS8 si hay equipo',
+	llamada:'Control de red llama por lista; cada estación responde con indicativo, ubicación y si tiene tráfico (precedencia E/P/B/R).',
+	formato:'Indicativo · lugar · situación · necesidades · tráfico pendiente. Mensajes formales en ICS-213 o radiograma.',
+	perdida:'Si no hay contacto en 2 llamados: intentar canal alterno, luego HF NVIS; al recuperar, reportar a control de red.',
+	retrans:'Una estación de enlace retransmite a quien no alcanza la repetidora; se anota en el mensaje por quién pasó.',
+	energia:'Cada estación reporta autonomía al registrarse y cuando baje de 4 horas.'
+};
+var PLANTILLAS={
+	deslizamiento:{n:'Deslizamiento', plan:{objetivo:'Mantener comunicación entre las veredas afectadas, el puesto de mando y los organismos de socorro mientras la vía y la telefonía estén caídas.',
+		mallas:'Cada 30 minutos las primeras 6 horas; luego cada hora.', restricciones:'No operar estaciones portátiles en la zona del deslizamiento ni en el cauce de quebradas cercanas.'},
+		acciones:['Confirmar qué repetidoras de la zona siguen en el aire','Ubicar una estación de enlace con línea de vista a las veredas afectadas','Reportar vías bloqueadas y accesos alternos','Registrar personas incomunicadas por vereda','Asignar una estación junto al puesto de mando']},
+	sismo:{n:'Sismo', plan:{objetivo:'Dar un primer panorama de daños por municipio y sostener comunicación si fallan la telefonía y la energía.',
+		mallas:'Malla de evaluación inmediata, luego cada hora. Atentos a réplicas.', restricciones:'Antes de transmitir, verificar que la edificación y la torre de antena sean seguras.'},
+		acciones:['Llamar a lista a todas las estaciones de la red y anotar quién responde','Reporte rápido por municipio: daños visibles, heridos, servicios caídos','Revisar estado de repetidoras y su energía de respaldo','Activar HF NVIS si la red de VHF quedó fragmentada','Asignar estación en el hospital o centro de salud principal']},
+	inundacion:{n:'Inundación o avenida torrencial', plan:{objetivo:'Vigilar el nivel de los ríos y quebradas y avisar a tiempo a las comunidades río abajo.',
+		mallas:'Cada 30 minutos mientras siga lloviendo; cada 15 si un observador reporta subida rápida.', restricciones:'Ninguna estación en orillas, puentes ni zonas bajas.'},
+		acciones:['Ubicar observadores con radio en puntos altos río arriba','Acordar señal de alerta de subida del nivel','Listar comunidades río abajo y cómo avisarles','Verificar albergues y su comunicación','Seguir el pronóstico de lluvia de la zona (Herramientas → Perfil de enlace / lluvia)']},
+	incendio_forestal:{n:'Incendio forestal', plan:{objetivo:'Apoyar la coordinación de bomberos y brigadas con reportes de avance del fuego y del viento.',
+		mallas:'Cada hora, y de inmediato ante cambio de viento o fuego cerca de viviendas.', restricciones:'Las estaciones de observación con ruta de salida definida; nunca a sotavento del fuego.'},
+		acciones:['Ubicar puntos de observación con vista al incendio','Reportar dirección y fuerza del viento cada hora','Registrar viviendas y personas en riesgo','Confirmar canales de los bomberos y no interferirlos','Asignar estación en el puesto de mando unificado']},
+	generica:{n:'Genérica', plan:{objetivo:'Sostener la comunicación de la zona afectada con el puesto de mando mientras fallen los medios habituales.', mallas:'Cada hora.'},
+		acciones:['Llamar a lista a las estaciones de la red','Verificar repetidoras de la zona','Asignar estación de enlace con el puesto de mando','Registrar necesidades urgentes por lugar']}
+};
+function plantilla(k){ var t=PLANTILLAS[k]; if(!t) return null; var p={}; Object.keys(BASE_PLAN).forEach(function(x){ p[x]=BASE_PLAN[x]; }); Object.keys(t.plan).forEach(function(x){ p[x]=t.plan[x]; }); return {n:t.n, plan:p, acciones:t.acciones}; }
+E.plantillas=PLANTILLAS; E.plantilla=plantilla;
 function planActual(){
 	var l=Object.keys(E.S.planes).map(function(k){ return E.S.planes[k]; }).filter(function(p){ return p.estado!=='retirado'; }).sort(function(a,b){ return b.ts-a.ts; });
 	return l.filter(function(p){ return p.estado==='aprobado'; })[0] || l[0] || null;
@@ -653,8 +685,21 @@ E.registrarVista('plan', {nombre:'Plan de comunicaciones', icono:'⌁', fn:funct
 	var b;
 	if((b=$('#pl-nuevo',v))) b.addEventListener('click', function(){
 		var d=p?p.d:{};
-		E.modal('Plan de comunicaciones', '<form class="em-form" id="f-plan"><p class="em-nota">Se guarda como una versión nueva en borrador; las anteriores se conservan.</p>'+CAMPOS_PLAN.map(function(c){ return '<label>'+esc(c[1])+(c[2]?' *':'')+'<textarea class="em-campo" name="'+c[0]+'" rows="2"'+(c[2]?' required':'')+'>'+esc(d[c[0]]||'')+'</textarea></label>'; }).join('')+'<button class="em-btn primario">Guardar versión</button></form>', function(c){
-			$('#f-plan',c).addEventListener('submit', function(e){ e.preventDefault(); var x={}; CAMPOS_PLAN.forEach(function(k){ x[k[0]]=this[k[0]].value; }, this); if(E.registrar('p_ver', x)){ E.cerrarModal(); E.ir('plan'); } });
+		E.modal('Plan de comunicaciones', '<form class="em-form" id="f-plan"><p class="em-nota">Se guarda como una versión nueva en borrador; las anteriores se conservan.</p>'
+			+'<label>Partir de una plantilla<select class="em-campo" name="plantilla"><option value="">— Sin plantilla —</option>'+Object.keys(PLANTILLAS).map(function(k){ return '<option value="'+k+'">'+esc(PLANTILLAS[k].n)+'</option>'; }).join('')+'</select></label>'+CAMPOS_PLAN.map(function(c){ return '<label>'+esc(c[1])+(c[2]?' *':'')+'<textarea class="em-campo" name="'+c[0]+'" rows="2"'+(c[2]?' required':'')+'>'+esc(d[c[0]]||'')+'</textarea></label>'; }).join('')+'<button class="em-btn primario">Guardar versión</button></form>', function(c){
+			$('#f-plan',c).plantilla.addEventListener('change', function(){
+				var t=plantilla(this.value), f=this.form; if(!t) return;
+				// Llena lo vacío; lo que ya estaba escrito no se pisa
+				CAMPOS_PLAN.forEach(function(k){ if(t.plan[k[0]] && !f[k[0]].value.trim()) f[k[0]].value=t.plan[k[0]]; });
+				if(!f.resp.value.trim()) f.resp.value=E.yo.ind||'';
+			});
+			$('#f-plan',c).addEventListener('submit', function(e){ e.preventDefault(); var x={}, t=plantilla(this.plantilla.value); CAMPOS_PLAN.forEach(function(k){ x[k[0]]=this[k[0]].value; }, this);
+				if(E.registrar('p_ver', x)){
+					// Con plantilla: su lista de verificación, sin repetir lo que ya está
+					if(t){ var ya={}; Object.keys(E.S.acciones||{}).forEach(function(k){ ya[String(E.S.acciones[k].texto||'').toLowerCase()]=1; });
+						t.acciones.forEach(function(a){ if(!ya[a.toLowerCase()]) E.registrar('accion', {texto:a}); }); }
+					E.cerrarModal(); E.ir('plan');
+				} });
 		}, true);
 	});
 	if((b=$('#pl-proponer',v))) b.addEventListener('click', function(){ if(E.registrar('p_est', {p:p.id, e:'propuesto'})) E.ir('plan'); });
@@ -792,11 +837,55 @@ E.VIVO.calidad = function(){
 };
 document.addEventListener('click', function(e){ var b=e.target.closest('[data-resuelve]'); if(!b) return; E.modal('Resolver conflicto', '<form class="em-form" id="f-res"><label>Por qué vale ese<input class="em-campo" name="nota" required></label><button class="em-btn primario">Resolver</button></form>', function(c){ $('#f-res',c).addEventListener('submit', function(ev){ ev.preventDefault(); if(!this.nota.value.trim()) return; if(E.registrar('resuelve', {ent:b.dataset.resuelve, gana:b.dataset.gana, nota:this.nota.value})) E.cerrarModal(); }); }); });
 var pestanaInf='sitrep';
+/* ── Tablero público de solo lectura (inc/emergencias/tablero.php) ──
+   Lo publica quien coordina; mientras la operación esté abierta en su dispositivo, se actualiza solo
+   (como mucho cada minuto). */
+var tablero={url:'', t:null, ultimo:0};
+function tableroClave(){ return 'tablero:'+E.op.codigo; }
+E.tableroPublicar = function(){
+	if(!E.op || E.op.local || !E.puede('coordinar')) return Promise.resolve(null);
+	tablero.ultimo=Date.now();
+	return E.rest('operaciones/'+E.op.codigo+'/tablero', {metodo:'POST', cuerpo:{resumen:core.tableroPublico(E.S, E.op)}}).then(function(r){
+		if(r.estado!==200 || !r.j || !r.j.url) throw new Error(r.j&&r.j.message||r.j&&r.j.error||'No se pudo publicar');
+		tablero.url=r.j.url; return DB.kvSet(tableroClave(), r.j.url).then(function(){ return r.j.url; });
+	});
+};
+E.tableroRetirar = function(){
+	return E.rest('operaciones/'+E.op.codigo+'/tablero', {metodo:'DELETE'}).then(function(){ tablero.url=''; return DB.kvSet(tableroClave(), ''); });
+};
+// Cada cambio en los registros programa una actualización (si está publicado)
+var refrescarAntes=E.refrescar;
+E.refrescar=function(){
+	var r=refrescarAntes.apply(this, arguments);
+	if(E.op && !E.op.local && E.puede('coordinar') && navigator.onLine!==false){
+		DB.kvGet(tableroClave()).then(function(u){
+			if(!u) return; tablero.url=u; clearTimeout(tablero.t);
+			tablero.t=setTimeout(function(){ E.tableroPublicar().catch(function(){}); }, Math.max(2000, 60000-(Date.now()-tablero.ultimo)));
+		}).catch(function(){});
+	}
+	return r;
+};
 E.registrarVista('informes', {nombre:'Informes', icono:'📄', fn:function(p){
 	if(p.filtro==='calidad') pestanaInf='calidad';
-	var v=E.el('<div><h1>Inteligencia operacional e informes</h1><div class="em-seg em-seg-tabs" role="tablist">'+[['sitrep','SITREP'],['cierre','Cierre y lecciones'],['calidad','Calidad de los datos'],['exportar','Exportar']].map(function(o){ return '<button type="button" role="tab" data-t="'+o[0]+'" aria-selected="'+(pestanaInf===o[0])+'" class="'+(pestanaInf===o[0]?'is-on':'')+'">'+o[1]+'</button>'; }).join('')+'</div><div id="if-c"></div></div>');
+	var v=E.el('<div><h1>Inteligencia operacional e informes</h1><div class="em-seg em-seg-tabs" role="tablist">'+[['sitrep','SITREP'],['cierre','Cierre y lecciones'],['calidad','Calidad de los datos'],['exportar','Exportar']].concat(E.puede('coordinar')&&!E.op.local?[['tablero','Tablero público']]:[]).map(function(o){ return '<button type="button" role="tab" data-t="'+o[0]+'" aria-selected="'+(pestanaInf===o[0])+'" class="'+(pestanaInf===o[0]?'is-on':'')+'">'+o[1]+'</button>'; }).join('')+'</div><div id="if-c"></div></div>');
 	function pintar(){
 		var c=$('#if-c',v);
+		if(pestanaInf==='tablero'){
+			c.innerHTML='<p class="em-nota">Un enlace de solo lectura para la alcaldía, el consejo de gestión del riesgo, la Defensa Civil o la UNGRD: incidentes vigentes, prioridades, verificación, estado de la red y cuántas estaciones están activas. <strong>No muestra</strong> nombres de personas, mensajes, notas, fuentes ni coordenadas exactas (se redondean a ~1 km). Mientras tengas la operación abierta, se actualiza solo.</p><div id="tb-est" aria-live="polite"></div>';
+			function ver(u){
+				var e=$('#tb-est',c);
+				e.innerHTML=u ? '<p class="em-ok-txt">Publicado.</p><p><input class="em-campo em-mono" readonly value="'+esc(u)+'" aria-label="Enlace del tablero"></p><div class="em-acciones">'+boton('tb-cop','Copiar enlace','primario')+boton('tb-abrir','Abrir','')+boton('tb-act','Actualizar ahora','')+boton('tb-ret','Dejar de publicar','peligro')+'</div>'
+					: '<div class="em-acciones">'+boton('tb-pub','Publicar tablero','primario')+'</div>';
+				var b;
+				if((b=$('#tb-pub',e))) b.addEventListener('click', function(){ var bt=this; bt.disabled=true; E.tableroPublicar().then(ver, function(x){ bt.disabled=false; E.aviso(x.message, 'peligro'); }); });
+				if((b=$('#tb-cop',e))) b.addEventListener('click', function(){ E.copiar(u); });
+				if((b=$('#tb-abrir',e))) b.addEventListener('click', function(){ window.open(u, '_blank', 'noopener'); });
+				if((b=$('#tb-act',e))) b.addEventListener('click', function(){ E.tableroPublicar().then(function(){ E.aviso('Tablero actualizado.', 'ok'); }, function(x){ E.aviso(x.message, 'peligro'); }); });
+				if((b=$('#tb-ret',e))) b.addEventListener('click', function(){ if(confirm('¿Dejar de publicar? El enlace dejará de funcionar para todos.')) E.tableroRetirar().then(function(){ ver(''); }); });
+			}
+			DB.kvGet(tableroClave()).then(function(u){ ver(u||''); }, function(){ ver(''); });
+			return;
+		}
 		if(pestanaInf==='sitrep'){
 			var t=core.sitrep(E.S, E.op, {corte:Date.now(), responsable:E.yo.ind, ventanaMin:E.ventana});
 			c.innerHTML='<p class="em-nota">Generado de los registros con fecha de corte de ahora. Incluye fuentes, responsable y limitaciones; no estima cifras.</p><div class="em-acciones">'+boton('if-copiar','Copiar','')+boton('if-imp','Imprimir / PDF','')+boton('if-txt','Descargar .txt','')+boton('if-json','Datos estructurados (JSON)','')+'</div><pre class="em-leer em-informe">'+esc(t)+'</pre>';

@@ -13,7 +13,7 @@
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-foreach ( array( 'modelo', 'esquema', 'directorio', 'alertas', 'api', 'admin', 'avisos' ) as $m ) require __DIR__ . '/emergencias/' . $m . '.php';
+foreach ( array( 'modelo', 'esquema', 'directorio', 'alertas', 'api', 'admin', 'avisos', 'tablero' ) as $m ) require __DIR__ . '/emergencias/' . $m . '.php';
 
 /* ── Ruta /emergencias/ (sin página de WordPress) ───────────────────────── */
 add_action( 'init', function() {
