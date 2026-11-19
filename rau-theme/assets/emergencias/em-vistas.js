@@ -98,6 +98,8 @@ function recomendacionBanda(){
 	if(pm && pm.nvis && pm.iono){
 		var r='<p><strong>Dentro de Colombia (NVIS):</strong> '+(pm.nvis.banda?'<strong>'+esc(pm.nvis.banda)+'</strong>. ':'')+esc(pm.nvis.texto)+' <small>Medido por la ionosonda de '+esc(pm.iono.nombre)+' hace '+pm.iono.hace+' min'+(pm.kp!==null&&pm.kp>=5?' · tormenta geomagnética (Kp '+pm.kp+')':'')+'.</small></p>';
 	} else var r='<p><strong>Dentro de Colombia (NVIS):</strong> '+(dia?'40 m (centro de actividad 7.060). De día la onda de cielo vuelve cerca.':'80 m (centro de actividad 3.985). De noche 40 m salta lejos y deja de oírse a 100–500 km.')+' <small>Regla general de propagación, no una medición.</small></p>';
+	// Enlaces cortos reportados en la última hora: lo que de verdad está funcionando dentro del país
+	if(pm && pm.nvis_medido && pm.nvis_medido.texto) r+='<p><strong>NVIS en uso ahora'+(pm.nvis_medido.banda?': '+esc(pm.nvis_medido.banda):'')+'.</strong> '+esc(pm.nvis_medido.texto)+'</p>';
 	if(o && o.bandas){
 		r+='<p><strong>Medido</strong> por el receptor HK4RAU en '+esc(o.lugar||'Colombia')+' ('+E.haceTxt(o.actualizado*1000)+', últimos 30 min): '+['40m','20m','15m','10m'].map(function(k){ var x=o.bandas[k]; return k.replace('m',' m')+': '+(x&&x.n?'<strong>oye '+x.n+' estaciones</strong>':'sin estaciones'); }).join(' · ')+'.</p>';
 	}

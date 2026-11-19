@@ -126,6 +126,7 @@ function rau_mapa_propagacion() {
 			var h='<p class="mb-1 font-mono text-xs uppercase tracking-[0.2em] text-primary">Pronóstico ahora</p>';
 			if(p.nvis) h+='<p><b>Cerca (NVIS, 0–400 km):</b> '+(p.nvis.banda?'<b>'+esc(p.nvis.banda)+'</b>. ':'')+esc(p.nvis.texto)+'</p>';
 			else h+='<p><b>Cerca (NVIS):</b> sin ionosonda con datos recientes; regla general: 40 m de día, 80 m de noche.</p>';
+			if(p.medido && p.medido.texto) h+='<p class="mt-1"><b>'+(p.medido.banda?'NVIS en uso: '+esc(p.medido.banda)+'.':'NVIS en uso:')+'</b> '+esc(p.medido.texto)+'</p>';
 			if(p.dx && p.dx.length){
 				var oidas=Object.keys(datos.bandas||{});
 				h+='<p class="mt-1"><b>Lejos (unos 3000 km):</b> según la MUF de la ionosonda, abiertas '+p.dx.map(function(b){ return '<b>'+esc(b)+'</b>'+(oidas.indexOf(b)>=0?' ✓':''); }).join(', ')+'. <small>✓ = además se están oyendo enlaces desde Colombia.</small></p>';

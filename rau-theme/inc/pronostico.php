@@ -65,11 +65,37 @@ function rau_pron_calcular( $iono, $solar, $hora_local ) {
 	elseif ( null !== $solar['kp'] && $solar['kp'] >= 4 ) $res['notas'][] = 'Campo geomagnético activo (Kp ' . number_format( $solar['kp'], 1, ',', '' ) . '): posibles altibajos.';
 	return $res;
 }
+/* NVIS medido: enlaces cortos (hasta 600 km) reportados en la última hora en las bandas bajas, desde los
+   datos de PSK Reporter que ya trae inc/propagacion.php. Lo que de verdad está pasando dentro del país,
+   frente a la estimación con una ionosonda lejana. */
+function rau_pron_nvis_medido( $reg = null, $ahora = null ) {
+	$ahora = $ahora ?: time();
+	if ( null === $reg ) { $p = get_option( 'rau_prop_co', array() ); $reg = is_array( $p ) && isset( $p['r'] ) ? $p['r'] : array(); }
+	$bajas = array( '160 m', '80 m', '60 m', '40 m', '30 m' ); $por = array(); $ej = array(); $n = 0;
+	foreach ( $reg as $x ) {
+		if ( ! in_array( $x['b'], $bajas, true ) || $x['t'] < $ahora - HOUR_IN_SECONDS || empty( $x['cp'] ) || empty( $x['op'] ) ) continue;
+		$km = function_exists( 'rau_prop_km' ) ? rau_prop_km( $x['cp'], $x['op'] ) : 9999;
+		if ( $km > 600 || $km < 5 ) continue;
+		$por[ $x['b'] ] = ( $por[ $x['b'] ] ?? 0 ) + 1; $n++;
+		if ( ! isset( $ej[ $x['b'] ] ) || $km > $ej[ $x['b'] ]['km'] ) $ej[ $x['b'] ] = array( 'a' => $x['c'], 'b' => $x['o'], 'km' => $km );
+	}
+	if ( ! $n ) return array( 'n' => 0, 'banda' => null, 'por_banda' => array(), 'ejemplo' => null );
+	arsort( $por ); $banda = key( $por );
+	return array( 'n' => $n, 'banda' => $por[ $banda ] >= 2 ? $banda : null, 'por_banda' => $por, 'ejemplo' => $ej[ $banda ] );
+}
+function rau_pron_nvis_medido_texto( $m ) {
+	if ( ! $m || ! $m['n'] ) return '';
+	$partes = array(); foreach ( $m['por_banda'] as $b => $k ) $partes[] = $b . ' (' . $k . ')';
+	$t = 'Medido en la última hora: ' . implode( ', ', $partes ) . ' enlace' . ( 1 === $m['n'] ? '' : 's' ) . ' de hasta 600 km reportados desde Colombia';
+	if ( $m['ejemplo'] ) $t .= ', por ejemplo ' . $m['ejemplo']['a'] . ' ↔ ' . $m['ejemplo']['b'] . ' a ' . number_format( $m['ejemplo']['km'], 0, ',', '.' ) . ' km';
+	return $t . '.';
+}
 function rau_pronostico( $forzar = false ) {
 	if ( ! $forzar ) { $c = get_transient( 'rau_pronostico' ); if ( false !== $c ) return $c; }
 	$iono = rau_pron_ionosonda(); $solar = rau_pron_solar();
 	$hora = (int) gmdate( 'G', time() - 5 * HOUR_IN_SECONDS );
 	$res = rau_pron_calcular( $iono, $solar, $hora );
+	$res['medido'] = rau_pron_nvis_medido(); $res['medido']['texto'] = rau_pron_nvis_medido_texto( $res['medido'] );
 	$res['actualizado'] = time();
 	$res['fuente'] = 'Ionosonda ' . ( $iono ? $iono['nombre'] . ' (red GIRO, vía prop.kc2g.com)' : 'sin datos recientes' ) . ' · flujo solar y Kp de NOAA SWPC';
 	set_transient( 'rau_pronostico', $res, ( $iono ? 15 : 5 ) * MINUTE_IN_SECONDS );

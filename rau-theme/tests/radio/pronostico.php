@@ -41,6 +41,24 @@ $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient%r
 ok( null === rau_pron_ionosonda(), 'una medición de hace más de 3 horas no se usa' );
 $pr = rau_pronostico( true );
 ok( null === $pr['iono'] && null === $pr['nvis'] && 142 === $pr['sfi'], 'sin ionosonda: el pronóstico no inventa banda, pero trae el flujo solar' );
+// NVIS medido con enlaces cortos de PSK Reporter
+$ah = time();
+$reg = array(
+	array( 'c' => 'HK4AAA', 'cp' => array( 6.25, -75.58 ), 'o' => 'HK3BBB', 'op' => array( 4.6, -74.08 ), 'b' => '40 m', 't' => $ah - 300 ),   // Medellín–Bogotá, 245 km
+	array( 'c' => 'HK4AAA', 'cp' => array( 6.25, -75.58 ), 'o' => 'HK6CCC', 'op' => array( 3.45, -76.53 ), 'b' => '40 m', 't' => $ah - 900 ),   // Medellín–Cali, 328 km
+	array( 'c' => 'HK1DDD', 'cp' => array( 10.4, -75.5 ), 'o' => 'HK4EEE', 'op' => array( 6.25, -75.58 ), 'b' => '80 m', 't' => $ah - 600 ),    // Cartagena–Medellín, 461 km
+	array( 'c' => 'HK4AAA', 'cp' => array( 6.25, -75.58 ), 'o' => 'W1AW', 'op' => array( 41.7, -72.7 ), 'b' => '40 m', 't' => $ah - 60 ),      // DX: no cuenta
+	array( 'c' => 'HK4AAA', 'cp' => array( 6.25, -75.58 ), 'o' => 'HK3FFF', 'op' => array( 4.6, -74.08 ), 'b' => '20 m', 't' => $ah - 60 ),    // 20 m: no es NVIS
+	array( 'c' => 'HK4AAA', 'cp' => array( 6.25, -75.58 ), 'o' => 'HK3GGG', 'op' => array( 4.6, -74.08 ), 'b' => '40 m', 't' => $ah - 7200 ),  // vieja
+);
+$m = rau_pron_nvis_medido( $reg, $ah );
+ok( 3 === $m['n'] && '40 m' === $m['banda'] && 2 === $m['por_banda']['40 m'] && 1 === $m['por_banda']['80 m'], 'NVIS medido: cuenta solo enlaces cortos, recientes y en bandas bajas' );
+ok( 'HK6CCC' === $m['ejemplo']['b'] && $m['ejemplo']['km'] > 300 && $m['ejemplo']['km'] < 360, 'trae el enlace más largo de la banda como ejemplo' );
+$tx = rau_pron_nvis_medido_texto( $m );
+ok( false !== strpos( $tx, '40 m (2), 80 m (1)' ) && false !== strpos( $tx, 'HK4AAA ↔ HK6CCC' ), 'texto: ' . $tx );
+$m1 = rau_pron_nvis_medido( array_slice( $reg, 2, 1 ), $ah );
+ok( 1 === $m1['n'] && null === $m1['banda'], 'con un solo enlace no se declara banda' );
+ok( '' === rau_pron_nvis_medido_texto( rau_pron_nvis_medido( array(), $ah ) ), 'sin enlaces, sin texto' );
 delete_transient( 'rau_pronostico' );
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient%rau_caida_%'" );
 echo "\n$n comprobaciones, $fallos fallas\n";
