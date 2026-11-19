@@ -307,3 +307,35 @@ test('paquete sin internet: ida y vuelta, partes en desorden, faltantes y altera
 	assert.match((await C.paqueteLeer(malo.join('\n'))).error, /alterado/);
 	assert.match((await C.paqueteLeer('hola')).error, /No se encontró/);
 });
+
+test('paquetes firmados: la firma identifica a quien lo armó y detecta cambios', async () => {
+	const par = await C.llaveNueva();
+	const { pub, fp } = await C.llavePublica(par);
+	assert.match(pub, /^[A-Za-z0-9_-]{87}$/); assert.match(fp, /^[0-9a-f]{16}$/);
+	assert.equal(await C.llaveHuella(pub), fp);
+	// La llave solo cuenta si la guardó el servidor y a nombre de quien la registró
+	const S = C.reducir([
+		{ u: 'k1', t: 'llave', a: 'HK4ABC', ts: 1, s: 7, d: { ind: 'HK4ABC', pub, fp } },
+		{ u: 'k2', t: 'llave', a: 'HK4ZZZ', ts: 2, s: 8, d: { ind: 'HK4XYZ', pub: 'x'.repeat(87), fp: 'aaaaaaaaaaaaaaaa' } },
+		{ u: 'k3', t: 'llave', a: 'HK4QQQ', ts: 3, s: 'p', d: { ind: 'HK4QQQ', pub: 'y'.repeat(87), fp: 'bbbbbbbbbbbbbbbb' } },
+	]);
+	assert.deepEqual(Object.keys(S.llaves), [fp], 'solo la llave propia y guardada en el servidor');
+	const ev = [{ u: 'e1', t: 'nota', a: 'HK4ABC', ts: 5, d: { texto: 'Puente caído en la vía a Urrao' } }];
+	const meta = { codigo: 'ABC123', nombre: 'Prueba', tipo: 'real' };
+	const partes = await C.paqueteCrear(ev, meta, { firma: { ind: 'HK4ABC', fp, privada: par.privateKey } });
+	const r = await C.paqueteLeer(partes.join('\n'));
+	assert.equal(r.firma.ind, 'HK4ABC'); assert.equal(r.eventos.length, 1);
+	assert.equal((await C.paqueteVerificar(r, S.llaves)).estado, 'valida');
+	assert.equal((await C.paqueteVerificar(r, {})).estado, 'desconocida', 'sin la llave registrada no se puede afirmar quién fue');
+	// Alterado: mismo firmante, otro texto
+	const otro = Object.assign({}, r, { cuerpo: r.cuerpo.replace('Urrao', 'Dabeiba') });
+	assert.equal((await C.paqueteVerificar(otro, S.llaves)).estado, 'invalida');
+	// Firmado con otra llave pero diciendo ser HK4ABC
+	const falso = await C.llaveNueva();
+	const p2 = await C.paqueteCrear(ev, meta, { firma: { ind: 'HK4ABC', fp, privada: falso.privateKey } });
+	assert.equal((await C.paqueteVerificar(await C.paqueteLeer(p2.join('\n')), S.llaves)).estado, 'invalida');
+	// Sin firma sigue funcionando como antes
+	const p3 = await C.paqueteLeer((await C.paqueteCrear(ev, meta)).join('\n'));
+	assert.equal(p3.firma, null); assert.equal((await C.paqueteVerificar(p3, S.llaves)).estado, 'sin_firma');
+	assert.equal(C.validar({ t: 'llave', d: { ind: 'HK4ABC', pub, fp } }, { permisos: ['ver', 'operar'] }), '');
+});

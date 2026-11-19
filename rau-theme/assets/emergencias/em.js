@@ -147,6 +147,7 @@ E.sincronizar = function(){
 	return enviar().then(traer).then(function(){
 		sync.enCurso=false; sync.ultimo=Date.now(); sync.error=''; sync.reintento=0; sync.espera=5000;
 		E.recalcular(); E.refrescar();
+		if(E.asegurarLlave) E.asegurarLlave();
 	}).catch(function(err){
 		sync.enCurso=false;
 		if(err && err.auth){ op.token=''; DB.guardarOp(op); sync.error='Sin acceso: vuelve a entrar'; E.aviso('La sesión ya no es válida (revocada o vencida). Vuelve a entrar con el código y una clave. Tus registros pendientes siguen guardados.', 'peligro'); }

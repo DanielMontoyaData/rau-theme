@@ -199,3 +199,17 @@ test('19.54: red, contactos con tráfico, período y ajustes; el período y los 
 	const c = await api(`/operaciones/${cod}/eventos`, { metodo: 'POST', token: coordReal, cuerpo: { eventos: [ev('periodo', { n: 1, inicio: ahora, fin: ahora + 6 * 3600000, objetivos: 'Mantener la red' }), ev('ajuste', { silencio_min: 20, sitrep_h: 3 })] } });
 	assert.deepEqual(c.j.resultados.map((x) => x.ok), [true, true], JSON.stringify(c.j.resultados));
 });
+
+test('llave de firma: solo la propia y con la huella correcta', async () => {
+	const { webcrypto, createHash } = await import('node:crypto');
+	const par = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+	const crudo = Buffer.from(await webcrypto.subtle.exportKey('raw', par.publicKey));
+	const pub = crudo.toString('base64url'), fp = createHash('sha256').update(crudo).digest('hex').slice(0, 16);
+	const cod = real.j.operacion.codigo;
+	const enviar = (d) => api(`/operaciones/${cod}/eventos`, { metodo: 'POST', token: operReal, cuerpo: { eventos: [ev('llave', d)] } }).then(r => r.j.resultados[0]);
+	assert.match((await enviar({ ind: 'HK4OTRO', pub, fp })).error, /propia llave/, 'no se registra la llave de otra persona');
+	assert.match((await enviar({ ind: 'HK6OPR', pub, fp: '0123456789abcdef' })).error, /huella/);
+	assert.match((await enviar({ ind: 'HK6OPR', pub: 'A'.repeat(87), fp })).error, /inválida/);
+	const ok = await enviar({ ind: 'HK6OPR', pub, fp });
+	assert.equal(ok.ok, true, JSON.stringify(ok));
+});

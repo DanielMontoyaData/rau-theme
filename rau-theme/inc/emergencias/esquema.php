@@ -87,6 +87,13 @@ function rau_em_validar_evento( $e, $op, $actor ) {
 	foreach ( $campos as $k => $spec ) {
 		if ( ! empty( $spec[2] ) && ( ! isset( $limpio[ $k ] ) || '' === $limpio[ $k ] ) ) return array( 'ok' => false, 'error' => "Falta el campo obligatorio: $k" );
 	}
+	// Llave de firma de paquetes: solo la propia (el servidor sabe quién registra) y con su huella correcta
+	if ( 'llave' === $t ) {
+		if ( strtoupper( (string) $limpio['ind'] ) !== strtoupper( (string) $actor['nombre'] ) ) return array( 'ok' => false, 'error' => 'Solo puedes registrar tu propia llave de firma' );
+		$crudo = base64_decode( strtr( (string) $limpio['pub'], '-_', '+/' ) . '=', true );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{87}$/', (string) $limpio['pub'] ) || 65 !== strlen( (string) $crudo ) || "\x04" !== $crudo[0] ) return array( 'ok' => false, 'error' => 'Llave pública inválida' );
+		if ( substr( hash( 'sha256', $crudo ), 0, 16 ) !== strtolower( (string) $limpio['fp'] ) ) return array( 'ok' => false, 'error' => 'La huella no corresponde a la llave' );
+	}
 	// Coordenadas: van en pareja
 	if ( isset( $limpio['lat'] ) xor isset( $limpio['lng'] ) ) return array( 'ok' => false, 'error' => 'La ubicación necesita latitud y longitud' );
 	return array( 'ok' => true, 'datos' => $limpio, 'perm' => $perm );

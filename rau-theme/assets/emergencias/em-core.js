@@ -150,7 +150,7 @@ function reducir(eventos, opts){
 	opts=opts||{};
 	var lista=(eventos||[]).filter(function(e){ return e && e.t && e.s!=='r'; }).slice().sort(function(a,b){ return (a.ts-b.ts) || (a.u<b.u?-1:a.u>b.u?1:0); });
 	var S={ inc:{}, msgs:{}, est:{}, enlaces:[], rec:{}, sol:{}, planes:{}, asig:{}, pts:{}, personas:{}, dir:{}, repe:{}, decisiones:[], acciones:{}, notas:[], sims:[], lecciones:[], informes:[],
-		conflictos:[], cerrada:false, todo:lista, porU:{}, ultimoEstado:{}, red:null, redHist:[], periodos:[], ajustes:{} };
+		conflictos:[], cerrada:false, todo:lista, porU:{}, ultimoEstado:{}, red:null, redHist:[], periodos:[], ajustes:{}, llaves:{} };
 	lista.forEach(function(e){ S.porU[e.u]=e; });
 	lista.forEach(function(e){ aplicar(S, e, false); });
 	return S;
@@ -176,6 +176,9 @@ function aplicar(S, e, reaplicando){
 	case 'red': S.red={e:d.e, ncs:d.ncs, canal:d.canal||'', nota:d.nota||'', ts:e.ts, a:e.a}; S.redHist.push(S.red); break;
 	case 'sim': S.sims.push(e); break;
 	case 'nota': S.notas.push(e); break;
+	/* Llave de firma de paquetes: vale la que el servidor guardó (s>0) a nombre de quien la registró.
+	   Una llave que solo llegó en un paquete no cuenta: cualquiera podría fabricarla. */
+	case 'llave': if(typeof e.s==='number' && e.s>0 && String(e.a).toUpperCase()===String(d.ind).toUpperCase()) S.llaves[d.fp]={ind:d.ind, pub:d.pub, ts:e.ts}; break;
 	case 'resuelve':
 		S.conflictos.forEach(function(c){ if(c.ent===d.ent && !c.resuelto){ c.resuelto=true; c.gana=d.gana; c.por=e.a; c.nota=d.nota; } });
 		if(S.porU[d.gana]) aplicar(S, Object.assign({}, S.porU[d.gana], {ts:e.ts}), true);
@@ -687,11 +690,30 @@ function crc32(txt){ var b=new TextEncoder().encode(txt), c=0xFFFFFFFF; for(var 
 function aB64(bytes){ var s=''; for(var i=0;i<bytes.length;i+=0x8000) s+=String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000)); return btoa(s); }
 function deB64(t){ var s=atob(t), b=new Uint8Array(s.length); for(var i=0;i<s.length;i++) b[i]=s.charCodeAt(i); return b; }
 function flujo(bytes, Clase, modo){ return new Response(new Blob([bytes]).stream().pipeThrough(new Clase(modo))).arrayBuffer().then(function(ab){ return new Uint8Array(ab); }); }
-/* Devuelve partes de texto «RAUEM1 <código> <i>/<n> <crc> <datos>»; cada parte cabe en un mensaje o un QR */
+/* ── Firma de paquetes (ECDSA P-256 con SHA-256, WebCrypto) ──
+   Cada dispositivo tiene su par de llaves; la pública se registra en la operación (registro «llave»)
+   cuando hay internet. Un paquete firmado dice quién lo armó, y quien lo recibe lo comprueba sin
+   conexión contra las llaves que ya tiene. La firma va sobre el JSON del paquete sin el campo «fir». */
+function b64u(bytes){ return aB64(bytes).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function deB64u(t){ t=String(t).replace(/-/g,'+').replace(/_/g,'/'); while(t.length%4) t+='='; return deB64(t); }
+function hex(bytes){ return Array.prototype.map.call(bytes, function(b){ return ('0'+b.toString(16)).slice(-2); }).join(''); }
+function llaveHuella(pub){ return crypto.subtle.digest('SHA-256', deB64u(pub)).then(function(h){ return hex(new Uint8Array(h)).slice(0,16); }); }
+function llavePublica(par){ return crypto.subtle.exportKey('raw', par.publicKey).then(function(r){ var pub=b64u(new Uint8Array(r)); return llaveHuella(pub).then(function(fp){ return {pub:pub, fp:fp}; }); }); }
+function llaveNueva(){ return crypto.subtle.generateKey({name:'ECDSA', namedCurve:'P-256'}, false, ['sign','verify']); }
+function firmarTexto(privada, texto){ return crypto.subtle.sign({name:'ECDSA', hash:'SHA-256'}, privada, new TextEncoder().encode(texto)).then(function(f){ return b64u(new Uint8Array(f)); }); }
+function verificarTexto(pub, texto, firma){
+	return crypto.subtle.importKey('raw', deB64u(pub), {name:'ECDSA', namedCurve:'P-256'}, false, ['verify'])
+		.then(function(k){ return crypto.subtle.verify({name:'ECDSA', hash:'SHA-256'}, k, deB64u(firma), new TextEncoder().encode(texto)); })
+		.catch(function(){ return false; });
+}
+/* Devuelve partes de texto «RAUEM1 <código> <i>/<n> <crc> <datos>»; cada parte cabe en un mensaje o un QR.
+   opts.firma = {ind, fp, privada}: firma el paquete con la llave del dispositivo. */
 function paqueteCrear(eventos, meta, opts){
 	opts=opts||{}; var tam=opts.tam||1200;
-	var json=JSON.stringify({v:1, op:meta.codigo, n:meta.nombre, tipo:meta.tipo, ev:eventos.map(function(e){ return {u:e.u, t:e.t, a:e.a, ts:e.ts, d:e.d}; })});
-	return flujo(new TextEncoder().encode(json), CompressionStream, 'deflate-raw').then(function(z){
+	var obj={v:1, op:meta.codigo, n:meta.nombre, tipo:meta.tipo, ev:eventos.map(function(e){ return {u:e.u, t:e.t, a:e.a, ts:e.ts, d:e.d}; })};
+	var cuerpo=JSON.stringify(obj);
+	var listo=opts.firma ? firmarTexto(opts.firma.privada, cuerpo).then(function(f){ obj.fir={ind:opts.firma.ind, k:opts.firma.fp, s:f}; return JSON.stringify(obj); }) : Promise.resolve(cuerpo);
+	return listo.then(function(json){ return flujo(new TextEncoder().encode(json), CompressionStream, 'deflate-raw'); }).then(function(z){
 		var b=aB64(z), crc=crc32(b), n=Math.max(1, Math.ceil(b.length/tam)), partes=[];
 		for(var i=0;i<n;i++) partes.push('RAUEM1 '+meta.codigo+' '+(i+1)+'/'+n+' '+crc+' '+b.slice(i*tam, (i+1)*tam));
 		return partes;
@@ -715,8 +737,21 @@ function paqueteLeer(texto){
 		var o=JSON.parse(new TextDecoder().decode(u));
 		if(o.v!==1 || !Array.isArray(o.ev)) return {error:'Formato de paquete no reconocido.'};
 		var ev=o.ev.filter(function(e){ return e && typeof e.u==='string' && typeof e.t==='string' && typeof e.ts==='number' && e.d && typeof e.d==='object'; });
-		return {op:o.op, nombre:o.n, tipo:o.tipo, eventos:ev, descartados:o.ev.length-ev.length};
+		var fir=o.fir && typeof o.fir.s==='string' && typeof o.fir.k==='string' ? {ind:String(o.fir.ind||''), k:o.fir.k, s:o.fir.s} : null;
+		if(fir) delete o.fir;
+		return {op:o.op, nombre:o.n, tipo:o.tipo, eventos:ev, descartados:o.ev.length-ev.length, firma:fir, cuerpo:fir?JSON.stringify(o):null};
 	}).catch(function(){ return {error:'No se pudo descomprimir el paquete.'}; });
+}
+
+/* Comprueba la firma de un paquete leído contra las llaves conocidas (S.llaves).
+   estado: 'valida' (la firmó la llave registrada de esa persona), 'invalida' (alterado o llave equivocada),
+   'desconocida' (firmado, pero esa llave no está registrada en la operación de este dispositivo), 'sin_firma'. */
+function paqueteVerificar(r, llaves){
+	if(!r || !r.firma) return Promise.resolve({estado:'sin_firma'});
+	var l=(llaves||{})[r.firma.k];
+	if(!l) return Promise.resolve({estado:'desconocida', ind:r.firma.ind});
+	if(String(l.ind).toUpperCase()!==String(r.firma.ind).toUpperCase()) return Promise.resolve({estado:'invalida', ind:r.firma.ind, de:l.ind});
+	return verificarTexto(l.pub, r.cuerpo, r.firma.s).then(function(ok){ return {estado:ok?'valida':'invalida', ind:l.ind}; });
 }
 
 return { usarEsquema:usarEsquema, ET:ET, et:et, ORDEN_PRIO:ORDEN_PRIO, ORDEN_PREC:ORDEN_PREC, MSG_FINAL:MSG_FINAL, REC_OCUPADO:REC_OCUPADO,
@@ -726,5 +761,6 @@ return { usarEsquema:usarEsquema, ET:ET, et:et, ORDEN_PRIO:ORDEN_PRIO, ORDEN_PRE
 	duplicados:duplicados, filtrarIncidentes:filtrarIncidentes, indicadores:indicadores, textoMensaje:textoMensaje, sitrep:sitrep, informeCierre:informeCierre,
 	geojson:geojson, csv:csv, cap:cap, mediana:mediana,
 	AJUSTES:AJUSTES, LIMITE_MSG:LIMITE_MSG, ajustes:ajustes, periodoActual:periodoActual, ultimoContacto:ultimoContacto, colaRed:colaRed, alarmas:alarmas, comando:comando,
-	puntosEntre:puntosEntre, perfilEnlace:perfilEnlace, relevo:relevo, ics309:ics309, crc32:crc32, paqueteCrear:paqueteCrear, paqueteLeer:paqueteLeer };
+	puntosEntre:puntosEntre, perfilEnlace:perfilEnlace, relevo:relevo, ics309:ics309, crc32:crc32, paqueteCrear:paqueteCrear, paqueteLeer:paqueteLeer, paqueteVerificar:paqueteVerificar,
+	llaveNueva:llaveNueva, llavePublica:llavePublica, llaveHuella:llaveHuella, firmarTexto:firmarTexto, verificarTexto:verificarTexto };
 });

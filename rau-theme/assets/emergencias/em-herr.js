@@ -130,6 +130,38 @@ E.VIVO.trafTablero = function(){
 };
 
 /* ── Paquetes sin internet ───────────────────────────────────────────────── */
+/* ── Llave de firma del dispositivo (una por operación e indicativo). La privada no se puede exportar:
+   queda en el navegador. La pública se registra en la operación al sincronizar. ── */
+function claveLlave(){ return 'firma:'+E.op.codigo+':'+String(E.yo.ind||'').toUpperCase(); }
+function miLlave(crear){
+	if(!E.op || !E.yo || !E.yo.ind || !window.crypto || !crypto.subtle) return Promise.resolve(null);
+	var k=claveLlave();
+	return DB.kvGet(k).then(function(g){
+		if(g && g.par) return g;
+		if(!crear) return null;
+		return core.llaveNueva().then(function(par){ return core.llavePublica(par).then(function(p){ var g={par:par, pub:p.pub, fp:p.fp}; return DB.kvSet(k, g).then(function(){ return g; }); }); });
+	}).catch(function(){ return null; });
+}
+E.asegurarLlave = function(){
+	if(!E.op || E.op.local || !E.actor || (E.actor.permisos||[]).indexOf('operar')<0) return Promise.resolve();
+	return miLlave(true).then(function(g){
+		if(!g || E.S.llaves[g.fp]) return;
+		if(E.eventos.some(function(e){ return e.t==='llave' && e.d && e.d.fp===g.fp && e.s!=='r'; })) return;
+		E.registrar('llave', {ind:E.yo.ind, pub:g.pub, fp:g.fp});
+	});
+};
+/* Firma para un paquete: solo si la llave ya está registrada en el servidor (si no, nadie podría comprobarla) */
+function firmaPaquete(){ return miLlave(false).then(function(g){ return g && E.S.llaves[g.fp] ? {ind:E.yo.ind, fp:g.fp, privada:g.par.privateKey} : null; }); }
+var TXT_FIRMA={
+	valida: function(v){ return '<p class="em-ok-txt">✔ Firmado por <strong>'+esc(v.ind)+'</strong> con su llave registrada en la operación: lo armó esa estación y no cambió en el camino.</p>'; },
+	invalida: function(v){ return '<p class="em-error">✖ La firma no es válida: el paquete cambió en el camino o no lo firmó quien dice ('+esc(v.ind||'?')+'). Confírmalo por otro medio antes de usarlo.</p>'; },
+	desconocida: function(v){ return '<p class="em-aviso">Firmado como '+esc(v.ind||'?')+', pero esa llave no está registrada en la copia de la operación de este dispositivo. Sincroniza cuando haya internet para comprobarla.</p>'; },
+	sin_firma: function(){ return '<p class="em-aviso">Sin firma: no se puede comprobar quién armó este paquete.</p>'; }
+};
+function llavesDe(cod){
+	if(E.op && E.op.codigo===cod) return Promise.resolve(E.S.llaves);
+	return DB.eventos(cod).then(function(ev){ return core.reducir(ev||[]).llaves; }).catch(function(){ return {}; });
+}
 var MEDIOS={sonido:['Sonido: módem RAU por radio, cable o altavoz', 1e9], radio:['Radio (fldigi, Winlink): partes de 600 caracteres', 600], qr:['Código QR en pantalla: partes de 900', 900], texto:['Mensajería o correo: una sola parte', 20000]};
 function cargarQR(){ if(window.qrcode) return Promise.resolve(window.qrcode); return new Promise(function(ok, mal){ var s=document.createElement('script'); s.src=C.qr; s.onload=function(){ ok(window.qrcode); }; s.onerror=mal; document.head.appendChild(s); }); }
 function svgQR(texto){ var q=window.qrcode(0, 'L'); q.addData(texto); q.make(); return q.createSvgTag({cellSize:3, margin:4, scalable:true}); }
@@ -159,7 +191,8 @@ E.montarPaquetes = function(cont){
 		var ev=E.eventos.filter(function(x){ return x.s!=='r' && !x.descartado && (q==='todo' || (q==='mios' ? x.a===E.yo.ind : x.ts>=ahora-(+q)*3600000)); });
 		if(!ev.length){ sal.innerHTML='<p class="em-nota">No hay registros con ese filtro.</p>'; return; }
 		sal.innerHTML='<p class="em-nota">Comprimiendo '+ev.length+' registros…</p>';
-		core.paqueteCrear(ev, E.op, {tam:MEDIOS[medio][1]}).then(function(p){ partes=p; iq=0; verParte(sal, medio); })
+		firmaPaquete().then(function(f){ return core.paqueteCrear(ev, E.op, {tam:MEDIOS[medio][1], firma:f}).then(function(p){ partes=p; iq=0; verParte(sal, medio);
+			sal.insertAdjacentHTML('afterbegin', f ? '<p class="em-ok-txt">✔ Firmado con la llave de '+esc(f.ind)+'.</p>' : '<p class="em-nota">Sin firma: tu llave se registra la primera vez que el dispositivo sincroniza con internet.</p>'); }); })
 			.catch(function(){ sal.innerHTML='<p class="em-error">Este navegador no puede comprimir (es muy antiguo). Usa el respaldo en archivo.</p>'; });
 	});
 	montarRecibir(cont);
@@ -258,8 +291,8 @@ function montarRecibir(cont){
 		var est=$('#pq-est',cont);
 		return core.paqueteLeer(texto).then(function(r){
 			if(r.error){ est.innerHTML='<p class="'+(r.faltan?'em-aviso':'em-error')+'">'+esc(r.error)+'</p>'; return r; }
-			return importar(r).then(function(res){
-				est.innerHTML='<p class="em-ok-txt">'+esc(res.msg)+'</p>'+(res.entrar?'<button type="button" class="em-btn primario" id="pq-entrar">Entrar a «'+esc(res.nombre)+'»</button>':'');
+			return llavesDe(r.op).then(function(ll){ return core.paqueteVerificar(r, ll); }).then(function(v){ r.verificacion=v; return importar(r); }).then(function(res){
+				est.innerHTML=TXT_FIRMA[r.verificacion.estado](r.verificacion)+'<p class="em-ok-txt">'+esc(res.msg)+'</p>'+(res.entrar?'<button type="button" class="em-btn primario" id="pq-entrar">Entrar a «'+esc(res.nombre)+'»</button>':'');
 				var b=$('#pq-entrar',est); if(b) b.addEventListener('click', function(){ E.cerrarModal(); E.entrar(res.entrar); });
 				return r;
 			}, function(x){ est.innerHTML='<p class="em-error">No se importó: '+esc(x&&x.message||x)+'</p>'; return {error:true}; });

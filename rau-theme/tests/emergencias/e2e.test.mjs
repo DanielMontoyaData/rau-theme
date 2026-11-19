@@ -443,6 +443,30 @@ test('19b. paquete por sonido: un celular lo transmite con el módem y otro lo o
 	} finally { await nav2.close(); fs.rmSync(path.dirname(wav), { recursive: true, force: true }); }
 });
 
+test('20b. paquete firmado: la llave del dispositivo se registra al sincronizar y quien lo recibe sabe quién lo armó', async () => {
+	// El coordinador y el operador están en la misma operación con internet: sus llaves ya quedaron registradas
+	await coord.evaluate(() => RauEm.sincronizar()); await sincronizado(coord);
+	await coord.waitForFunction(() => RauEm.eventos.some(e => e.t === 'llave' && e.s > 0), null, { timeout: 15000 });
+	await oper.evaluate(() => RauEm.sincronizar()); await sincronizado(oper);
+	await oper.waitForFunction(() => Object.keys(RauEm.S.llaves).length >= 1, null, { timeout: 15000 });
+	await coord.evaluate(() => RauEm.ir('campo')); await coord.waitForSelector('#pq-env');
+	await coord.selectOption('#pq-env [name=medio]', 'texto'); await coord.selectOption('#pq-env [name=que]', 'mios');
+	await coord.click('#pq-env button'); await coord.waitForSelector('#pq-sal textarea');
+	assert.match(await texto(coord, '#pq-sal'), /Firmado con la llave de/);
+	const paquete = await coord.inputValue('#pq-sal textarea');
+	await oper.evaluate(() => RauEm.recibirPaquete()); await modalListo(oper);
+	await oper.fill('#pq-rec [name=t]', paquete); await oper.click('#pq-rec button.primario');
+	await oper.waitForFunction(() => /registros nuevos/.test(document.querySelector('#pq-est').textContent));
+	assert.match(await texto(oper, '#pq-est'), /✔ Firmado por/);
+	// Alterado en el camino: la firma ya no coincide (se cambia un carácter de los datos y se recalcula la suma)
+	const alterado = await oper.evaluate(async (t) => {
+		const r = await RauEm.core.paqueteLeer(t); r.cuerpo = r.cuerpo.replace(/"ts":(\d)/, '"ts":9');
+		return (await RauEm.core.paqueteVerificar(r, RauEm.S.llaves)).estado;
+	}, paquete);
+	assert.equal(alterado, 'invalida');
+	await oper.evaluate(() => RauEm.cerrarModal());
+});
+
 test('20. paquete sin internet: se prepara en un dispositivo y se recibe en otro sin la operación', async () => {
 	const p = datos.pAlarmas;
 	await p.evaluate(() => RauEm.ir('campo')); await p.waitForSelector('#pq-env');
