@@ -316,6 +316,17 @@ test('14. simulador: aislado, marcado y con métricas', async () => {
 	await p.evaluate(() => RauEm.ir('simulador'));
 	await p.waitForFunction(() => /Registrar el incidente[\s\S]*\d+ s/.test(document.querySelector('[data-vivo=sim]').innerText));
 	assert.match(await texto(p, '[data-vivo=sim]'), /Escenario Deslizamiento/);
+	// Al terminar queda en el historial del dispositivo
+	await p.click('#sm-fin'); await p.click('#cf-si');
+	await p.waitForFunction(() => /Simulacros anteriores/.test(document.querySelector('#em-main').innerText));
+	assert.match(await texto(p, '#em-main'), /Deslizamiento[\s\S]*10×[\s\S]*1 de 5/);
+	// Programado: aparece en la lista y arranca solo a la hora en el dispositivo de quien lo programó
+	await p.waitForSelector('#sm-prog');
+	await p.evaluate(() => RauEm.registrar('sim_prog', { escenario: 'incendio_forestal', inicio: Date.now() + 2000, velocidad: 10, nota: 'Canal 146.520' }));
+	await p.evaluate(() => RauEm.ir('simulador'));
+	assert.match(await texto(p, '#em-main'), /Simulacros programados[\s\S]*Incendio forestal a 10×[\s\S]*Canal 146\.520/);
+	await p.waitForSelector('.em-sim-msg', { timeout: 20000 });
+	assert.match(await texto(p, '.em-sim-msg'), /La Cauchera/);
 	await p.context().close();
 });
 

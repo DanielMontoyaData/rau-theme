@@ -170,14 +170,63 @@ function vistaSimulador(){
 	var b;
 	if((b=$('#sm-pausa',v))) b.addEventListener('click', function(){ sim.pausadoEn=Date.now(); guardar(); E.ir('simulador'); });
 	if((b=$('#sm-seguir',v))) b.addEventListener('click', function(){ sim.pausaTotal+=Date.now()-sim.pausadoEn; sim.pausadoEn=0; guardar(); arrancar(); E.ir('simulador'); });
-	if((b=$('#sm-fin',v))) b.addEventListener('click', function(){ E.confirmar('Terminar el escenario', 'Se detienen las inyecciones. Las métricas quedan.', 'Terminar').then(function(si){ if(!si) return; sim.terminado=true; guardar(); clearInterval(reloj); E.registrar('nota', {tipo:'Simulación', texto:'Fin del escenario «'+ESC[sim.escenario].n+'».'}); E.ir('simulador'); }); });
+	if((b=$('#sm-fin',v))) b.addEventListener('click', function(){ E.confirmar('Terminar el escenario', 'Se detienen las inyecciones. Las métricas quedan.', 'Terminar').then(function(si){ if(!si) return; sim.terminado=true; guardar(); clearInterval(reloj); E.registrar('nota', {tipo:'Simulación', texto:'Fin del escenario «'+ESC[sim.escenario].n+'».'}); guardarHistorial().then(function(){ E.ir('simulador'); }); }); });
 	if((b=$('#sm-csv',v))) b.addEventListener('click', function(){ E.descargar(E.nombreArchivo('metricas-simulacro','csv'), core.csv([['paso','inyeccion','se_espera','estado','segundos','detalle']].concat(metricas().map(function(x){ return [x.i+1, x.p.texto, ESPERA[x.p.espera], x.estado, x.seg!=null?Math.round(x.seg):'', x.extra||'']; }))), 'text/csv;charset=utf-8'); });
 	v.addEventListener('click', function(e){ var x=e.target.closest('[data-esc]'); if(x) iniciar(x.dataset.esc, +($('#sm-vel',v)||{value:5}).value); });
+	if(!sim || sim.terminado){ v.insertAdjacentHTML('beforeend', htmlProgramar()); montarProgramar(v); }
+	var hist=E.el('<div></div>'); v.appendChild(hist);
+	E.db.kvGet('simhist').then(function(l){ hist.innerHTML=htmlHistorial(l, sim?sim.escenario:''); }).catch(function(){});
 	return v;
 }
 function listaEscenarios(){
 	return '<label class="em-inline">Velocidad <select class="em-campo" id="sm-vel"><option value="1">1× (tiempo real)</option><option value="5" selected>5×</option><option value="10">10×</option></select></label><div class="em-lista">'+Object.keys(ESC).map(function(k){ var x=ESC[k]; return '<button type="button" class="em-fila em-fila-btn" data-esc="'+k+'"><span><strong>'+esc(x.n)+'</strong><small>'+esc(x.d)+' · '+x.pasos.length+' inyecciones · unos '+Math.round(x.pasos[x.pasos.length-1].t/60)+' min a 1×</small></span><span aria-hidden="true">▶</span></button>'; }).join('')+'</div>';
 }
+/* ── Historial: cada escenario terminado queda en el dispositivo para comparar el siguiente ── */
+function resultado(){
+	var M=metricas(), resp=M.filter(function(x){ return x.estado==='respondido'; });
+	return {fecha:Date.now(), op:E.op.nombre, escenario:sim.escenario, velocidad:sim.velocidad, n:M.length, resp:resp.length,
+		mediana:resp.length?Math.round(core.mediana(resp.map(function(x){ return x.seg; }))):null, pasos:M.map(function(x){ return x.estado==='respondido'?Math.round(x.seg):null; })};
+}
+function guardarHistorial(){
+	var r=resultado();
+	return E.db.kvGet('simhist').then(function(l){ l=Array.isArray(l)?l:[]; l.push(r); return E.db.kvSet('simhist', l.slice(-100)); }).catch(function(){});
+}
+function htmlHistorial(l, escenario){
+	l=(l||[]).filter(function(x){ return !escenario || x.escenario===escenario; }).sort(function(a,b){ return b.fecha-a.fecha; });
+	if(!l.length) return '';
+	return '<section class="em-tarjeta"><h2>Simulacros anteriores'+(escenario?' de «'+esc(ESC[escenario]?ESC[escenario].n:escenario)+'»':'')+'</h2><table class="em-tabla"><thead><tr><th>Fecha</th><th>Escenario</th><th>Velocidad</th><th>Respondidas</th><th>Mediana</th><th>Frente al anterior</th></tr></thead><tbody>'
+		+l.slice(0,15).map(function(x){
+			var ant=l.filter(function(y){ return y.escenario===x.escenario && y.fecha<x.fecha && y.velocidad===x.velocidad && y.mediana!==null; })[0], cmp='—';
+			if(ant && x.mediana!==null){ var d=x.mediana-ant.mediana; cmp=d<0?'<span class="em-ok-txt">'+seg(-d)+' más rápido</span>':d>0?'<span class="em-error">'+seg(d)+' más lento</span>':'igual'; }
+			return '<tr><td>'+esc(new Date(x.fecha).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+'</td><td>'+esc(ESC[x.escenario]?ESC[x.escenario].n:x.escenario)+'</td><td>'+x.velocidad+'×</td><td>'+x.resp+' de '+x.n+'</td><td>'+(x.mediana===null?'—':seg(x.mediana))+'</td><td>'+cmp+'</td></tr>';
+		}).join('')+'</tbody></table><p class="em-nota">Se compara con el anterior del mismo escenario y la misma velocidad. Guardado en este dispositivo.</p></section>';
+}
+/* ── Programar: quien coordina fija fecha y hora; el servidor avisa al celular 30 min antes y al empezar,
+   y el dispositivo de quien lo programó arranca las inyecciones a la hora (si tiene el simulacro abierto). ── */
+function programados(){ var S=E.S||{simProg:{}}; return Object.keys(S.simProg||{}).map(function(k){ return S.simProg[k]; }).filter(function(p){ return !p.anulado && p.inicio>Date.now()-15*60000; }).sort(function(a,b){ return a.inicio-b.inicio; }); }
+function htmlProgramar(){
+	var l=programados(), coord=E.puede('coordinar');
+	var h='<section class="em-tarjeta"><h2>Simulacros programados</h2>'+(l.length?'<ul class="em-lista-txt">'+l.map(function(p){ return '<li><b>'+esc(new Date(p.inicio).toLocaleString('es-CO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+'</b> · '+esc(ESC[p.escenario]?ESC[p.escenario].n:p.escenario)+' a '+p.velocidad+'× · lo arranca '+esc(p.a)+(p.nota?' · '+esc(p.nota):'')+(coord?' <button type="button" class="em-btn" data-anular="'+p.id+'">Anular</button>':'')+'</li>'; }).join('')+'</ul>':'<p class="em-nota">Ninguno por ahora.</p>');
+	if(coord) h+='<form class="em-form" id="sm-prog"><div class="em-tres"><label>Escenario<select class="em-campo" name="esc">'+Object.keys(ESC).map(function(k){ return '<option value="'+k+'">'+esc(ESC[k].n)+'</option>'; }).join('')+'</select></label><label>Fecha y hora<input class="em-campo" type="datetime-local" name="cuando" required></label><label>Velocidad<select class="em-campo" name="vel"><option value="1">1×</option><option value="5" selected>5×</option><option value="10">10×</option></select></label></div><label>Nota para el equipo<input class="em-campo" name="nota" maxlength="300" placeholder="Canal, punto de encuentro…"></label><button class="em-btn primario">Programar</button><p class="em-nota">Quienes activaron los avisos de esta operación reciben uno 30 minutos antes y otro al empezar. Las inyecciones salen de tu dispositivo: tenlo abierto a esa hora.</p></form>';
+	return h+'</section>';
+}
+function montarProgramar(v){
+	var f=$('#sm-prog',v);
+	if(f) f.addEventListener('submit', function(e){ e.preventDefault(); var t=new Date(this.cuando.value).getTime(); if(!(t>Date.now())){ E.aviso('Elige una hora futura.', 'aviso'); return; }
+		if(E.registrar('sim_prog', {escenario:this.esc.value, inicio:t, velocidad:+this.vel.value, nota:this.nota.value})){ E.aviso('Simulacro programado.', 'ok'); E.ir('simulador'); } });
+	$$('[data-anular]',v).forEach(function(b){ b.addEventListener('click', function(){ if(E.registrar('sim_prog', {escenario:'-', inicio:0, anula:b.dataset.anular})) E.ir('simulador'); }); });
+}
+// Arranque automático a la hora, en el dispositivo de quien lo programó
+function revisarProgramados(){
+	if(!enSimulacro() || (sim && !sim.terminado) || !E.yo) return;
+	programados().forEach(function(p){
+		var k='simprog-hecho:'+p.id, hecho=false; try{ hecho=localStorage.getItem(k); }catch(x){}
+		if(hecho || p.a!==E.yo.ind || Date.now()<p.inicio || Date.now()>p.inicio+15*60000) return;
+		try{ localStorage.setItem(k,'1'); }catch(x){}
+		iniciar(p.escenario, p.velocidad);
+	});
+}
+setInterval(revisarProgramados, 10000);
 E.registrarVista('simulador', {nombre:'Simulador', icono:'🎯', fn:vistaSimulador});
 
 /* Desde el inicio: crear el simulacro (en el servidor para practicar en grupo, o solo en este dispositivo) */
@@ -197,5 +246,5 @@ E.alEntrar.push(function(){
 	if(!enSimulacro()) return;
 	E.db.kvGet(clave()).then(function(s){ if(s && E.op && E.op.tipo==='simulacro'){ sim=s; if(!s.terminado && !s.pausadoEn) arrancar(); E.refrescar(); } });
 });
-E.simulador={escenarios:ESC, metricas:metricas};
+E.simulador={escenarios:ESC, metricas:metricas, resultado:function(){ return sim?resultado():null; }, guardarHistorial:guardarHistorial, programados:programados};
 })();

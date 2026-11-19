@@ -88,6 +88,25 @@ rau_em_avisos_revisar();
 $quedan = array_filter( rau_em_avisos_subs(), function( $s ) use ( $cod ) { return $s['op'] === $cod; } );
 ok( 0 === count( $quedan ), 'una suscripción vencida (410) se borra' );
 
+// Simulacro programado: aviso 30 minutos antes y otro al empezar, cada uno una vez
+$respuesta = 201;
+list( , $os ) = api( 'POST', '/operaciones', array( 'nombre' => 'prueba-em-simprog', 'zona' => 'Pereira', 'tipo' => 'simulacro', 'indicativo' => 'HK6COO', 'clave' => 'OPER-simprog1', 'clave_coord' => 'COORD-simprog99' ) );
+$cs = $os['operacion']['codigo'];
+api( 'POST', "/operaciones/$cs/avisos", $sub, $os['token'] );
+$inicio = ( time() + 20 * 60 ) * 1000;
+list( , $r ) = api( 'POST', "/operaciones/$cs/eventos", array( 'eventos' => array( $ev( 'sim_prog', array( 'escenario' => 'incendio_forestal', 'inicio' => $inicio, 'velocidad' => 5 ) ) ) ), $os['token'] );
+ok( ! empty( $r['resultados'][0]['ok'] ), 'quien coordina programa el simulacro' );
+list( , $r ) = api( 'POST', "/operaciones/$cod/eventos", array( 'eventos' => array( $ev( 'sim_prog', array( 'escenario' => 'sismo', 'inicio' => $inicio, 'velocidad' => 5 ) ) ) ), $tokCoord );
+ok( empty( $r['resultados'][0]['ok'] ), 'en una operación real no se programan simulacros' );
+$enviados = array(); rau_em_avisos_revisar();
+$txt = $enviados ? json_encode( $enviados[0] ) : '';
+ok( 1 === count( $enviados ), '20 minutos antes: un aviso de que empieza pronto' );
+$enviados = array(); rau_em_avisos_revisar( time() + 21 * 60 );
+ok( 1 === count( $enviados ), 'a la hora: el aviso de que empieza' );
+$enviados = array(); rau_em_avisos_revisar( time() + 22 * 60 );
+ok( 0 === count( $enviados ), 'y no se repiten' );
+$wpdb->delete( $t['ev'], array( 'inc' => $cs ) ); $wpdb->delete( $t['ses'], array( 'op' => $cs ) ); $wpdb->delete( $t['ops'], array( 'codigo' => $cs ) );
+
 // Limpieza
 update_option( RAU_EM_AVISOS_OPCION, $antes, false );
 $wpdb->delete( $t['ev'], array( 'inc' => $cod ) ); $wpdb->delete( $t['ses'], array( 'op' => $cod ) ); $wpdb->delete( $t['ops'], array( 'codigo' => $cod ) );

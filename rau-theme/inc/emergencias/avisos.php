@@ -128,6 +128,17 @@ function rau_em_avisos_revisar( $ahora = null ) {
 			$min = ( $ahora * 1000 - $m['ts'] ) / 60000;
 			if ( ! $m['fin'] && $min >= 10 ) rau_em_avisar( $op, 'msgE10:' . $u, 'Mensaje de EMERGENCIA n.º ' . ( $m['d']['num'] ?? 's/n' ) . ' para ' . ( $m['d']['para'] ?? '' ) . ' lleva ' . floor( $min ) . ' min sin entregarse', '', true );
 		}
+		// Simulacros programados: aviso 30 minutos antes y al comenzar
+		if ( 'simulacro' === $op['tipo'] ) {
+			$prog = $wpdb->get_results( $wpdb->prepare( "SELECT uuid, datos FROM {$t['ev']} WHERE inc = %s AND tipo = 'sim_prog' ORDER BY id", $cod ), ARRAY_A );
+			$lista = array(); foreach ( $prog as $f ) { $d = json_decode( $f['datos'], true ) ?: array(); if ( ! empty( $d['anula'] ) ) unset( $lista[ $d['anula'] ] ); else $lista[ $f['uuid'] ] = $d; }
+			foreach ( $lista as $u => $d ) {
+				$falta = ( (int) $d['inicio'] / 1000 - $ahora ) / 60;
+				$hora = wp_date( 'H:i', (int) ( $d['inicio'] / 1000 ) );
+				if ( $falta > 0 && $falta <= 35 ) rau_em_avisar( $op, 'simpre:' . $u, 'El simulacro «' . str_replace( '_', ' ', $d['escenario'] ) . '» empieza a las ' . $hora . '. Ten el radio y el centro de mando listos.', '', true );
+				elseif ( $falta <= 0 && $falta > -15 ) rau_em_avisar( $op, 'simya:' . $u, 'Empieza el simulacro «' . str_replace( '_', ' ', $d['escenario'] ) . '». Entra al centro de mando.', '', true );
+			}
+		}
 		foreach ( $inc as $u => $x ) {
 			$min = ( $ahora * 1000 - $x['ts'] ) / 60000;
 			if ( ! $x['resp'] && ! $x['fin'] && $min >= 15 ) rau_em_avisar( $op, 'resp15:' . $u, 'Incidente CRÍTICO sin responsable hace ' . floor( $min ) . ' min: ' . ( $x['d']['titulo'] ?? '' ), '', true );

@@ -150,7 +150,7 @@ function reducir(eventos, opts){
 	opts=opts||{};
 	var lista=(eventos||[]).filter(function(e){ return e && e.t && e.s!=='r'; }).slice().sort(function(a,b){ return (a.ts-b.ts) || (a.u<b.u?-1:a.u>b.u?1:0); });
 	var S={ inc:{}, msgs:{}, est:{}, enlaces:[], rec:{}, sol:{}, planes:{}, asig:{}, pts:{}, personas:{}, dir:{}, repe:{}, decisiones:[], acciones:{}, notas:[], sims:[], lecciones:[], informes:[],
-		conflictos:[], cerrada:false, todo:lista, porU:{}, ultimoEstado:{}, red:null, redHist:[], periodos:[], ajustes:{}, llaves:{} };
+		conflictos:[], cerrada:false, todo:lista, porU:{}, ultimoEstado:{}, red:null, redHist:[], periodos:[], ajustes:{}, llaves:{}, simProg:{} };
 	lista.forEach(function(e){ S.porU[e.u]=e; });
 	lista.forEach(function(e){ aplicar(S, e, false); });
 	return S;
@@ -176,6 +176,8 @@ function aplicar(S, e, reaplicando){
 	case 'red': S.red={e:d.e, ncs:d.ncs, canal:d.canal||'', nota:d.nota||'', ts:e.ts, a:e.a}; S.redHist.push(S.red); break;
 	case 'sim': S.sims.push(e); break;
 	case 'nota': S.notas.push(e); break;
+	/* Simulacro programado (o anulado con «anula») */
+	case 'sim_prog': if(d.anula){ if(S.simProg[d.anula]) S.simProg[d.anula].anulado=true; } else S.simProg[e.u]={id:e.u, escenario:d.escenario, inicio:d.inicio, velocidad:d.velocidad||1, nota:d.nota||'', a:e.a, ts:e.ts, anulado:false}; break;
 	/* Llave de firma de paquetes: vale la que el servidor guardó (s>0) a nombre de quien la registró.
 	   Una llave que solo llegó en un paquete no cuenta: cualquiera podría fabricarla. */
 	case 'llave': if(typeof e.s==='number' && e.s>0 && String(e.a).toUpperCase()===String(d.ind).toUpperCase()) S.llaves[d.fp]={ind:d.ind, pub:d.pub, ts:e.ts}; break;

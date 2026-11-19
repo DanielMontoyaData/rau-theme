@@ -96,6 +96,7 @@
 		"leccion": { "perm": "coordinar", "campos": { "cat": ["e", "leccion_cat", true], "texto": ["t", 1000, true] } },
 		"resuelve": { "perm": "operar", "campos": { "ent": ["s", 60, true], "gana": ["u", null, true], "nota": ["s", 300] } },
 		"sim": { "perm": "operar", "soloSim": true, "campos": { "escenario": ["s", 40, true], "paso": ["n", [0, 999], true], "texto": ["t", 1000, true], "espera": ["s", 40], "canal": ["s", 80] } },
+		"sim_prog": {"perm": "coordinar", "soloSim": true, "campos": {"escenario": ["s", 40, true], "inicio": ["n", [0, 9999999999999], true], "velocidad": ["n", [1, 10]], "nota": ["s", 300], "anula": ["u"]}},
 		"nota": { "perm": "operar", "campos": { "tipo": ["s", 20], "texto": ["t", 2000, true], "inc": ["u"] } },
 		"llave": {"perm": "operar", "campos": {"ind": ["ind", null, true], "pub": ["s", 100, true], "fp": ["s", 16, true]}},
 		"persona": { "perm": "operar", "campos": { "nombre": ["s", 120, true], "estado": ["e", "persona_e", true], "ubic": ["s", 160], "contacto": ["s", 160], "msg": ["s", 300] } },
