@@ -130,18 +130,19 @@ E.VIVO.trafTablero = function(){
 };
 
 /* ── Paquetes sin internet ───────────────────────────────────────────────── */
-var MEDIOS={radio:['Radio (fldigi, Winlink): partes de 600 caracteres', 600], qr:['Código QR en pantalla: partes de 900', 900], texto:['Mensajería o correo: una sola parte', 20000]};
+var MEDIOS={sonido:['Sonido: módem RAU por radio, cable o altavoz', 1e9], radio:['Radio (fldigi, Winlink): partes de 600 caracteres', 600], qr:['Código QR en pantalla: partes de 900', 900], texto:['Mensajería o correo: una sola parte', 20000]};
 function cargarQR(){ if(window.qrcode) return Promise.resolve(window.qrcode); return new Promise(function(ok, mal){ var s=document.createElement('script'); s.src=C.qr; s.onload=function(){ ok(window.qrcode); }; s.onerror=mal; document.head.appendChild(s); }); }
 function svgQR(texto){ var q=window.qrcode(0, 'L'); q.addData(texto); q.make(); return q.createSvgTag({cellSize:3, margin:4, scalable:true}); }
 E.montarPaquetes = function(cont){
 	if(!cont || !E.op) return;
 	var ahora=Date.now();
-	cont.innerHTML='<p class="em-nota">Cuando no hay internet, los registros pasan de un dispositivo a otro como texto: por radio digital, por un mensaje o mostrando un código QR. Cada parte lleva una suma de verificación; si llega alterada se rechaza. Quien recibe ve los registros marcados «por paquete».</p>'
+	cont.innerHTML='<p class="em-nota">Cuando no hay internet, los registros pasan de un dispositivo a otro: como sonido con el módem RAU (por la radio, por cable o de parlante a micrófono), como texto por radio digital o por un mensaje, o mostrando un código QR. Cada parte lleva una suma de verificación; si llega alterada se rechaza. Quien recibe ve los registros marcados «por paquete».</p>'
 		+'<div class="em-dos"><form class="em-form" id="pq-env"><h3>Enviar</h3><label>Qué registros<select class="em-campo" name="que">'+E.opciones({todo:'Todos los de esta operación', '1':'De la última hora', '6':'De las últimas 6 horas', '24':'De las últimas 24 horas', mios:'Solo los que registré yo'}, 'todo')+'</select></label>'
 		+'<label>Por dónde<select class="em-campo" name="medio">'+E.opciones(Object.keys(MEDIOS).reduce(function(o,k){ o[k]=MEDIOS[k][0]; return o; }, {}), 'radio')+'</select></label><button class="em-btn primario">Preparar paquete</button><div id="pq-sal" aria-live="polite"></div></form>'
 		+FORM_RECIBIR+'</div>';
 	var partes=[], iq=0;
 	function verParte(sal, medio){
+		if(medio==='sonido'){ E.montarModemTx(sal, partes[0]); return; }
 		if(medio==='qr'){
 			cargarQR().then(function(){ sal.innerHTML='<p>Parte <b>'+(iq+1)+'</b> de '+partes.length+'</p><div class="em-qr">'+svgQR(partes[iq])+'</div><div class="em-acciones"><button type="button" class="em-btn" id="pq-ant"'+(iq?'':' disabled')+'>← Anterior</button><button type="button" class="em-btn" id="pq-sig"'+(iq<partes.length-1?'':' disabled')+'>Siguiente →</button></div><p class="em-nota">Quien recibe la escanea con «Escanear QR» (Android) o con la cámara del teléfono y pega el texto.</p>';
 				$('#pq-ant',sal).addEventListener('click', function(){ iq--; verParte(sal, medio); }); $('#pq-sig',sal).addEventListener('click', function(){ iq++; verParte(sal, medio); });
@@ -163,7 +164,89 @@ E.montarPaquetes = function(cont){
 	});
 	montarRecibir(cont);
 };
+/* ── Módem de audio (assets/radio/modem.js): el paquete viaja como sonido ──
+   El texto «RAUEM1 código 1/1 crc base64» se manda como la cabecera más los bytes comprimidos (sin base64: 25 % menos). */
+function cargarModem(){
+	if(window.RauModem) return Promise.resolve(window.RauModem);
+	function js(u){ return new Promise(function(ok, mal){ var s=document.createElement('script'); s.src=u; s.onload=ok; s.onerror=mal; document.head.appendChild(s); }); }
+	return js(C.modem[0]).then(function(){ return js(C.modem[1]); }).then(function(){ return window.RauModem; });
+}
+function paqueteABytes(t){
+	var m=/^(RAUEM1 \S+ \d+\/\d+ [0-9A-F]{8} )([A-Za-z0-9+\/=]+)$/.exec(t.trim()); if(!m) return null;
+	var cab=new TextEncoder().encode(m[1]), s=atob(m[2]), b=new Uint8Array(cab.length+s.length); b.set(cab);
+	for(var i=0;i<s.length;i++) b[cab.length+i]=s.charCodeAt(i);
+	return b;
+}
+function bytesAPaquete(b){
+	var esp=0, i=0; for(;i<b.length && i<80;i++) if(b[i]===32 && ++esp===4) break;
+	if(esp<4) return null;
+	var cab=new TextDecoder().decode(b.subarray(0, i+1)), s=''; for(var j=i+1;j<b.length;j++) s+=String.fromCharCode(b[j]);
+	return /^RAUEM1 /.test(cab) ? cab+btoa(s) : null;
+}
+function minSeg(s){ s=Math.round(s); return s<60 ? s+' s' : Math.floor(s/60)+' min '+(s%60? (s%60)+' s':''); }
+var tx=null;
+E.montarModemTx = function(sal, texto){
+	var bytes=paqueteABytes(texto);
+	if(!bytes){ sal.innerHTML='<p class="em-error">No se pudo preparar el paquete para el módem.</p>'; return; }
+	sal.innerHTML='<p class="em-nota">Cargando el módem…</p>';
+	cargarModem().then(function(M){
+		if(bytes.length>M.MAX_BYTES){ sal.innerHTML='<p class="em-error">Son '+bytes.length+' bytes y el módem pasa hasta '+M.MAX_BYTES+' por envío. Elige menos registros (por ejemplo, la última hora).</p>'; return; }
+		var n=M.tramas(bytes).length;
+		sal.innerHTML='<p><b>'+bytes.length+' bytes</b> en '+n+' tramas (numeradas de 0 a '+(n-1)+').</p>'
+			+'<label>Velocidad<select class="em-campo" id="md-modo"><option value="robusto">Robusta · '+minSeg(M.duracion(n,'robusto'))+' · altavoz y micrófono, o señal débil</option><option value="rapido">Rápida · '+minSeg(M.duracion(n,'rapido'))+' · cable o radio FM con buena señal</option></select></label>'
+			+'<label>Reenviar solo estas tramas (opcional)<input class="em-campo em-mono" id="md-solo" placeholder="3, 7, 12" inputmode="numeric"></label>'
+			+'<div class="em-acciones"><button type="button" class="em-btn primario" id="md-tx">▶ Transmitir</button><button type="button" class="em-btn" id="md-parar" disabled>■ Detener</button></div>'
+			+'<progress id="md-prog" max="1" value="0" style="width:100%"></progress><p id="md-est" class="em-nota" aria-live="polite"></p>'
+			+'<p class="em-nota">Conecta la salida de audio del celular a la entrada de micrófono de la radio (o pon el celular junto al micrófono), con el volumen a media escala, y transmite con PTT o VOX: medio segundo de tono abre el VOX. Quien recibe usa «Recibir → 🎤 Escuchar el módem». Si le faltan tramas, te dirá cuáles: escríbelas arriba y transmite solo esas.</p>';
+		function parar(){ if(tx){ try{ tx.src.stop(); }catch(e){} tx.ctx.close(); tx=null; } $('#md-tx',sal).disabled=false; $('#md-parar',sal).disabled=true; }
+		$('#md-parar',sal).addEventListener('click', function(){ parar(); $('#md-est',sal).textContent='Detenido.'; });
+		$('#md-tx',sal).addEventListener('click', function(){
+			if(tx) return;
+			var solo=($('#md-solo',sal).value.match(/\d+/g)||[]).map(Number).filter(function(x){ return x<n; });
+			var ctx=new AudioContext(), y=M.sintetizar(bytes, ctx.sampleRate, {modo:$('#md-modo',sal).value, solo:solo}), buf=ctx.createBuffer(1, y.length, ctx.sampleRate);
+			buf.getChannelData(0).set(y);
+			var src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination);
+			tx={ctx:ctx, src:src}; var t0=ctx.currentTime, dur=buf.duration;
+			src.onended=function(){ if(tx && tx.src===src){ parar(); $('#md-prog',sal).value=1; $('#md-est',sal).textContent='Listo: '+(solo.length?solo.length+' tramas reenviadas.':'paquete completo transmitido.'); } };
+			src.start(); $('#md-tx',sal).disabled=true; $('#md-parar',sal).disabled=false;
+			(function avance(){ if(!tx || tx.src!==src) return; var p=(ctx.currentTime-t0)/dur; $('#md-prog',sal).value=Math.min(1,p); $('#md-est',sal).textContent='Transmitiendo… quedan '+minSeg(Math.max(0, dur-(ctx.currentTime-t0)))+'. No sueltes el PTT.'; requestAnimationFrame(avance); })();
+		});
+	}).catch(function(){ sal.innerHTML='<p class="em-error">No se pudo cargar el módem en este dispositivo.</p>'; });
+};
+/* Escucha por el micrófono (o la entrada de audio conectada a la radio) hasta completar un paquete */
+var rx=null;
+E.montarModemRx = function(est, boton, alTexto){
+	function parar(){ if(rx){ rx.flujo.getTracks().forEach(function(t){ t.stop(); }); rx.ctx.close(); rx=null; } boton.textContent='🎤 Escuchar el módem'; }
+	if(rx){ parar(); est.innerHTML='<p class="em-nota">Dejé de escuchar.</p>'; return; }
+	est.innerHTML='<p class="em-nota">Cargando el módem y pidiendo el micrófono…</p>';
+	cargarModem().then(function(M){
+		// Sin cancelación de eco, supresión de ruido ni control de volumen: deforman los tonos
+		return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}}).then(function(flujo){
+			var ctx=new AudioContext(), fuente=ctx.createMediaStreamSource(flujo), proc=ctx.createScriptProcessor(4096, 1, 1), mudo=ctx.createGain(); mudo.gain.value=0;
+			var nivel=0, ult=null;
+			function pintar(e){
+				est.innerHTML='<p><b>Escuchando…</b> nivel '+'▮'.repeat(Math.min(10, Math.round(nivel*40)))+'▯'.repeat(Math.max(0, 10-Math.min(10, Math.round(nivel*40))))+'</p>'
+					+(e?'<p>Tramas: <b>'+e.recibidas+(e.total?' de '+e.total:'')+'</b>'+(e.faltan.length?' · faltan <b class="em-mono">'+e.faltan.join(', ')+'</b>':'')+'<br><small>Última: n.º '+e.ultima.seq+' · '+(e.ultima.modo==='rapido'?'rápida':'robusta')+' · SNR '+e.ultima.snr+' dB · desfase '+e.ultima.desfase+' Hz</small></p>'
+						+(e.total && e.faltan.length?'<p class="em-aviso">Pide que reenvíen solo las tramas '+e.faltan.join(', ')+'.</p>':''):'<p class="em-nota">Esperando tramas. Acerca el celular al parlante de la radio o conecta su salida de audio. Volumen alto sin distorsión.</p>');
+			}
+			var r=M.crearReceptor(ctx.sampleRate, function(e){ ult=e; pintar(e); }, function(b){
+				var t=bytesAPaquete(b); parar();
+				if(!t){ est.innerHTML='<p class="em-error">Llegó un mensaje del módem, pero no es un paquete del centro de mando.</p>'; return; }
+				alTexto(t);
+			}, function(err){ ult=null; pintar(null); est.insertAdjacentHTML('beforeend', '<p class="em-error">'+esc(err)+'</p>'); });
+			var cuenta=0;
+			proc.onaudioprocess=function(ev){
+				var x=ev.inputBuffer.getChannelData(0), s=0; for(var i=0;i<x.length;i++) s+=x[i]*x[i];
+				nivel=0.8*nivel+0.2*Math.sqrt(s/x.length); r.alimentar(new Float32Array(x));
+				if(++cuenta%4===0 && rx) pintar(ult);
+			};
+			fuente.connect(proc); proc.connect(mudo); mudo.connect(ctx.destination);
+			rx={ctx:ctx, flujo:flujo}; boton.textContent='■ Dejar de escuchar'; pintar(null);
+		});
+	}).catch(function(e){ parar(); est.innerHTML='<p class="em-error">'+(e && e.name==='NotAllowedError'?'Sin permiso para usar el micrófono.':'No se pudo iniciar la escucha en este dispositivo.')+'</p>'; });
+};
 var FORM_RECIBIR='<form class="em-form" id="pq-rec"><h3>Recibir</h3><label>Pega las partes (en cualquier orden)<textarea class="em-campo em-mono" name="t" rows="6" placeholder="RAUEM1 ABC123 1/3 …"></textarea></label><div class="em-acciones"><button class="em-btn primario">Leer paquete</button>'
+	+(navigator.mediaDevices && window.AudioContext ? '<button type="button" class="em-btn" id="pq-oir">🎤 Escuchar el módem</button>' : '')
 	+('BarcodeDetector' in window && navigator.mediaDevices ? '<button type="button" class="em-btn" id="pq-cam">Escanear QR con la cámara</button>' : '')+'</div><div id="pq-est" aria-live="polite"></div></form>';
 function montarRecibir(cont){
 	function leer(texto){
@@ -178,6 +261,7 @@ function montarRecibir(cont){
 		});
 	}
 	$('#pq-rec',cont).addEventListener('submit', function(e){ e.preventDefault(); leer(this.t.value); });
+	var oir=$('#pq-oir',cont); if(oir) oir.addEventListener('click', function(){ E.montarModemRx($('#pq-est',cont), oir, function(t){ $('#pq-rec',cont).t.value=t; return leer(t); }); });
 	var cam=$('#pq-cam',cont); if(cam) cam.addEventListener('click', function(){ escanear(function(t){ var ta=$('#pq-rec',cont).t; if(ta.value.indexOf(t)<0) ta.value+=(ta.value?'\n':'')+t; return leer(ta.value).then(function(r){ return !r.error; }); }); });
 }
 E.recibirPaquete = function(){

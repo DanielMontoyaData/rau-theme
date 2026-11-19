@@ -6,11 +6,13 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.56.0' );
+define( 'RAU_THEME_VERSION', '19.57.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
 require get_template_directory() . '/inc/emergencias.php';
+require get_template_directory() . '/inc/propagacion.php';
+require get_template_directory() . '/inc/js8-oido.php';
 
 /**
  * Configuración básica del tema
@@ -1469,6 +1471,16 @@ add_action( 'template_redirect', function() {
 		exit;
 	}
 }, 1 );
+/* Al compartir un enlace, Telegram, Discord, Slack y otros leen el oEmbed de WordPress, que trae el
+ * autor de la página: salía «claude-temporal» (la cuenta que la creó) con enlace a su archivo de autor.
+ * El sitio habla como asociación: el autor es RAU. */
+add_filter( 'oembed_response_data', function( $data ) {
+	$data['author_name'] = get_bloginfo( 'name' ) . ' — Radioaficionados Unidos';
+	$data['author_url']  = home_url( '/' );
+	return $data;
+}, 20 );
+// Lo mismo en los feeds RSS (<dc:creator>), que también leen los lectores y algunas vistas previas
+add_filter( 'the_author', function( $nombre ) { return is_feed() ? get_bloginfo( 'name' ) : $nombre; } );
 add_filter( 'wp_sitemaps_add_provider', function( $provider, $name ) {
 	return 'users' === $name ? false : $provider;
 }, 10, 2 );
@@ -2992,15 +3004,14 @@ function rau_send_web_push( $subscription, $title, $body, $url = '' ) {
 /** Guarda una suscripción nueva (llamado desde el navegador vía AJAX). */
 add_action( 'wp_ajax_rau_push_subscribe', 'rau_push_subscribe' );
 add_action( 'wp_ajax_nopriv_rau_push_subscribe', 'rau_push_subscribe' );
-function rau_push_subscribe() {
-	// Límite por IP: 1 intento cada 30 segundos — mismo patrón ya probado en checkin/libro_visitas
-	$ip_hash = md5( ( $_SERVER['REMOTE_ADDR'] ?? '' ) . wp_salt( 'nonce' ) );
-	if ( get_transient( 'rau_push_' . $ip_hash ) ) { wp_send_json_error( 'Espera un momento.' ); return; }
-	set_transient( 'rau_push_' . $ip_hash, 1, 30 );
-
-	$body = json_decode( file_get_contents( 'php://input' ), true );
+/**
+ * Valida una suscripción push del navegador. Devuelve array( endpoint, keys => array( p256dh, auth ) ) o el
+ * motivo del rechazo como texto. La usan las alertas de banda y los avisos del centro de mando.
+ */
+function rau_push_validar_suscripcion( $body ) {
+	if ( ! is_array( $body ) ) return 'Suscripción inválida.';
 	if ( empty( $body['endpoint'] ) || empty( $body['keys']['p256dh'] ) || empty( $body['keys']['auth'] ) ) {
-		wp_send_json_error( 'Suscripción inválida.' );
+		return 'Suscripción inválida.';
 	}
 
 	// El endpoint se guarda y MÁS TARDE el servidor le envía peticiones desde rau_push_send().
@@ -3022,8 +3033,7 @@ function rau_push_subscribe() {
 		if ( fnmatch( $patron, (string) $host ) ) { $host_ok = true; break; }
 	}
 	if ( 'https' !== $esquema || ! $host_ok || strlen( $endpoint ) > 500 ) {
-		wp_send_json_error( 'Endpoint de suscripción no reconocido.' );
-		return;
+		return 'Endpoint de suscripción no reconocido.';
 	}
 
 	// Las claves son base64url de longitud conocida; cualquier otra cosa se rechaza en vez de
@@ -3031,9 +3041,22 @@ function rau_push_subscribe() {
 	$p256dh = trim( (string) $body['keys']['p256dh'] );
 	$auth   = trim( (string) $body['keys']['auth'] );
 	if ( ! preg_match( '/^[A-Za-z0-9_-]{80,100}$/', $p256dh ) || ! preg_match( '/^[A-Za-z0-9_-]{16,32}$/', $auth ) ) {
-		wp_send_json_error( 'Claves de suscripción inválidas.' );
-		return;
+		return 'Claves de suscripción inválidas.';
 	}
+
+	return array( 'endpoint' => $endpoint, 'keys' => array( 'p256dh' => $p256dh, 'auth' => $auth ) );
+}
+
+function rau_push_subscribe() {
+	// Límite por IP: 1 intento cada 30 segundos — mismo patrón ya probado en checkin/libro_visitas
+	$ip_hash = md5( ( $_SERVER['REMOTE_ADDR'] ?? '' ) . wp_salt( 'nonce' ) );
+	if ( get_transient( 'rau_push_' . $ip_hash ) ) { wp_send_json_error( 'Espera un momento.' ); return; }
+	set_transient( 'rau_push_' . $ip_hash, 1, 30 );
+
+	$body = json_decode( file_get_contents( 'php://input' ), true );
+	$sub  = rau_push_validar_suscripcion( $body );
+	if ( is_string( $sub ) ) { wp_send_json_error( $sub ); return; }
+	$endpoint = $sub['endpoint']; $p256dh = $sub['keys']['p256dh']; $auth = $sub['keys']['auth'];
 
 	$subs = get_option( 'rau_push_subscriptions', array() );
 	// Tope máximo — evita que un abuso haga crecer la opción sin límite

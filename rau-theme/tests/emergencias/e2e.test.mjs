@@ -411,6 +411,38 @@ test('19. perfil de enlace sobre el terreno y lluvia en el incidente (consultas 
 	assert.match(await texto(p, '.em-detalle'), /Ubicación aproximada/, 'con coordenadas, la precisión no queda «desconocida»');
 });
 
+test('19b. paquete por sonido: un celular lo transmite con el módem y otro lo oye por el micrófono', async () => {
+	const p = datos.pAlarmas;
+	await p.evaluate(() => RauEm.ir('campo')); await p.waitForSelector('#pq-env');
+	await p.selectOption('#pq-env [name=medio]', 'sonido'); await p.click('#pq-env button');
+	await p.waitForSelector('#md-tx');
+	assert.match(await texto(p, '#pq-sal'), /\d+ bytes en \d+ tramas/);
+	// Se guarda lo que sale por el parlante
+	await p.evaluate(() => { const o = AudioBufferSourceNode.prototype.start; AudioBufferSourceNode.prototype.start = function () { window.__audio = { d: this.buffer.getChannelData(0).slice(), sr: this.buffer.sampleRate }; return o.apply(this, arguments); }; });
+	await p.selectOption('#md-modo', 'rapido'); await p.click('#md-tx');
+	await p.waitForFunction(() => window.__audio);
+	const { b64, sr } = await p.evaluate(() => { const a = window.__audio.d, i16 = new Int16Array(a.length); for (let i = 0; i < a.length; i++) i16[i] = Math.max(-1, Math.min(1, a[i])) * 32767; let s = ''; const u = new Uint8Array(i16.buffer); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return { b64: btoa(s), sr: window.__audio.sr }; });
+	await p.click('#md-parar');
+	// WAV con un segundo de silencio antes y dos después, con un poco de ruido: es lo que «oye» el micrófono falso de Chromium
+	const pcm = Buffer.from(b64, 'base64'), sil = Buffer.alloc(sr * 2), cuerpo = Buffer.concat([sil.subarray(0, sr * 2), pcm, sil, sil]);
+	for (let i = 0; i < cuerpo.length; i += 2) cuerpo.writeInt16LE(Math.max(-32768, Math.min(32767, cuerpo.readInt16LE(i) + Math.round((Math.random() - 0.5) * 2000))), i);
+	const cab = Buffer.alloc(44); cab.write('RIFF', 0); cab.writeUInt32LE(36 + cuerpo.length, 4); cab.write('WAVEfmt ', 8); cab.writeUInt32LE(16, 16); cab.writeUInt16LE(1, 20); cab.writeUInt16LE(1, 22);
+	cab.writeUInt32LE(sr, 24); cab.writeUInt32LE(sr * 2, 28); cab.writeUInt16LE(2, 32); cab.writeUInt16LE(16, 34); cab.write('data', 36); cab.writeUInt32LE(cuerpo.length, 40);
+	const fs = require('fs'), os = require('os'), path = require('path'), wav = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rau-modem-')), 'modem.wav');
+	fs.writeFileSync(wav, Buffer.concat([cab, cuerpo]));
+	const n = await p.evaluate(() => RauEm.eventos.length);
+	const nav2 = await chromium.launch({ args: ['--no-proxy-server', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--use-file-for-fake-audio-capture=' + wav, '--autoplay-policy=no-user-gesture-required'] });
+	try {
+		const ctx = await nav2.newContext({ ...devices['Pixel 7'], permissions: ['microphone'] });
+		const q = await pagina(ctx, 'oyente');
+		await entrarComo(q, 'hk6mod');
+		await q.click('#in-paq'); await modalListo(q);
+		await q.click('#pq-oir');
+		await q.waitForFunction(() => /registros nuevos/.test(document.querySelector('#pq-est').textContent), null, { timeout: 90000 });
+		assert.match(await texto(q, '#pq-est'), new RegExp(n + ' registros nuevos, 0 ya estaban'));
+	} finally { await nav2.close(); fs.rmSync(path.dirname(wav), { recursive: true, force: true }); }
+});
+
 test('20. paquete sin internet: se prepara en un dispositivo y se recibe en otro sin la operación', async () => {
 	const p = datos.pAlarmas;
 	await p.evaluate(() => RauEm.ir('campo')); await p.waitForSelector('#pq-env');

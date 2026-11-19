@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const F = require('../../assets/radio/ftx.js');
+const J8 = require('../../assets/radio/js8.js');
 const BASE = process.env.RAU_EM_BASE || 'http://localhost:8099';
 let nav, p; const errores = [];
 
@@ -21,6 +22,16 @@ function ranuraFT4() {
 		const s = F.sintetizar(F.tonos(F.empacar(m), F.FT4), f, F.FT4, 12000);
 		for (let i = 0; i < s.length; i++) x[6000 + i] += 0.3 * s[i];
 	});
+	return x;
+}
+/* Una ranura JS8 (15 s): mensaje dirigido al grupo @EMCOMM y un latido con cuadrícula */
+const AN = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ /@', NB = 37 * 36 * 10 * 27 * 27 * 27;
+const bitsDe = (v, n) => { const b = []; for (let i = n - 1; i >= 0; i--) b.push(Math.floor(v / 2 ** i) % 2); return b; };
+const indic = c => c === '@EMCOMM' ? NB + 36 : 36 * 10 * 27 ** 3 * AN.indexOf(c[0]) + 10 * 27 ** 3 * AN.indexOf(c[1]) + 27 ** 3 * AN.indexOf(c[2]) + 27 * 27 * (AN.indexOf(c[3]) - 10) + 27 * (AN.indexOf(c[4]) - 10) + (AN.indexOf(c[5]) - 10);
+function ranuraJS8() {
+	const x = new Float32Array(180000); for (let i = 0; i < x.length; i++) x[i] = 0.05 * gauss();
+	const dir = [...bitsDe(3, 3), ...bitsDe(indic('HK4ABC'), 28), ...bitsDe(indic('@EMCOMM'), 28), ...bitsDe(25, 5), 0, 0, ...bitsDe(31 - 12, 6)];
+	const s = J8.sintetizar(J8.codificar(dir, 3), 1300, 12000); for (let i = 0; i < s.length; i++) x[i] += 0.3 * s[i];
 	return x;
 }
 /* CW a 20 PPM, tono de 700 Hz, que se repite */
@@ -40,11 +51,11 @@ before(async () => {
 	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
 	await p.addInitScript({ content: `(function(){
 		function f32(s){ var b=atob(s), u=new Uint8Array(b.length); for(var i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return new Float32Array(u.buffer); }
-		var FT=f32('${b64(ranuraFT4())}'), CW=f32('${b64(cw())}'), modo='usb';
+		var FT=f32('${b64(ranuraFT4())}'), CW=f32('${b64(cw())}'), J8=f32('${b64(ranuraJS8())}'), modo='usb', js8=false;
 		function msg(ws, t){ var e=new TextEncoder().encode('MSG '+t), u=new Uint8Array(e.length); u.set(e); ws.onmessage && ws.onmessage({data:u.buffer}); }
 		window.WebSocket=function(url){
 			var ws=this, timer=null, ult=Date.now(), seq=0; ws.url=url; ws.readyState=0;
-			ws.send=function(t){ (window.__enviados=window.__enviados||[]).push(t); var m=/mod=(\\w+)/.exec(t); if(m) modo=m[1]; };
+			ws.send=function(t){ (window.__enviados=window.__enviados||[]).push(t); var m=/mod=(\\w+)/.exec(t); if(m) modo=m[1]; var fq=/freq=([\\d.]+)/.exec(t); if(fq) js8=Math.abs(+fq[1]-7078)<1 || Math.abs(+fq[1]-14078)<1; };
 			ws.close=function(){ clearInterval(timer); ws.readyState=3; };
 			setTimeout(function(){
 				ws.readyState=1; ws.onopen && ws.onopen();
@@ -55,7 +66,7 @@ before(async () => {
 					var buf=new ArrayBuffer(10+2*n), dv=new DataView(buf), u=new Uint8Array(buf);
 					u[0]=83; u[1]=78; u[2]=68; u[3]=0; dv.setUint32(4, seq++, true); dv.setUint16(8, 2000, false);
 					for(var i=0;i<n;i++){ var t=(ult+i/12)/1000, v;
-						if(modo==='cw') v=CW[Math.floor(t*12000)%CW.length]; else v=FT[Math.floor((t%7.5)*12000)];
+						if(modo==='cw') v=CW[Math.floor(t*12000)%CW.length]; else if(js8) v=J8[Math.floor((t%15)*12000)]; else v=FT[Math.floor((t%7.5)*12000)];
 						dv.setInt16(10+2*i, Math.max(-32767, Math.min(32767, Math.round(v*32767))), false); }
 					ult=ahora; ws.onmessage && ws.onmessage({data:buf});
 				}, 40);
@@ -89,6 +100,14 @@ test('FT4: decodifica en el navegador, alinea con la hora UTC y resalta CQ y col
 	assert.ok(await p.evaluate(() => [...document.querySelectorAll('#rx-ft-mapa path.leaflet-interactive')].length >= 1));
 	await p.check('#rx-ft-cq');
 	assert.doesNotMatch(await p.textContent('#rx-ft-filas'), /HK4ABC K1ABC/, 'el filtro deja solo los CQ');
+});
+
+test('JS8: decodifica un mensaje al grupo @EMCOMM con el texto que muestra JS8Call', async () => {
+	await p.uncheck('#rx-ft-cq');
+	await p.click('.rx-dec[data-d=JS8]');
+	assert.match(await p.textContent('#rx-ft-titulo'), /JS8/);
+	await p.waitForFunction(() => /HK4ABC: @EMCOMM SNR -12/.test(document.querySelector('#rx-ft-filas').textContent), null, { timeout: 60000 });
+	assert.match(await p.textContent('#rx-ft-info'), /1 mensaje en [\d.]+ s · dial 7\.0780|1 mensaje en [\d.]+ s · dial 14\.0780/);
 });
 
 test('CW: el decodificador nuevo lee la señal del receptor', async () => {

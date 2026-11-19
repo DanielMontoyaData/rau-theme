@@ -264,6 +264,58 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.57.0 — Módem de audio, JS8, propagación de Colombia en vivo, avisos al celular y vista previa al compartir
+
+- **Vista previa al compartir un enlace** (WhatsApp, Telegram, Facebook, Discord, Slack)
+  - Las páginas creadas desde la cuenta de trabajo de Claude salían firmadas «claude-temporal» en la
+    vista previa: Telegram, Discord y Slack leen el autor del oEmbed de WordPress. Ahora el oEmbed
+    dice «RAU — Radioaficionados Unidos» y enlaza a la portada, sea quien sea el autor de la página.
+  - /emergencias/ no tenía etiquetas sociales: ahora lleva título, descripción, imagen (el escudo),
+    URL canónica y tarjeta de Twitter/X.
+- **Módem de audio RAU** (`assets/radio/modem.js`): pasa los registros del centro de mando de un
+  celular a otro **como sonido**, por la radio (FM o SSB), por cable o de parlante a micrófono.
+  - Tramas de 8 bytes protegidas con el mismo código que FT8 (LDPC 174/91 y CRC-14), en 8 tonos de
+    fase continua con sincronía Costas. El mensaje completo lleva además su CRC-16.
+  - Dos velocidades: robusta (50 baudios, ≈5 bytes/s) y rápida (100 baudios, ≈10 bytes/s). El
+    receptor escucha las dos a la vez, corrige ±150 Hz de desfase y avisa qué tramas faltan para
+    reenviar solo esas. Medio segundo de tono inicial abre el VOX.
+  - Medido con ruido blanco en 2500 Hz: la robusta decodifica el 100 % a −10 dB y la rápida a −6 dB.
+    También con relojes distintos (300 ppm) y eco de sala de 20 ms.
+  - En «Campo → Pasar registros sin internet» (medio «Sonido») y en «Recibir → 🎤 Escuchar el
+    módem». Funciona sin internet: el service worker guarda el módem.
+- **JS8 en el receptor** (botón «JS8» junto a FT8 y FT4; submodo Normal)
+  - Port del decodificador de JS8Call (GPL v3: tablas LDPC 174/87, CRC-12, Costas, varicode,
+    Huffman y compresión JSC). La sincronía y la etapa fina son las de `ftx.js`, que JS8 comparte con
+    FT8.
+  - En las 7 grabaciones de prueba del modo Normal que trae JS8Call: **30 de los 31 mensajes que
+    espera JS8Call (97 %)**, con varias pasadas restando lo decodificado. Cero decodificaciones en 40
+    grabaciones de FT8/FT4 y en ruido.
+  - Muestra el texto como JS8Call («KN4ZXG: @HB HEARTBEAT FM16», «KG9B: KN4CRD HEARTBEAT SNR -14»),
+    arma los mensajes de varios marcos y ubica en el mapa a quien manda cuadrícula.
+  - El diccionario de compresión de JS8Call (262 144 palabras, 1 MB comprimido) se baja solo la
+    primera vez que se usa JS8.
+  - **Al centro de mando**: con sesión iniciada, lo decodificado (salvo los latidos) se envía al sitio
+    y la sala lo muestra en «Ahora mismo» como «JS8 oído en el receptor HK4RAU», primero lo dirigido a
+    grupos de emergencia (@EMCOMM, @ARES, @RACES…), con quién lo reportó. Sin sesión no se acepta nada.
+- **Propagación desde Colombia en vivo** (debajo del receptor, en sus dos pestañas)
+  - Cada 10 minutos se consultan en PSK Reporter los reportes de las cuadrículas FJ y FK y se guardan
+    los enlaces de la última hora con un lado en Colombia (incluye San Andrés y Malpelo).
+  - Mapa por banda, con quién de aquí se oye afuera y a quién se oye desde aquí, distancia máxima y
+    regiones. Endpoint público `/wp-json/rau/v1/propagacion` con caché de 2 minutos.
+  - El centro de mando muestra el resumen («Abiertas desde Colombia») junto a la regla de NVIS.
+- **Avisos al celular del centro de mando** (Web Push con las llaves VAPID del tema), con la página
+  cerrada. Se activan en «Alarmas → 📱 Avisos en este celular».
+  - En el momento: mensaje de EMERGENCIA, URGENCIA reportada por una estación, incidente crítico.
+  - Por tiempo: mensaje de emergencia sin entregar a los 10 min; incidente crítico sin responsable a
+    los 15 min.
+  - Cada aviso sale una vez. A quien registró el evento no se le avisa. En un simulacro el aviso lo
+    dice. Las suscripciones vencidas se borran solas.
+- **Pruebas nuevas**: módem (9), JS8 (7; la opcional con las grabaciones de JS8Call exige ≥90 %),
+  propagación (11), JS8 al centro de mando (10), avisos (15), módem de punta a punta entre dos
+  navegadores con micrófono simulado, y JS8 en el E2E del receptor.
+
+---
+
 ## 19.56.0 — OSD, mapa, skimmer de CW, ajustes de audio y hora; centro de mando más liviano
 
 - **FT8/FT4: OSD** (decodificación por estadísticas ordenadas, como `osd174_91` de WSJT-X).

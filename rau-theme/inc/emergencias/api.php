@@ -214,7 +214,7 @@ function rau_em_api_registrar( WP_REST_Request $req ) {
 	if ( count( $lista ) > 100 ) return rau_em_error( 'Máximo 100 registros por envío' );
 	if ( rau_em_limite( 'reg' . ( $a['sesion'] ?: 'u' . $a['usuario'] ), 3000, HOUR_IN_SECONDS ) ) return rau_em_error( 'Demasiados registros en una hora', 429 );
 	$cerrada = 'cerrado' === $op['estado'];
-	$res = array();
+	$res = array(); $aceptados = array();
 	$estado_op = null;
 	foreach ( $lista as $e ) {
 		$u = is_array( $e ) && isset( $e['u'] ) ? (string) $e['u'] : '';
@@ -235,12 +235,15 @@ function rau_em_api_registrar( WP_REST_Request $req ) {
 			$res[] = array( 'u' => $u, 'ok' => false, 'error' => 'No se pudo guardar (identificador en uso)' ); continue;
 		}
 		$res[] = array( 'u' => $u, 'ok' => true, 's' => (int) $wpdb->insert_id );
+		$aceptados[] = array( 'u' => $u, 't' => $tipo, 'd' => $v['datos'] );
 		if ( in_array( $tipo, array( 'op', 'inc' ), true ) ) $estado_op = $v['datos']['estado'];
 		if ( in_array( $v['perm'], array( 'coordinar', 'recursos' ), true ) ) rau_em_auditar( $op['codigo'], $a, 'registro_' . $tipo, $u, $v['datos'] );
 	}
 	$cambio = array( 'actividad' => time() );
 	if ( $estado_op ) { $cambio['estado'] = $estado_op; $cambio['cerrado'] = 'cerrado' === $estado_op ? time() : 0; }
 	$wpdb->update( $t['ops'], $cambio, array( 'codigo' => $op['codigo'] ) );
+	// Avisos al celular de lo urgente (inc/emergencias/avisos.php)
+	if ( $aceptados ) do_action( 'rau_em_eventos_guardados', $op, $aceptados, $a );
 	return array( 'resultados' => $res );
 }
 

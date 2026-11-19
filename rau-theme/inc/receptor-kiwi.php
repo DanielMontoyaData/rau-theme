@@ -152,7 +152,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			<div class="rx-grupo" role="group" aria-label="Decodificador">
 				<span class="rx-serigrafia">Decodificador</span>
 				<div id="rx-decs" class="rx-teclas">
-					<button type="button" data-d="" class="rx-dec rx-tecla" aria-pressed="true">Ninguno</button><button type="button" data-d="cw" class="rx-dec rx-tecla" aria-pressed="false">CW</button><button type="button" data-d="FT8" class="rx-dec rx-tecla" aria-pressed="false">FT8</button><button type="button" data-d="FT4" class="rx-dec rx-tecla" aria-pressed="false">FT4</button>
+					<button type="button" data-d="" class="rx-dec rx-tecla" aria-pressed="true">Ninguno</button><button type="button" data-d="cw" class="rx-dec rx-tecla" aria-pressed="false">CW</button><button type="button" data-d="FT8" class="rx-dec rx-tecla" aria-pressed="false">FT8</button><button type="button" data-d="FT4" class="rx-dec rx-tecla" aria-pressed="false">FT4</button><button type="button" data-d="JS8" class="rx-dec rx-tecla" aria-pressed="false" title="JS8Call, submodo Normal">JS8</button>
 				</div>
 			</div>
 			<div class="rx-grupo" role="group" aria-label="Filtro">
@@ -279,6 +279,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		horas(); estado(); setInterval(estado, 60000);
 	})();
 	</script>
+	<?php rau_mapa_propagacion(); ?>
 	<?php endif; ?>
 	</div>
 
@@ -291,6 +292,8 @@ function rau_receptor_kiwi( $args = array() ) {
 		var SDR_POS=<?php $l = get_option( 'rau_sdr_lugar' ); echo wp_json_encode( is_array( $l ) && isset( $l['lat'] ) ? array( 'lat' => (float) $l['lat'], 'lng' => (float) $l['lng'], 'n' => rau_sdr_lugar() ) : null ); ?>;
 		var RELAY=<?php echo wp_json_encode( preg_replace( '#^http(s?)://#', 'ws$1://', $relay ) ); ?>;
 		var AJAX_RX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+		// Con sesión iniciada, lo que se decodifica en JS8 se comparte con el centro de mando (ver inc/js8-oido.php)
+		var JS8_API=<?php echo wp_json_encode( is_user_logged_in() ? array( 'url' => rest_url( 'rau/v1/js8' ), 'nonce' => wp_create_nonce( 'wp_rest' ) ) : null ); ?>;
 		var PAGINA=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>;
 		var PLAN=<?php echo wp_json_encode( rau_receptor_plan() ); ?>;
 		/* Bandas de radioaficionado con sus segmentos de uso (plan IARU Región 2) y otras escuchas.
@@ -604,10 +607,13 @@ function rau_receptor_kiwi( $args = array() ) {
 		   la red), menos una corrección que se ajusta sola con el DT de lo decodificado. Al terminar
 		   cada ranura UTC se le pasa al worker su audio completo. */
 		var FT4F={'80 m':3575,'40 m':7047.5,'30 m':10140,'20 m':14080,'17 m':18104,'15 m':21140,'12 m':24919,'10 m':28180};
+		// Frecuencias de llamada de JS8Call (kHz, dial USB)
+		var JS8F={'160 m':1842,'80 m':3578,'40 m':7078,'30 m':10130,'20 m':14078,'17 m':18104,'15 m':21078,'12 m':24922,'10 m':28078,'6 m':50318};
 		var ftFilas=[], ftWorker=null, ftId=0, ftT=null;
 		function frecFT(modo){
 			var b=bandaDe(st.freq)||BANDAS.filter(function(x){ return x.n===(DIA?'20 m':'40 m'); })[0];
 			if(modo==='FT4') return FT4F[b.n]||14080;
+			if(modo==='JS8') return JS8F[b.n]||14078;
 			var s=b.s.filter(function(x){ return x[0]==='FT8'; })[0]; return s?s[1]:14074;
 		}
 		/* Diferencia del reloj del equipo con el servidor (ms, positiva = adelantado): de cinco consultas
@@ -631,12 +637,12 @@ function rau_receptor_kiwi( $args = array() ) {
 		function elegirDecodificador(d){
 			var habia=!!st.ft;
 			st.ft=null; clearInterval(ftT);
-			if(habia && d!=='FT8' && d!=='FT4') audioDatos(false);
+			if(habia && d!=='FT8' && d!=='FT4' && d!=='JS8') audioDatos(false);
 			st.decod = d==='cw' ? 'cw' : '';
 			if(d==='cw'){ if(st.modo!=='cw') sintonizar(st.freq, 'cw', false); }
-			else if(d==='FT8' || d==='FT4'){
+			else if(d==='FT8' || d==='FT4' || d==='JS8'){
 				var corr=0.6; try { corr=+localStorage.getItem('rau_rx_ftcorr')||0.6; } catch(e){}
-				st.ft={modo:d, ranura:d==='FT8'?15:7.5, buf:null, n:0, marcas:[], hechas:{}, corr:corr, rapido:false};
+				st.ft={modo:d, ranura:d==='FT4'?7.5:15, buf:null, n:0, marcas:[], hechas:{}, corr:corr, rapido:false};
 				audioDatos(true);
 				medirReloj().then(function(m){
 					var ft=st.ft, av=$('rx-ft-reloj'); if(!ft || !m) return;
@@ -650,6 +656,7 @@ function rau_receptor_kiwi( $args = array() ) {
 				if(!ftWorker){ try { ftWorker=new Worker(FT_WORKER); ftWorker.onmessage=ftResultado; } catch(e){ ftWorker=null; } }
 				$('rx-ft-titulo').textContent='Decodificador '+d;
 				$('rx-ft-info').textContent=ftWorker ? (st.on ? 'Esperando la próxima ranura…' : 'Pulsa «Escuchar» para empezar.') : 'Este navegador no puede decodificar en segundo plano.';
+				if(d==='JS8' && ftWorker) $('rx-ft-info').textContent+=JS8_API ? ' Lo que decodifiques (salvo los latidos) se comparte con el centro de mando de emergencias, con tu nombre.' : ' Inicia sesión en el sitio para compartir lo que oigas con el centro de mando de emergencias.';
 				ftT=setInterval(ftRevisar, 250);
 			}
 			pintarFreq();
@@ -686,7 +693,10 @@ function rau_receptor_kiwi( $args = array() ) {
 			// Equipo lento: si decodificar toma más de media ranura, se pasa a la etapa rápida (decodifica menos, pero a tiempo)
 			if(!ft.rapido && d.ms>ft.ranura*500) ft.rapido=true;
 			var res=d.res.filter(function(r){ return r.texto; });
-			res.forEach(function(r){ ftFilas.unshift({utc:horaUtc(p.S), snr:r.snr, dt:r.dt, f:r.freq, t:r.texto, nuevo:true}); r.t=r.texto; });
+			res.forEach(function(r){ ftFilas.unshift({utc:horaUtc(p.S), snr:r.snr, dt:r.dt, f:r.freq, t:r.texto.trim(), nuevo:true}); r.t=r.texto; });
+			// JS8: los mensajes de varios marcos, ya armados, van como una fila más
+			(d.mensajes||[]).forEach(function(m){ if(m.partes>1) ftFilas.unshift({utc:horaUtc(p.S), snr:'', dt:null, f:m.freq, t:'✉ '+m.texto, nuevo:true}); });
+			if(p.modo==='JS8') js8Compartir(p, res, d.mensajes||[]);
 			if(ftFilas.length>300) ftFilas.length=300;
 			// Corrección de tiempo: lleva la mediana del DT hacia 0
 			if(res.length>=2){ var dts=res.map(function(r){ return r.dt; }).sort(function(a,b){ return a-b; }), med=dts[dts.length>>1];
@@ -695,11 +705,21 @@ function rau_receptor_kiwi( $args = array() ) {
 			res.forEach(function(r){ ftEstacion(r, p.S); });
 			pintarFt(); pintarMapa();
 		}
+		/* JS8 al centro de mando: con sesión iniciada se envía lo decodificado (sin latidos) para que la sala
+		   lo vea como «oído en el receptor HK4RAU». Sin sesión, nada sale del navegador. */
+		function js8Compartir(p, res, mensajes){
+			if(!JS8_API) return;
+			var items=res.filter(function(r){ return r.tipo!=='latido' && r.texto; }).map(function(r){ return {texto:r.texto.trim(), de:r.de||'', para:r.para||'', grupo:r.grupo||'', tipo:r.tipo, f:r.freq, snr:r.snr}; })
+				.concat(mensajes.filter(function(m){ return m.partes>1; }).map(function(m){ return {texto:m.texto, tipo:'mensaje', f:m.freq, snr:null}; }));
+			if(!items.length) return;
+			fetch(JS8_API.url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json', 'X-WP-Nonce':JS8_API.nonce}, body:JSON.stringify({ranura:p.S, dial:Math.round(p.dial*1000), items:items.slice(0, 30)})}).catch(function(){});
+		}
 		/* ── Mapa de lo oído: quien envía su locator (CQ o respuesta con cuadrícula) ── */
 		var ftEst={}, ftMapa=null;
 		function cuadricula(g){ var a=g.charCodeAt(0)-65, b=g.charCodeAt(1)-65; return {lat:b*10-90+(+g[3])+0.5, lng:a*20-180+(+g[2])*2+1}; }
 		function km(a, b){ var r=Math.PI/180, x=Math.sin((b.lat-a.lat)*r/2), y=Math.sin((b.lng-a.lng)*r/2), h=x*x+Math.cos(a.lat*r)*Math.cos(b.lat*r)*y*y; return Math.round(12742*Math.asin(Math.sqrt(h))); }
 		function ftEstacion(r, S){
+			if(r.cuadricula && r.de){ if(/^[A-R]{2}[0-9]{2}$/.test(r.cuadricula)) ftEst[r.de]={c:r.de, g:r.cuadricula, p:cuadricula(r.cuadricula), snr:r.snr, t:S, msg:r.texto}; return; }
 			if(!r.campos) return; var g=String(r.campos[2]||'').replace(/^R /,''), c=r.campos[1];
 			if(!/^[A-R]{2}[0-9]{2}$/.test(g) || !c || /^</.test(c)) return;
 			ftEst[c]={c:c, g:g, p:cuadricula(g), snr:r.snr, t:S, msg:r.t||r.texto};
@@ -733,7 +753,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			var solo=$('rx-ft-cq').checked, ultima=ftFilas.length?ftFilas[0].utc:'';
 			$('rx-ft-filas').innerHTML=ftFilas.filter(function(r){ return !solo || /^CQ\b/.test(r.t); }).slice(0, 150).map(function(r){
 				var t=r.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(CO, '<b class="rx-ft-co">$&</b>');
-				return '<tr class="'+(/^CQ\b/.test(r.t)?'rx-ft-cqf ':'')+(r.utc===ultima?'rx-ft-ult':'')+'"><td>'+r.utc+'</td><td>'+(r.snr>0?'+':'')+r.snr+'</td><td>'+r.dt.toFixed(1)+'</td><td>'+r.f+'</td><td>'+t+'</td></tr>';
+				return '<tr class="'+(/^CQ\b/.test(r.t)?'rx-ft-cqf ':'')+(r.utc===ultima?'rx-ft-ult':'')+'"><td>'+r.utc+'</td><td>'+(r.snr===''||r.snr===null?'':(r.snr>0?'+':'')+r.snr)+'</td><td>'+(r.dt===null?'':r.dt.toFixed(1))+'</td><td>'+r.f+'</td><td>'+t+'</td></tr>';
 			}).join('') || '<tr><td colspan="5">Todavía nada decodificado.</td></tr>';
 		}
 

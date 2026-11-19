@@ -52,5 +52,11 @@ function rau_em_alertas_publicas() {
 	$o = function_exists( 'rau_sdr_oido' ) ? rau_sdr_oido() : null;
 	$bandas = array();
 	if ( $o ) foreach ( $o['bandas'] as $b => $x ) $bandas[ $b ] = array( 'n' => $x['n'], 'lejos' => $x['lejos'] ? $x['lejos']['km'] : 0 );
-	return array( 'alertas' => $a, 'oido' => $o ? array( 'bandas' => $bandas, 'vigiladas' => $o['vigiladas'], 'actualizado' => $o['actualizado'], 'lugar' => $o['rx']['lugar'] ) : null );
+	// Propagación de Colombia por banda (PSK Reporter, última hora): solo el resumen, sin los enlaces
+	$prop = null;
+	if ( function_exists( 'rau_prop_datos' ) ) {
+		$d = rau_prop_datos();
+		if ( $d['bandas'] ) { $prop = array( 'actualizado' => $d['actualizado'], 'bandas' => array() ); foreach ( $d['bandas'] as $b => $x ) $prop['bandas'][ $b ] = array( 'n' => $x['n'], 'max' => $x['max'], 'reg' => array_slice( array_keys( $x['reg'] ), 0, 3 ), 'nac' => $x['reg']['Colombia'] ?? 0 ); }
+	}
+	return array( 'alertas' => $a, 'prop' => $prop, 'js8' => function_exists( 'rau_js8_para_sala' ) ? rau_js8_para_sala() : array(), 'oido' => $o ? array( 'bandas' => $bandas, 'vigiladas' => $o['vigiladas'], 'actualizado' => $o['actualizado'], 'lugar' => $o['rx']['lugar'] ) : null );
 }

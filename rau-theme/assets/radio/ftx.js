@@ -100,7 +100,7 @@ function puntajeFT8(W, c){
 	var s=0, n=0, base=idxCand(W, c), mag=W.mag, st=W.paso;
 	for(var m=0;m<3;m++) for(var k=0;k<7;k++){
 		var bl=36*m+k, ba=c.t+bl; if(ba<0) continue; if(ba>=W.bloques) break;
-		var p=base+bl*st, sm=COSTAS8[k], v=mag[p+sm];
+		var p=base+bl*st, sm=(W.p.costas||COSTAS8)[k], v=mag[p+sm];
 		if(sm>0){ s+=v-mag[p+sm-1]; n++; }
 		if(sm<7){ s+=v-mag[p+sm+1]; n++; }
 		if(k>0 && ba>0){ s+=v-mag[p+sm-st]; n++; }
@@ -231,8 +231,10 @@ var SYNC8=[[0,COSTAS8],[36,COSTAS8],[72,COSTAS8]], SYNC4=[[1,COSTAS4[0]],[34,COS
 function Etapa2(x, proto){
 	var p=this.p=proto;
 	this.nsps=Math.round(12000*p.simbolo); this.fac=this.nsps/32;
-	this.N1=p===FT8?192000:92160; this.N2=this.N1/this.fac; this.fs2=12000/this.fac; this.df=12000/this.N1; this.baud=1/p.simbolo;
-	this.bits=p===FT8?3:2; this.gray=p===FT8?GRAY8:GRAY4; this.datos=p===FT8?DATOS8:DATOS4; this.sync=p===FT8?SYNC8:SYNC4;
+	// p.nn===79: FT8 y JS8 (misma forma de onda; JS8 cambia las matrices Costas y no usa código Gray)
+	var ocho=p.nn===79;
+	this.N1=ocho?192000:92160; this.N2=this.N1/this.fac; this.fs2=12000/this.fac; this.df=12000/this.N1; this.baud=1/p.simbolo;
+	this.bits=ocho?3:2; this.gray=ocho?(p.gray||GRAY8):GRAY4; this.datos=ocho?DATOS8:DATOS4; this.sync=ocho?(p.costas?[[0,p.costas],[36,p.costas],[72,p.costas]]:SYNC8):SYNC4;
 	this.plan1=planFFT(this.N1); this.plan2=planFFT(this.N2);
 	this.cargar(x);
 	var t=this.taper=new Float64Array(101); for(var i=0;i<=100;i++) t[i]=0.5*(1+Math.cos(i*Math.PI/100));
@@ -400,7 +402,7 @@ function verificarOsd(L, proto){
 /* Intenta decodificar en la posición fina; devuelve {payload, f1, t, cs} o null */
 Etapa2.prototype.decodificar=function(f1, t0){
 	var a=this.afinar(f1, t0), cs=this.simbolos(a);
-	if(this.sincroDura(cs)<=(this.p===FT8?6:4)) return null;
+	if(this.sincroDura(cs)<=(this.p.nn===79?6:4)) return null;
 	var Ls=this.metricas(cs);
 	for(var k=0;k<4;k++){ var pl=verificarLdpc(Ls[k], 30, this.p); if(pl) return {payload:pl, f1:a.f1, t:a.t, cs:cs}; }
 	// Segunda oportunidad con OSD sobre las métricas de 1 y de 3 símbolos
@@ -781,5 +783,9 @@ function decodificar(muestras, tasa, opts){
 }
 
 return { FT8:FT8, FT4:FT4, Monitor:Monitor, Hashes:Hashes, buscarCandidatos:buscarCandidatos, decodificarCandidato:decodificarCandidato, decodificar:decodificar,
-	desempacar:desempacar, empacar:empacar, tonos:tonos, sintetizar:sintetizar, remuestrear:remuestrear, crc14:crc14, planFFT:planFFT, fft:fft };
+	desempacar:desempacar, empacar:empacar, tonos:tonos, sintetizar:sintetizar, remuestrear:remuestrear, crc14:crc14, planFFT:planFFT, fft:fft,
+	// Piezas para el módem de audio (modem.js)
+	ldpc:ldpc, codificar174:codificar174, agregarCrc:agregarCrc, extraerCrc:extraerCrc, empacarBits:empacarBits, GRAY8:GRAY8, COSTAS8:COSTAS8,
+	// Piezas para JS8 (js8.js)
+	Monitor:Monitor, Etapa2:Etapa2, restarFino:restarFino };
 });

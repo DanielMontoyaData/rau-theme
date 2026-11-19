@@ -20,6 +20,7 @@ $em_cfg = array(
 	'nonce'      => is_user_logged_in() ? wp_create_nonce( 'wp_rest' ) : '',
 	'sitio'      => home_url( '/' ),
 	'login'      => wp_login_url( home_url( '/emergencias/' ) ),
+	'ajax'       => admin_url( 'admin-ajax.php' ),
 	'admin'      => admin_url( 'tools.php?page=rau-em' ),
 	'version'    => $em_ver,
 	// El esquema y el directorio ya no van aquí: el esquema es un archivo estático versionado (lo guarda el
@@ -32,6 +33,7 @@ $em_cfg = array(
 	'contorno'   => $em_uri . 'colombia.geojson?ver=' . $em_ver,
 	'leaflet'    => array( 'js' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.js?ver=1.9.4', 'css' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.css?ver=1.9.4' ),
 	'qr'         => get_template_directory_uri() . '/assets/vendor/qrcode/qrcode.js?ver=1.4.4',
+	'modem'      => array( get_template_directory_uri() . '/assets/radio/ftx.js?ver=' . $em_ver, get_template_directory_uri() . '/assets/radio/modem.js?ver=' . $em_ver ),
 );
 ?><!DOCTYPE html>
 <html lang="es">
@@ -42,6 +44,26 @@ $em_cfg = array(
 <meta name="robots" content="noindex">
 <meta name="description" content="Centro de mando de emergencias de HK4RAU: incidentes, mensajes con trazabilidad, estaciones, recursos, plan de comunicaciones e informes para radioaficionados y organizaciones de respuesta en Colombia. Funciona sin internet.">
 <title>Centro de Mando de Emergencias · HK4RAU</title>
+<?php
+// Esta página no pasa por wp_head: las etiquetas para compartir el enlace (WhatsApp, Telegram, Facebook, X) van aquí
+$em_desc = 'Coordinación de comunicaciones de emergencia para radioaficionados y organizaciones de respuesta en Colombia: incidentes, mensajes con trazabilidad, red de estaciones y recursos. Funciona sin internet.';
+$em_img  = get_template_directory_uri() . '/assets/images/rau-badge.png';
+?>
+<link rel="canonical" href="<?php echo esc_url( home_url( '/emergencias/' ) ); ?>">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="es_CO">
+<meta property="og:site_name" content="RAU — Radioaficionados Unidos">
+<meta property="og:title" content="Centro de Mando de Emergencias · HK4RAU">
+<meta property="og:description" content="<?php echo esc_attr( $em_desc ); ?>">
+<meta property="og:url" content="<?php echo esc_url( home_url( '/emergencias/' ) ); ?>">
+<meta property="og:image" content="<?php echo esc_url( $em_img ); ?>">
+<meta property="og:image:width" content="640">
+<meta property="og:image:height" content="591">
+<meta property="og:image:alt" content="Insignia de Radioaficionados Unidos">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Centro de Mando de Emergencias · HK4RAU">
+<meta name="twitter:description" content="<?php echo esc_attr( $em_desc ); ?>">
+<meta name="twitter:image" content="<?php echo esc_url( $em_img ); ?>">
 <link rel="manifest" href="<?php echo esc_url( get_template_directory_uri() . '/manifest.json' ); ?>">
 <link rel="icon" href="<?php echo esc_url( get_template_directory_uri() . '/assets/images/favicon-32x32.png' ); ?>">
 <link rel="stylesheet" href="<?php echo esc_url( $em_uri . 'em.css?ver=' . $em_ver ); ?>">

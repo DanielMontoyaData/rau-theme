@@ -98,6 +98,11 @@ function recomendacionBanda(){
 	if(o && o.bandas){
 		r+='<p><strong>Medido</strong> por el receptor HK4RAU en '+esc(o.lugar||'Colombia')+' ('+E.haceTxt(o.actualizado*1000)+', últimos 30 min): '+['40m','20m','15m','10m'].map(function(k){ var x=o.bandas[k]; return k.replace('m',' m')+': '+(x&&x.n?'<strong>oye '+x.n+' estaciones</strong>':'sin estaciones'); }).join(' · ')+'.</p>';
 	}
+	var p=E.alertas && E.alertas.prop;
+	if(p && p.bandas){
+		var bs=Object.keys(p.bandas).sort(function(a,b){ return p.bandas[b].n-p.bandas[a].n; }).slice(0,4);
+		r+='<p><strong>Abiertas desde Colombia</strong> (PSK Reporter, última hora, '+E.haceTxt(p.actualizado*1000)+'): '+bs.map(function(b){ var x=p.bandas[b]; return '<strong>'+esc(b)+'</strong> '+x.n+' enlaces hasta '+x.max.toLocaleString('es-CO')+' km'+(x.reg.length?' hacia '+esc(x.reg.join(', ')):'')+(x.nac?' ('+x.nac+' dentro del país)':''); }).join(' · ')+'. <small>Son enlaces digitales reportados automáticamente: en fonía hace falta más señal.</small></p>';
+	}
 	return r;
 }
 /* USGS escribe el lugar en inglés: «37 km ESE of Cañaveral, Peru» → «a 37 km al ESE de Cañaveral, Perú» */
@@ -111,6 +116,8 @@ E.lugarSismo = function(t){
 E.VIVO.alertas = function(){
 	var a=E.alertas && E.alertas.alertas, h=(E.op && E.esSim() ? '<p class="em-aviso em-real">Datos REALES de fuentes externas: no forman parte del simulacro.</p>' : '')+recomendacionBanda();
 	if(!E.alertas) return h+'<p class="em-nota">Alertas en vivo: necesitan internet.</p>';
+	var j8=E.alertas.js8;
+	if(j8 && j8.length) h+='<h3>JS8 oído en el receptor HK4RAU · 2 horas</h3><div class="em-lista">'+j8.map(function(x){ return '<div class="em-fila"><span>'+(x.emergencia?E.pill('aviso', x.grupo||x.para)+' ':'')+'<strong class="em-mono">'+esc(x.texto)+'</strong><small>'+E.haceTxt(x.t*1000)+' · '+x.mhz.toFixed(3).replace('.', ',')+' MHz'+(x.snr!==null?' · '+(x.snr>0?'+':'')+x.snr+' dB':'')+' · lo reportó '+esc(x.por)+'</small></span></div>'; }).join('')+'</div><p class="em-nota">Decodificado por quien escuchaba el receptor del sitio con sesión iniciada. Es lo que se oyó en el aire, sin verificar: confírmalo por radio antes de actuar.</p>';
 	if(a && a.gdacs && a.gdacs.length) h+='<h3>Alertas de desastre (GDACS)</h3><div class="em-lista">'+a.gdacs.slice(0,4).map(function(g){ return '<div class="em-fila"><span>'+E.pill(g.nivel==='red'?'peligro':g.nivel==='orange'?'aviso':'ok', g.nivel==='red'?'Roja':g.nivel==='orange'?'Naranja':'Verde')+' <strong>'+esc(g.tipo)+'</strong> '+esc(g.nombre)+'<small>desde '+new Date(g.desde*1000).toLocaleDateString('es-CO')+'</small></span>'+(g.url?'<a href="'+esc(g.url)+'" target="_blank" rel="noopener">Ver</a>':'')+'</div>'; }).join('')+'</div>';
 	if(a && a.sismos){ var s=a.sismos.slice(0,5); h+='<h3>Sismos M3,5+ · 7 días (USGS)</h3>'+(s.length?'<div class="em-lista">'+s.map(function(x){ return '<div class="em-fila"><span><strong class="'+(x.m>=6?'em-rojo':x.m>=5?'em-ambar':'')+'">M'+x.m.toFixed(1)+'</strong> '+esc(E.lugarSismo(x.lugar))+'<small>'+E.haceTxt(x.t*1000)+' · '+x.prof+' km de profundidad</small></span><a href="'+esc(x.url)+'" target="_blank" rel="noopener">Ver</a></div>'; }).join('')+'</div>':'<p class="em-nota">Ninguno en Colombia y alrededores.</p>'); }
 	h+='<p class="em-nota">Fuente: USGS y GDACS, recibido '+E.haceTxt(E.alertas.recibido)+(E.alertas.alertas&&E.alertas.alertas.viejo?' (copia anterior: la fuente no respondió)':'')+'. El Servicio Geológico Colombiano no publica sus datos para otras aplicaciones: confirma en sgc.gov.co. Una alerta no crea incidentes por sí sola.</p>';

@@ -75,15 +75,43 @@ function listaAlarmas(){ var l=E.alarmasActivas(); return l.length ? l.map(funct
 function abrirAlarmas(){
 	E.modal('Alarmas', '<div class="em-acciones"><button type="button" class="em-btn" id="al-todas">Enterado todas</button><button type="button" class="em-btn" id="al-son" aria-pressed="'+sonido+'">'+(sonido?'🔔 Sonido encendido':'🔕 Sonido apagado')+'</button>'
 		+(window.Notification && Notification.permission!=='granted' ? '<button type="button" class="em-btn" id="al-not">Avisos del sistema</button>' : '')
+		+(E.op && !E.op.local && 'PushManager' in window ? '<button type="button" class="em-btn" id="al-push">📱 Avisos en este celular</button>' : '')
 		+(E.puede('coordinar')&&!cerrada()?'<button type="button" class="em-btn" id="al-aj">Ajustar límites</button>':'')+'</div>'
 		+'<div id="al-lista" class="em-alarmas">'+listaAlarmas()+'</div><p class="em-nota">«Enterado» quita el aviso en este dispositivo; la alarma sigue hasta que se atiende la causa. Si sube de nivel, vuelve a sonar.</p>', function(c){
 		$('#al-todas',c).addEventListener('click', function(){ marcarEnterado(E.alarmasActivas().map(function(a){ return a.id; })); $('#al-lista',c).innerHTML=listaAlarmas(); });
 		$('#al-son',c).addEventListener('click', function(){ sonido=!sonido; DB.kvSet('sonido', sonido).catch(function(){}); this.textContent=sonido?'🔔 Sonido encendido':'🔕 Sonido apagado'; this.setAttribute('aria-pressed', sonido); if(sonido) pitar('alta'); revisarAlarmas(); });
 		if($('#al-not',c)) $('#al-not',c).addEventListener('click', function(){ var b=this; Notification.requestPermission().then(function(p){ b.textContent=p==='granted'?'Avisos activados':'Avisos bloqueados por el navegador'; b.disabled=true; }); });
 		if($('#al-aj',c)) $('#al-aj',c).addEventListener('click', formAjustes);
+		if($('#al-push',c)){ var bp=$('#al-push',c); DB.kvGet('avisos:'+E.op.codigo).then(function(v){ if(v) bp.textContent='📱 Avisos activos (quitar)'; }).catch(function(){}); bp.addEventListener('click', function(){ avisosCelular(bp); }); }
 	}, true);
 }
 E.abrirAlarmas = abrirAlarmas;
+/* Avisos al celular con la página cerrada: mensaje de emergencia, urgencia de una estación, incidente crítico,
+   y lo que lleva demasiado tiempo sin atender. El servidor los envía (inc/emergencias/avisos.php). */
+function b64aBytes(b){ var p='='.repeat((4-b.length%4)%4), s=atob((b+p).replace(/-/g,'+').replace(/_/g,'/')), o=new Uint8Array(s.length); for(var i=0;i<s.length;i++) o[i]=s.charCodeAt(i); return o; }
+function avisosCelular(boton){
+	var cod=E.op.codigo, clave='avisos:'+cod;
+	DB.kvGet(clave).catch(function(){ return null; }).then(function(activo){
+		return navigator.serviceWorker.ready.then(function(reg){
+			return reg.pushManager.getSubscription().then(function(sub){
+				if(activo && sub){ return E.rest('operaciones/'+cod+'/avisos', {metodo:'DELETE', cuerpo:{endpoint:sub.endpoint}}).then(function(){ DB.kvSet(clave, false); boton.textContent='📱 Avisos en este celular'; E.aviso('Este celular ya no recibe avisos de la operación.'); }); }
+				return Notification.requestPermission().then(function(p){
+					if(p!=='granted') throw new Error('El navegador no dio permiso para mostrar avisos.');
+					return sub || fetch(C.ajax+'?action=rau_vapid_public_key', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+						if(!j.success || !j.data.key) throw new Error('El sitio no tiene avisos configurados.');
+						return reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64aBytes(j.data.key)});
+					});
+				}).then(function(s){
+					return E.rest('operaciones/'+cod+'/avisos', {metodo:'POST', cuerpo:s.toJSON()}).then(function(r){
+						if(r.estado!==200) throw new Error((r.j&&r.j.error)||'No se pudo activar.');
+						DB.kvSet(clave, true); boton.textContent='📱 Avisos activos (quitar)';
+						E.aviso('Listo: este celular avisará aunque la página esté cerrada.');
+					});
+				});
+			});
+		});
+	}).catch(function(x){ E.aviso(String(x&&x.message||x), 'aviso'); });
+}
 document.addEventListener('click', function(e){ if(e.target.closest('#em-alarmas')) abrirAlarmas(); });
 setInterval(function(){ revisarAlarmas(); refrescarSala(); }, 10000);
 E.alRefrescar.push(revisarAlarmas);

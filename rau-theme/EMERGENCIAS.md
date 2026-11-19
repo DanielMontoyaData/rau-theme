@@ -323,6 +323,11 @@ Requieren un WordPress con el tema y `RAU_EM_PRUEBAS` definido en ese `wp-config
 | API REST | `RAU_EM_BASE=http://localhost:8099 node --test tests/emergencias/api.test.mjs` |
 | Cuentas, organizaciones, conservación y directorio | `php tests/emergencias/cuentas.php /ruta/a/wordpress/wp-load.php` |
 | De punta a punta (Playwright; las consultas a Open-Meteo se responden con datos fijos) | `RAU_EM_BASE=http://localhost:8099 node --test --test-concurrency=1 tests/emergencias/e2e.test.mjs` |
+| Avisos al celular (los envíos al servicio push se interceptan) | `php tests/emergencias/avisos.php /ruta/a/wordpress/wp-load.php` |
+| Módem de audio (ruido, desfase, eco, tramas perdidas) | `node --test tests/radio/modem.test.mjs` |
+| JS8 (con `JS8CALL_WAV=<media/tests de JS8Call>` compara con sus grabaciones) | `node --test tests/radio/js8.test.mjs` |
+| JS8 al centro de mando | `php tests/radio/js8-oido.php /ruta/a/wordpress/wp-load.php` |
+| Propagación desde Colombia (PSK Reporter simulado) | `php tests/radio/propagacion.php /ruta/a/wordpress/wp-load.php` |
 | Verificador general del tema | `php bin/verificar.php` |
 
 La carpeta `tests/` no se incluye en el zip que se sube al sitio.
@@ -336,8 +341,15 @@ La carpeta `tests/` no se incluye en el zip que se sube al sitio.
   dispositivo que los recibe: los sube quien los registró cuando tenga conexión.
 - **Perfil de enlace**: no modela vegetación, edificios, difracción ni propagación troposférica.
   «Despejado» es condición necesaria, no garantía: se confirma con una prueba de enlace.
-- **Alarmas**: suenan solo con la página abierta (no hay notificaciones push del servidor) y el sonido
-  necesita que alguien lo active en ese dispositivo.
+- **Alarmas**: el sonido suena solo con la página abierta y necesita que alguien lo active en ese
+  dispositivo. Con la página cerrada llegan los avisos al celular (sección 12), si se activaron.
+- **Avisos al celular**: dependen del servicio push del navegador (Google, Mozilla, Apple) y de internet;
+  en iPhone solo funcionan con el sitio instalado en la pantalla de inicio (iOS 16.4 o posterior).
+- **Módem de audio**: hasta 4 KB por envío (unas 90 a 120 tramas). Con más registros hay que filtrar
+  (por ejemplo, la última hora). No corrige errores entre tramas: la que llega dañada se pide de nuevo.
+- **JS8**: solo el submodo Normal. Lo que llega al centro de mando lo decodificó el navegador de quien
+  reportó; el sitio comprueba que tenga sesión y limpia el texto, pero no puede comprobar que se haya
+  oído en el aire.
 
 - **Formularios**: no son formularios oficiales validados por la UNGRD.
   - El ICS-213, el SCI-205 y el SCI-214 son adaptaciones y lo dicen en su texto.
@@ -446,4 +458,43 @@ Además, en esta versión:
 - Los sismos de USGS se muestran en español.
 - Durante un simulacro, las alertas reales llevan la marca «Datos REALES».
 - La tabla de frecuencias del inicio lleva las condiciones y fuentes como notas numeradas.
+
+---
+
+## 12. Avisos al celular, módem de audio y JS8 (19.57.0)
+
+**Avisos al celular** (`inc/emergencias/avisos.php`):
+
+- Quien está en una operación los activa en «Alarmas → 📱 Avisos en este celular». La suscripción
+  queda en el servidor con la operación, el indicativo y el rol (`POST/DELETE
+  /rau-em/v1/operaciones/<código>/avisos`, con la sesión de la operación).
+- En el momento: mensaje de EMERGENCIA, URGENCIA reportada por una estación, incidente crítico.
+- Cada 5 minutos (WP-Cron): mensaje de emergencia sin entregar a los 10 min; incidente crítico sin
+  responsable a los 15 min.
+- Cada aviso sale una sola vez; a quien registró el evento no se le avisa; en simulacro el título dice
+  «[SIMULACRO]». Si el servicio push responde 404 o 410, la suscripción se borra.
+
+**Módem de audio** (`assets/radio/modem.js`; medio «Sonido» en «Pasar registros sin internet»):
+
+- El paquete `RAUEM1` viaja como su cabecera más los bytes comprimidos (sin base64).
+- Tramas de 8 bytes con número de secuencia, LDPC 174/91 y CRC-14 (como FT8), en 8 tonos con
+  sincronía Costas; el mensaje completo lleva CRC-16.
+- Robusta: 50 baudios, 1100–1450 Hz. Rápida: 100 baudios, 900–1600 Hz. El receptor escucha las dos.
+- Quien recibe ve cuántas tramas llegaron y cuáles faltan; quien envía escribe esos números y
+  transmite solo esas.
+- Para conectar: salida de audio del celular a la entrada de micrófono de la radio, o el celular junto
+  al micrófono, con PTT o VOX. En recepción, el celular junto al parlante o la salida de audio de la
+  radio a la entrada del celular. Se desactivan la cancelación de eco y el control de volumen del
+  micrófono, que deforman los tonos.
+
+**JS8 oído en el receptor** (`inc/js8-oido.php`, `assets/radio/js8.js`):
+
+- El receptor del sitio decodifica JS8 (submodo Normal) en el navegador.
+- Con sesión iniciada, lo decodificado (sin latidos) se envía a `POST /wp-json/rau/v1/js8`: como mucho
+  un envío cada 10 s por persona, ranuras de los últimos 10 minutos, 30 líneas, solo el alfabeto de
+  JS8. Se guardan 6 horas.
+- «Ahora mismo» muestra lo de las últimas 2 horas, primero lo dirigido a grupos de emergencia, con
+  frecuencia, SNR y quién lo reportó, y la advertencia de que es lo oído, sin verificar.
+- JS8Call es software libre con licencia GPL v3; el port la conserva (ver
+  `assets/radio/LICENSE-JS8Call-GPLv3.txt`).
 
