@@ -28,6 +28,20 @@ for (const ppm of [12, 20, 30, 40]) test(ppm + ' PPM con buena señal (10 dB en 
 test('señal moderada (3 dB en 500 Hz) a 20 PPM: casi todo legible', () => { semilla = 3; const r = leer(generar(TXT + ' QTH MEDELLIN', 20, 3, 0.06)); assert.ok(errores(TXT + ' QTH MEDELLIN', r) <= 0.15, r); });
 test('mano irregular (±18 %) a 20 PPM', () => { semilla = 5; const r = leer(generar(TXT, 20, 8, 0.18)); assert.ok(errores(TXT, r) <= 0.1, r); });
 test('solo ruido: no inventa texto', () => { semilla = 9; const x = new Float32Array(12000 * 20); for (let i = 0; i < x.length; i++) x[i] = gauss(); assert.ok(leer(x).length <= 2, leer(x)); });
+test('skimmer: cuatro estaciones a la vez, cada una con su velocidad', () => {
+	semilla = 17;
+	const EST = [['CQ CQ DE HK4RAU HK4RAU K', 20, 450, 8], ['HK6XYZ DE K1ABC UR 599 TU', 28, 700, 6], ['TEST DE W9XYZ W9XYZ', 15, 1050, 10], ['QRL? DE EA1ABC', 25, 1600, 6]];
+	// Un solo ruido para todas y cada estación a su velocidad y frecuencia
+	const n = 25 * 12000, x = new Float32Array(n);
+	for (let i = 0; i < n; i++) x[i] = gauss();
+	EST.forEach(([t, p, f, s]) => { const u = 1.2 / p, A = Math.sqrt(2 * Math.pow(10, s / 10) * 500 / 6000); let tt = 1;
+		t.split('').forEach((ch) => { if (ch === ' ') { tt += 4 * u; return; } INV[ch].split('').forEach((e, k, a) => { const d = (e === '.' ? 1 : 3) * u, i0 = Math.round(tt * 12000), i1 = Math.round((tt + d) * 12000); for (let i = i0; i < i1 && i < n; i++) x[i] += A * Math.min(1, (i - i0) / 60, (i1 - i) / 60) * Math.sin(2 * Math.PI * f * i / 12000); tt += d + (k < a.length - 1 ? u : 0); }); tt += 3 * u; }); });
+	const sk = CW.crearSkimmer(12000, () => {});
+	for (let i = 0; i < n; i += 512) sk.procesar(x.subarray(i, i + 512));
+	const c = sk.canales();
+	assert.equal(c.length, 4, c.map((q) => Math.round(q.tono)).join(','));
+	EST.forEach(([t, p, f]) => { const q = c.find((z) => Math.abs(z.tono - f) < 10); assert.ok(q, 'falta ' + f); assert.ok(errores(t, q.texto.trim()) <= 0.12, f + ' Hz: ' + q.texto); assert.ok(Math.abs(q.info.ppm - p) <= 3, f + ' Hz ppm ' + q.info.ppm); });
+});
 test('informa velocidad, tono y relación señal/ruido', () => {
 	semilla = 13; let info = null; const d = CW.crear(12000, () => {}, (o) => { info = o; }); const x = generar(TXT, 25, 10, 0.05);
 	for (let i = 0; i < x.length; i += 512) d.procesar(x.subarray(i, i + 512));

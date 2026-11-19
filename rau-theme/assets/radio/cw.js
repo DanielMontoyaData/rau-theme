@@ -36,12 +36,13 @@ function biquad(fc, fs){
 function filtrar(f, x){ var y=f.b0*x+f.b1*f.x1+f.b2*f.x2-f.a1*f.y1-f.a2*f.y2; f.x2=f.x1; f.x1=x; f.y2=f.y1; f.y1=y; return y; }
 function percentil(a, n, p){ var b=Array.prototype.slice.call(a, 0, n).sort(function(x,y){ return x-y; }); return b[Math.min(n-1, Math.floor(n*p))]; }
 
-function crear(tasa, alTexto, alInfo){
+function crear(tasa, alTexto, alInfo, opts){
+	opts=opts||{};
 	var HOP=Math.max(1, Math.round(tasa*0.004)), fsE=tasa/HOP, pasoMs=1000/fsE;
 	var NF=4096; while(NF/tasa>0.4 && NF>1024) NF>>=1;  // ~0,34 s de audio por espectro
 	var st={};
 	function reiniciar(){
-		st.tono=0; st.fase=0; st.ai=0; st.aq=0; st.cnt=0; st.espec=null; st.cand=0; st.candT=0;
+		st.tono=opts.tono||0; st.fase=0; st.ai=0; st.aq=0; st.cnt=0; st.espec=null; st.cand=0; st.candT=0;
 		st.bufE=new Float32Array(Math.round(3*fsE)); st.nE=0; st.iE=0;
 		st.ruido=0; st.marca=0; st.abajo=false; st.dur=0; st.pend=null; st.pendT=0;
 		st.marcas=[]; st.silencios=[]; st.u=40; st.envIni=[]; st.letra=[]; st.huecos=[]; st.espacio=true; st.silencio=0; st.calibrado=false; st.crudo=[];
@@ -114,8 +115,14 @@ function crear(tasa, alTexto, alInfo){
 	}
 	function soltarLetra(){
 		if(!st.letra.length) return;
-		leer(st.letra, st.huecos).forEach(function(r){ alTexto(r.c, r.conf); });
-		st.letra=[]; st.huecos=[]; st.espacio=false;
+		var r=leer(st.letra, st.huecos);
+		// Una E o una T sola después de un espacio y con poca confianza es casi siempre ruido (al final de una
+		// transmisión el silenciador tarda unos segundos en cerrar)
+		var suelta=r.length===1 && /^[ET]$/.test(r[0].c) && st.espacio && r[0].conf<0.5;
+		st.letra=[]; st.huecos=[];
+		if(suelta) return;
+		r.forEach(function(x){ alTexto(x.c, x.conf); });
+		st.espacio=false;
 	}
 	/* Arma letras con los elementos: m = marca, s = silencio */
 	function elemento(tipo, dur){
@@ -173,7 +180,10 @@ function crear(tasa, alTexto, alInfo){
 			st.ruido=percentil(b, st.nE, 0.2);
 			// La marca sigue al desvanecimiento (QSB): se mide en el último 1,2 s, como un control automático de ganancia
 			var n5=Math.min(st.nE, Math.round(1.2*fsE)), rec=new Float32Array(n5); for(var k=0;k<n5;k++) rec[k]=b[(st.iE-1-k+b.length)%b.length];
-			st.marca=percentil(rec, n5, 0.92);
+			// Con memoria que baja despacio (a la mitad en ~2 s): tras una pausa entre turnos, la primera raya
+			// encuentra el nivel de la estación y no se acorta
+			st.marcaMem=Math.max(percentil(rec, n5, 0.92), (st.marcaMem||0)*0.985);
+			st.marca=st.marcaMem;
 		}
 		// Silenciador: con solo ruido (Rayleigh) el percentil 95 queda ~3,6 veces sobre el 20; con CW, mucho más
 		var span=st.marca-st.ruido, hay=st.marca>st.ruido*5, umbral=st.ruido+span*(st.abajo?0.42:0.58);
@@ -206,6 +216,8 @@ function crear(tasa, alTexto, alInfo){
 			}
 	}
 	function procesar(m){
+		// Tono fijo (un canal del skimmer): sin búsqueda de tono, directo al detector
+		if(opts.tono){ for(var j=0;j<m.length;j++) mezclar(m[j]); return; }
 		for(var k=0;k<m.length;k++){
 			var x=m[k];
 			// Últimos 3 s de audio: al encontrar el tono se vuelve a pasar, para no perder la primera letra
@@ -223,7 +235,76 @@ function crear(tasa, alTexto, alInfo){
 		}
 	}
 	reiniciar();
-	return {procesar:procesar, reiniciar:reiniciar, estado:function(){ return {tono:st.tono, ppm:1200/st.u, banda:st.fc}; }};
+	return {procesar:procesar, reiniciar:reiniciar,
+		estado:function(){ return {tono:st.tono, ppm:1200/st.u, banda:st.fc, snr:20*Math.log10((st.marca+1e-12)/(st.ruido+1e-12)), calibrado:st.calibrado}; },
+		seguir:function(f){ if(opts.tono && Math.abs(f-st.tono)<15) st.tono+=0.3*(f-st.tono); }};
 }
-return {crear:crear, MORSE:MORSE};
+
+/* ── Skimmer: todas las señales de CW del pasabanda a la vez ─────────────────
+   Cada 0,34 s un espectro promediado; los picos que sobresalen 10 veces la mediana en dos espectros
+   seguidos abren un canal (hasta `max`) con su propio decodificador de tono fijo, que arranca con los
+   últimos 3 s de audio para no perder la primera letra. Un canal se cierra tras 30 s sin señal. */
+function crearSkimmer(tasa, alCambio, opts){
+	opts=opts||{};
+	var NF=4096; while(NF/tasa>0.4 && NF>1024) NF>>=1;
+	var fmin=opts.fmin||250, fmax=Math.min(opts.fmax||2800, tasa/2-100), MAX=opts.max||8;
+	var b0=Math.floor(fmin*NF/tasa), b1=Math.ceil(fmax*NF/tasa), espec=new Float64Array(b1-b0+1), buf=new Float32Array(NF), nb=0;
+	var hist=new Float32Array(Math.round(3*tasa)), iH=0, nH=0, canales=[], cands=[], sec=0, reloj=0;
+	function nuevoCanal(f){
+		var c={id:++sec, tono:f, texto:'', ultimo:reloj, visto:reloj, info:null};
+		c.dec=crear(tasa, function(ch, conf){
+			if(conf!==undefined && conf<0.2) return;
+			if(ch===' ' && (!c.texto || / $/.test(c.texto))) return;
+			c.texto=(c.texto+ch).slice(-200); c.ultimo=reloj; alCambio(c);
+		}, function(o){ c.info=o; }, {tono:f});
+		// Arranca con lo que sonó hace poco
+		var h=new Float32Array(nH), i0=(iH-nH+hist.length)%hist.length; for(var k=0;k<nH;k++) h[k]=hist[(i0+k)%hist.length];
+		c.dec.procesar(h);
+		canales.push(c); alCambio(c);
+	}
+	function analizar(){
+		var re=new Float64Array(NF), im=new Float64Array(NF), b, k;
+		for(var i=0;i<NF;i++){ var w=0.5-0.5*Math.cos(2*Math.PI*i/NF); re[i]=buf[i]*w; }
+		fft2(re, im);
+		for(b=b0;b<=b1;b++){ var p=re[b]*re[b]+im[b]*im[b]; espec[b-b0]=espec[b-b0]*0.6+p*0.4; }
+		var med=percentil(espec, espec.length, 0.5), picos=[];
+		for(k=2;k<espec.length-2;k++){
+			var v=espec[k];
+			if(v>med*10 && v>=espec[k-1] && v>=espec[k+1] && v>=espec[k-2] && v>=espec[k+2]){
+				var a=espec[k-1], d=espec[k+1], den=a-2*v+d, f=(b0+k)*tasa/NF+(den?0.5*(a-d)/den*tasa/NF:0);
+				picos.push({f:f, p:v});
+			}
+		}
+		picos.sort(function(x,y){ return y.p-x.p; });
+		// Los «clics» de manipulación de una estación fuerte aparecen como picos a su lado: un pico vale si no
+		// está más de 17 dB por debajo de otro a menos de 200 Hz
+		picos=picos.filter(function(pk){ return !picos.some(function(o){ return o!==pk && Math.abs(o.f-pk.f)<200 && pk.p<o.p*0.02; }); });
+		var usados=[];
+		picos.forEach(function(pk){
+			if(usados.some(function(u){ return Math.abs(u-pk.f)<40; })) return; usados.push(pk.f);
+			var c=canales.filter(function(x){ return Math.abs(x.tono-pk.f)<15; })[0];
+			if(c){ c.visto=reloj; c.dec.seguir(pk.f); c.tono=c.dec.estado().tono; return; }
+			// Un pico nuevo tiene que repetirse en dos espectros seguidos
+			var cd=cands.filter(function(x){ return Math.abs(x.f-pk.f)<15; })[0];
+			if(cd){ if(++cd.n>=2 && canales.length<MAX){ nuevoCanal(pk.f); cands=cands.filter(function(x){ return x!==cd; }); } else cd.t=reloj; }
+			else cands.push({f:pk.f, n:1, t:reloj});
+		});
+		cands=cands.filter(function(x){ return reloj-x.t<1; });
+		var antes=canales.length;
+		canales=canales.filter(function(c){ return reloj-c.visto<30 || reloj-c.ultimo<30; });
+		if(canales.length!==antes) alCambio(null);
+	}
+	return {
+		procesar:function(m){
+			for(var k=0;k<m.length;k++){
+				var x=m[k]; hist[iH]=x; iH=(iH+1)%hist.length; if(nH<hist.length) nH++;
+				buf[nb++]=x; if(nb===NF){ nb=0; reloj+=NF/tasa; analizar(); }
+			}
+			for(var c=0;c<canales.length;c++) canales[c].dec.procesar(m);
+		},
+		canales:function(){ return canales.slice().sort(function(a,b){ return a.tono-b.tono; }); },
+		reiniciar:function(){ canales=[]; cands=[]; espec.fill(0); alCambio(null); }
+	};
+}
+return {crear:crear, crearSkimmer:crearSkimmer, MORSE:MORSE};
 });

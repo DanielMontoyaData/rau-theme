@@ -342,12 +342,69 @@ function verificarLdpc(L, iters, proto){
 	if(!pl.some(function(v){ return v; })) return null;
 	return pl;
 }
+/* ── OSD: decodificación por estadísticas ordenadas (osd174_91 de WSJT-X), cuando falla la propagación de
+   creencias. Se toman los 91 bits más confiables como base (eliminación gaussiana sobre la matriz
+   generadora con las columnas ordenadas por |LLR|), se reconstruye la palabra y se prueban los cambios de
+   uno y de dos de los bits menos confiables de esa base; gana la palabra más cercana a lo recibido. */
+var GFULL=null, PAL=6;
+function generadora(){
+	if(GFULL) return GFULL; GFULL=[];
+	for(var j=0;j<K;j++){ var r=new Uint32Array(PAL); r[j>>5]|=1<<(j&31);
+		for(var i=0;i<M;i++) if((LDPC_GEN[i*12+(j>>3)]>>(7-(j&7)))&1){ var n=K+i; r[n>>5]|=1<<(n&31); }
+		GFULL.push(r); }
+	return GFULL;
+}
+function bitDe(c, n){ return (c[n>>5]>>>(n&31))&1; }
+function osd(L, pares){
+	var G=generadora(), perm=new Array(N), n, r, k;
+	for(n=0;n<N;n++) perm[n]=n;
+	perm.sort(function(a,b){ return Math.abs(L[b])-Math.abs(L[a]); });
+	var filas=G.map(function(x){ return x.slice(); }), piv=[], r0=0;
+	for(var pi=0;pi<N && r0<K;pi++){
+		var col=perm[pi], w=col>>5, b=1<<(col&31), p=-1;
+		for(r=r0;r<K;r++) if(filas[r][w]&b){ p=r; break; }
+		if(p<0) continue;
+		var t=filas[p]; filas[p]=filas[r0]; filas[r0]=t;
+		for(r=0;r<K;r++) if(r!==r0 && (filas[r][w]&b)) for(k=0;k<PAL;k++) filas[r][k]^=filas[r0][k];
+		piv.push(col); r0++;
+	}
+	if(r0<K) return null;
+	var c0=new Uint32Array(PAL);
+	for(k=0;k<K;k++) if(L[piv[k]]>0) for(var q=0;q<PAL;q++) c0[q]^=filas[k][q];
+	// Aporte de cambiar cada bit: + |L| si hoy coincide con lo recibido, − |L| si no
+	var d0=0, sg=new Float64Array(N);
+	for(n=0;n<N;n++){ var dur=L[n]>0?1:0, ok=bitDe(c0, n)===dur; if(!ok) d0+=Math.abs(L[n]); sg[n]=ok?Math.abs(L[n]):-Math.abs(L[n]); }
+	function delta(x){ var d=0; for(var q2=0;q2<PAL;q2++){ var v=x[q2]; while(v){ var lb=v&-v, pos=31-Math.clz32(lb); d+=sg[(q2<<5)+pos]; v^=lb; } } return d; }
+	var mejor=c0, md=d0, tmp=new Uint32Array(PAL);
+	for(k=0;k<K;k++){ var dk=d0+delta(filas[k]); if(dk<md){ md=dk; mejor=new Uint32Array(PAL); for(var q3=0;q3<PAL;q3++) mejor[q3]=c0[q3]^filas[k][q3]; } }
+	var T=Math.min(K, pares||0);
+	for(var a1=K-T;a1<K;a1++) for(var a2=a1+1;a2<K;a2++){
+		for(var q4=0;q4<PAL;q4++) tmp[q4]=filas[a1][q4]^filas[a2][q4];
+		var d2=d0+delta(tmp); if(d2<md){ md=d2; mejor=new Uint32Array(PAL); for(var q5=0;q5<PAL;q5++) mejor[q5]=c0[q5]^tmp[q5]; }
+	}
+	var bits=new Uint8Array(N), duros=0;
+	for(n=0;n<N;n++){ bits[n]=bitDe(mejor, n); if(bits[n]!==(L[n]>0?1:0)) duros++; }
+	if(erroresParidad(bits)) return null; // no debería pasar: toda combinación de filas es palabra de código
+	return {bits:bits, dist:md, duros:duros};
+}
+var OSD_DUROS=99, OSD_PARES=24;
+function verificarOsd(L, proto){
+	var r=osd(L, OSD_PARES); if(!r || r.duros>OSD_DUROS) return null;
+	var a=empacarBits(r.bits, K), crc=extraerCrc(a); a[9]&=0xF8; a[10]=0;
+	if(crc!==crc14(a, 82)) return null;
+	var pl=new Uint8Array(10); for(var i=0;i<10;i++) pl[i]=proto===FT4 ? a[i]^XOR4[i] : a[i];
+	if(!pl.some(function(v){ return v; })) return null;
+	return {payload:pl, duros:r.duros, dist:r.dist};
+}
+
 /* Intenta decodificar en la posición fina; devuelve {payload, f1, t, cs} o null */
 Etapa2.prototype.decodificar=function(f1, t0){
 	var a=this.afinar(f1, t0), cs=this.simbolos(a);
 	if(this.sincroDura(cs)<=(this.p===FT8?6:4)) return null;
 	var Ls=this.metricas(cs);
 	for(var k=0;k<4;k++){ var pl=verificarLdpc(Ls[k], 30, this.p); if(pl) return {payload:pl, f1:a.f1, t:a.t, cs:cs}; }
+	// Segunda oportunidad con OSD sobre las métricas de 1 y de 3 símbolos
+	if(this.osd) for(var q=0;q<3;q+=2){ var o=verificarOsd(Ls[q], this.p); if(o) return {payload:o.payload, f1:a.f1, t:a.t, cs:cs, osd:o}; }
 	return null;
 };
 /* SNR en 2500 Hz, el mayor de dos métodos que fallan en casos opuestos:
@@ -682,6 +739,14 @@ function estimarSNR(W, c, payload, ruidoDb){
 	var ruido=Math.pow(10, ruidoDb/10), s=sum/n-ruido, enbw=1.5/(W.p.simbolo*W.osrF);
 	return s<=0 ? -30 : Math.round(10*Math.log10(s/ruido)+10*Math.log10(enbw/2500));
 }
+/* Lo que sale por OSD tiene que parecer un QSO real: mensaje estándar con indicativos bien formados
+   (prefijo que no empieza en 0 ni 1, un número, sufijo de letras; sin /P), o CQ, DE, QRZ. */
+var RX_CALL=/^(<[A-Z0-9\/]+>|[A-Z2-9][A-Z0-9]?[0-9][A-Z]{1,4}(\/R)?|[A-Z][0-9][0-9][A-Z]{1,4})$/;
+function plausibleOsd(m){
+	if(m.error || m.tipo!=='estandar' || /<\.\.\.>/.test(m.texto)) return false;
+	var c1=m.campos[0], c2=m.campos[1];
+	return (/^(CQ( [A-Z0-9]+)?|DE|QRZ)$/.test(c1) || RX_CALL.test(c1)) && RX_CALL.test(c2);
+}
 /* muestras: Float32Array de una ranura (15 s FT8, 7,5 s FT4), con el inicio de la ranura en `inicio` segundos.
    Devuelve [{texto, snr, dt, freq, tipo, pasada}], sin repetidos, como la lista de WSJT-X.
    opts.profundo=false usa solo la etapa de ft8_lib (más rápida, decodifica menos). */
@@ -692,6 +757,7 @@ function decodificar(muestras, tasa, opts){
 	for(var pasada=1;pasada<=pasadas;pasada++){
 		var W=new Monitor(proto, 12000, opts); W.cargar(x);
 		var cands=buscarCandidatos(W, opts.candidatos||140, opts.minimo===undefined?10:opts.minimo), E=profundo?new Etapa2(x, proto):null, nuevos=[];
+		if(E) E.osd=opts.osd!==false;
 		var ruido=magDb(percentil(W.mag.subarray(0, W.bloques*W.paso), 0.3));
 		for(var i=0;i<cands.length;i++){
 			var c=cands[i], f=(W.minBin+c.f+c.fs/W.osrF)/proto.simbolo, t0=(c.t+c.ts/W.osrT-1)*proto.simbolo;
@@ -701,8 +767,11 @@ function decodificar(muestras, tasa, opts){
 			var clave=Array.prototype.join.call(pl, ','); if(vistos[clave]) continue; vistos[clave]=1;
 			if(E && !fino){ var a=E.afinar(f, t0); fino={f1:a.f1, t:a.t, cs:E.simbolos(a)}; }
 			var ts=tonos(pl, proto), m=desempacar(pl, H);
+			// Lo que sale por OSD tiene que ser un mensaje con indicativos conocidos: el texto libre o un hash sin resolver se descartan
+			if(fino && fino.osd && !plausibleOsd(m)){ delete vistos[clave]; continue; }
+			if(opts.diag && fino && fino.osd) opts.diag.push({texto:m.texto, duros:fino.osd.duros, dist:fino.osd.dist});
 			out.push({texto:m.texto||'', error:m.error||'', tipo:m.tipo||'', campos:m.campos||null, freq:Math.round(fino?fino.f1:f), dt:Math.round(((fino?fino.t:t0)-inicio-0.5)*10)/10,
-				snr:fino?E.snr(fino.cs, ts):estimarSNR(W, c, pl, ruido), pasada:pasada});
+				snr:fino?E.snr(fino.cs, ts):estimarSNR(W, c, pl, ruido), pasada:pasada, osd:!!(fino && fino.osd)});
 			if(fino) nuevos.push([ts, fino.f1, fino.t]);
 		}
 		if(!nuevos.length || pasada===pasadas) break;

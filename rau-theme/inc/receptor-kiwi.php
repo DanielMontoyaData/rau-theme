@@ -116,9 +116,11 @@ function rau_receptor_kiwi( $args = array() ) {
 		<div id="rx-cw" class="rx-cw hidden">
 			<div class="rx-cw-cab">
 				<span class="rx-serigrafia">Decodificador CW</span><span id="rx-cw-info">Esperando una señal…</span>
+				<label class="rx-ft-filtro" title="Lee a la vez todas las estaciones de CW que caben en el filtro ancho"><input type="checkbox" id="rx-cw-skim"> todas las señales</label>
 				<button type="button" id="rx-cw-borrar" class="rx-tecla rx-tecla-mini">Borrar</button>
 			</div>
 			<p id="rx-cw-texto" class="rx-cw-texto" aria-live="polite"></p>
+			<div id="rx-cw-canales" class="rx-cw-canales hidden" role="log" aria-live="polite" aria-label="Estaciones de CW decodificadas"></div>
 			<p class="rx-cw-nota">Funciona mejor con una sola señal clara: tócala en la cascada para centrarla en el filtro y usa el filtro «Angosto». Las letras tenues son dudosas.</p>
 		</div>
 
@@ -126,12 +128,15 @@ function rau_receptor_kiwi( $args = array() ) {
 			<div class="rx-cw-cab">
 				<span class="rx-serigrafia" id="rx-ft-titulo">Decodificador FT8</span><span id="rx-ft-info">Esperando la próxima ranura…</span>
 				<label class="rx-ft-filtro"><input type="checkbox" id="rx-ft-cq"> solo CQ</label>
+				<button type="button" id="rx-ft-mapa-b" class="rx-tecla rx-tecla-mini" aria-pressed="false">Mapa</button>
 				<button type="button" id="rx-ft-borrar" class="rx-tecla rx-tecla-mini">Borrar</button>
 			</div>
+			<p id="rx-ft-reloj" class="rx-ft-aviso hidden" role="status"></p>
+			<div id="rx-ft-mapa" class="rx-ft-mapa hidden" role="region" aria-label="Mapa de las estaciones oídas"></div>
 			<div class="rx-ft-tabla" role="log" aria-live="polite" aria-label="Mensajes decodificados">
 				<table><thead><tr><th>UTC</th><th>dB</th><th>DT</th><th>Hz</th><th>Mensaje</th></tr></thead><tbody id="rx-ft-filas"></tbody></table>
 			</div>
-			<p class="rx-cw-nota">Decodifica cada ranura de tiempo en este navegador. La SNR es aproximada y la hora sale del reloj de tu equipo: si DT se va lejos de 0, revisa que la hora esté sincronizada. Resaltados: CQ y estaciones colombianas.</p>
+			<p class="rx-cw-nota">Decodifica cada ranura de tiempo en este navegador, con el control de ganancia fijo y el audio sin compresión mientras tanto. La SNR es aproximada. Resaltados: CQ y estaciones colombianas. El mapa ubica a quien transmite su locator.</p>
 		</div>
 
 		<div class="rx-mesa">
@@ -282,6 +287,8 @@ function rau_receptor_kiwi( $args = array() ) {
 	<script>
 	(function(){
 		var FT_WORKER=<?php echo wp_json_encode( get_template_directory_uri() . '/assets/radio/ftx-worker.js?ver=' . RAU_THEME_VERSION ); ?>;
+		var LEAFLET=<?php echo wp_json_encode( array( 'js' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.js?ver=1.9.4', 'css' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.css?ver=1.9.4' ) ); ?>;
+		var SDR_POS=<?php $l = get_option( 'rau_sdr_lugar' ); echo wp_json_encode( is_array( $l ) && isset( $l['lat'] ) ? array( 'lat' => (float) $l['lat'], 'lng' => (float) $l['lng'], 'n' => rau_sdr_lugar() ) : null ); ?>;
 		var RELAY=<?php echo wp_json_encode( preg_replace( '#^http(s?)://#', 'ws$1://', $relay ) ); ?>;
 		var AJAX_RX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 		var PAGINA=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>;
@@ -547,6 +554,7 @@ function rau_receptor_kiwi( $args = array() ) {
 		function sintonizar(f, modo, recentrar){
 			// Otra estación: el decodificador de CW vuelve a aprender tono y velocidad
 			if(st.cw && Math.abs(f-st.freq)>0.3) st.cw.reiniciar();
+			if(st.skim && Math.abs(f-st.freq)>0.05) st.skim.reiniciar();
 			st.freq=Math.min(30000, Math.max(10, Math.round(f*100)/100));
 			if(modo && MODOS[modo]) st.modo=modo;
 			enviarModo();
@@ -569,6 +577,21 @@ function rau_receptor_kiwi( $args = array() ) {
 			cwLetras.push({c:ch, d:conf!==undefined && conf<0.5}); if(cwLetras.length>400) cwLetras=cwLetras.slice(-400);
 			$('rx-cw-texto').innerHTML=cwLetras.map(function(x){ var t=x.c.replace(/&/g,'&amp;').replace(/</g,'&lt;'); return x.d ? '<span class="rx-cw-duda">'+t+'</span>' : t; }).join('');
 		}
+		/* Skimmer: una línea por estación; tocarla sintoniza esa estación (en CW el tono de 500 Hz es la portadora) */
+		var skimPend=false;
+		function pintarSkim(){
+			if(skimPend) return; skimPend=true;
+			requestAnimationFrame(function(){
+				skimPend=false; if(!st.skim) return;
+				// Solo las estaciones que ya dijeron algo: un pico sin texto todavía no es una estación
+				var l=st.skim.canales().filter(function(c){ return c.texto.trim(); });
+				$('rx-cw-canales').innerHTML=l.length ? l.map(function(c){
+					var f=st.freq+(c.tono-500)/1000, t=c.texto.slice(-60).replace(/&/g,'&amp;').replace(/</g,'&lt;').trim();
+					return '<button type="button" class="rx-cw-canal" data-f="'+f.toFixed(2)+'"><span class="rx-cw-f">'+f.toFixed(2)+'</span><span class="rx-cw-v">'+(c.info&&c.info.senal?c.info.ppm+' PPM':'…')+'</span><span class="rx-cw-t">'+(t||'escuchando…')+'</span></button>';
+				}).join('') : '<p class="rx-cw-nota">Buscando señales de CW en el filtro…</p>';
+				$('rx-cw-info').textContent=l.length+(l.length===1?' estación':' estaciones')+' en el filtro de '+(MODOS.cw.f[st.filtro][1]-MODOS.cw.f[st.filtro][0])+' Hz';
+			});
+		}
 		var cwInfoT=0;
 		function cwInfo(o){
 			var ahora=Date.now(); if(ahora-cwInfoT<400) return; cwInfoT=ahora;
@@ -587,13 +610,42 @@ function rau_receptor_kiwi( $args = array() ) {
 			if(modo==='FT4') return FT4F[b.n]||14080;
 			var s=b.s.filter(function(x){ return x[0]==='FT8'; })[0]; return s?s[1]:14074;
 		}
+		/* Diferencia del reloj del equipo con el servidor (ms, positiva = adelantado): de cinco consultas
+		   vale la de menor ida y vuelta, que es la que menos error trae */
+		function medirReloj(){
+			var muestras=[], n=0;
+			return new Promise(function(fin){
+				(function una(){
+					var t0=Date.now();
+					fetch(AJAX_RX+'?action=rau_hora', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+						var t1=Date.now(); muestras.push({rtt:t1-t0, off:(t0+t1)/2-j.t});
+					}).catch(function(){}).then(function(){ if(++n<5) setTimeout(una, 150); else { muestras.sort(function(a,b){ return a.rtt-b.rtt; }); fin(muestras.length ? muestras[0] : null); } });
+				})();
+			});
+		}
+		function audioDatos(si){
+			// Para decodificar: ganancia fija (el AGC sube y baja con cada señal fuerte) y audio sin compresión ADPCM
+			if(si){ send(st.snd, 'SET agc=0 hang=0 thresh=-100 slope=6 decay=1000 manGain=50'); send(st.snd, 'SET compression=0'); }
+			else { agc(); send(st.snd, 'SET compression=1'); }
+		}
 		function elegirDecodificador(d){
+			var habia=!!st.ft;
 			st.ft=null; clearInterval(ftT);
+			if(habia && d!=='FT8' && d!=='FT4') audioDatos(false);
 			st.decod = d==='cw' ? 'cw' : '';
 			if(d==='cw'){ if(st.modo!=='cw') sintonizar(st.freq, 'cw', false); }
 			else if(d==='FT8' || d==='FT4'){
 				var corr=0.6; try { corr=+localStorage.getItem('rau_rx_ftcorr')||0.6; } catch(e){}
-				st.ft={modo:d, ranura:d==='FT8'?15:7.5, buf:null, n:0, marcas:[], hechas:{}, corr:corr};
+				st.ft={modo:d, ranura:d==='FT8'?15:7.5, buf:null, n:0, marcas:[], hechas:{}, corr:corr, rapido:false};
+				audioDatos(true);
+				medirReloj().then(function(m){
+					var ft=st.ft, av=$('rx-ft-reloj'); if(!ft || !m) return;
+					// La demora de la red queda en la corrección; el reloj corrido se suma de entrada
+					ft.corr=0.6+m.off/1000; st.relojOff=m.off;
+					var s=Math.abs(m.off)/1000;
+					av.classList.toggle('hidden', s<1);
+					av.textContent='Tu reloj está '+s.toFixed(1).replace('.', ',')+' s '+(m.off>0?'adelantado':'atrasado')+' respecto a la hora UTC del servidor. Se compensa solo, pero conviene sincronizarlo (Windows: Configuración → Hora e idioma → Sincronizar ahora; celular: hora automática).';
+				});
 				st.filtro=2; sintonizar(frecFT(d), 'usb');
 				if(!ftWorker){ try { ftWorker=new Worker(FT_WORKER); ftWorker.onmessage=ftResultado; } catch(e){ ftWorker=null; } }
 				$('rx-ft-titulo').textContent='Decodificador '+d;
@@ -622,7 +674,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			// Hace falta la ranura entera dentro de lo guardado
 			if(k0<ft.n-L || k0+n>ft.n || k0<0){ $('rx-ft-info').textContent='Juntando audio de una ranura completa…'; return; }
 			var x=new Float32Array(n); for(var i=0;i<n;i++) x[i]=ft.buf[(k0+i)%L];
-			ftWorker.postMessage({id:++ftId, modo:ft.modo, muestras:x, tasa:Math.abs(ft.tasa-12000)<2?12000:ft.tasa});
+			ftWorker.postMessage({id:++ftId, modo:ft.modo, muestras:x, tasa:Math.abs(ft.tasa-12000)<2?12000:ft.tasa, profundo:!ft.rapido});
 			ft.pend={id:ftId, S:S, dial:st.freq, modo:ft.modo};
 			$('rx-ft-info').textContent='Decodificando la ranura de las '+horaUtc(S)+'…';
 		}
@@ -631,14 +683,50 @@ function rau_receptor_kiwi( $args = array() ) {
 			var ft=st.ft, d=e.data; if(!ft || !ft.pend || d.id!==ft.pend.id) return;
 			var p=ft.pend; ft.pend=null;
 			if(d.error){ $('rx-ft-info').textContent='Error al decodificar: '+d.error; return; }
+			// Equipo lento: si decodificar toma más de media ranura, se pasa a la etapa rápida (decodifica menos, pero a tiempo)
+			if(!ft.rapido && d.ms>ft.ranura*500) ft.rapido=true;
 			var res=d.res.filter(function(r){ return r.texto; });
-			res.forEach(function(r){ ftFilas.unshift({utc:horaUtc(p.S), snr:r.snr, dt:r.dt, f:r.freq, t:r.texto, nuevo:true}); });
+			res.forEach(function(r){ ftFilas.unshift({utc:horaUtc(p.S), snr:r.snr, dt:r.dt, f:r.freq, t:r.texto, nuevo:true}); r.t=r.texto; });
 			if(ftFilas.length>300) ftFilas.length=300;
 			// Corrección de tiempo: lleva la mediana del DT hacia 0
 			if(res.length>=2){ var dts=res.map(function(r){ return r.dt; }).sort(function(a,b){ return a-b; }), med=dts[dts.length>>1];
 				if(Math.abs(med)>0.15){ ft.corr=Math.max(-2, Math.min(4, ft.corr+0.7*med)); try { localStorage.setItem('rau_rx_ftcorr', ft.corr.toFixed(2)); } catch(e2){} } }
-			$('rx-ft-info').textContent=horaUtc(p.S)+' UTC · '+res.length+(res.length===1?' mensaje':' mensajes')+' en '+(d.ms/1000).toFixed(1)+' s · dial '+(p.dial/1000).toFixed(4)+' MHz USB · corrección de hora '+(ft.corr>=0?'+':'')+ft.corr.toFixed(1)+' s';
-			pintarFt();
+			$('rx-ft-info').textContent=horaUtc(p.S)+' UTC · '+res.length+(res.length===1?' mensaje':' mensajes')+' en '+(d.ms/1000).toFixed(1)+' s'+(ft.rapido?' (modo rápido: este equipo no alcanza la decodificación completa)':'')+' · dial '+(p.dial/1000).toFixed(4)+' MHz USB · corrección de hora '+(ft.corr>=0?'+':'')+ft.corr.toFixed(1)+' s';
+			res.forEach(function(r){ ftEstacion(r, p.S); });
+			pintarFt(); pintarMapa();
+		}
+		/* ── Mapa de lo oído: quien envía su locator (CQ o respuesta con cuadrícula) ── */
+		var ftEst={}, ftMapa=null;
+		function cuadricula(g){ var a=g.charCodeAt(0)-65, b=g.charCodeAt(1)-65; return {lat:b*10-90+(+g[3])+0.5, lng:a*20-180+(+g[2])*2+1}; }
+		function km(a, b){ var r=Math.PI/180, x=Math.sin((b.lat-a.lat)*r/2), y=Math.sin((b.lng-a.lng)*r/2), h=x*x+Math.cos(a.lat*r)*Math.cos(b.lat*r)*y*y; return Math.round(12742*Math.asin(Math.sqrt(h))); }
+		function ftEstacion(r, S){
+			if(!r.campos) return; var g=String(r.campos[2]||'').replace(/^R /,''), c=r.campos[1];
+			if(!/^[A-R]{2}[0-9]{2}$/.test(g) || !c || /^</.test(c)) return;
+			ftEst[c]={c:c, g:g, p:cuadricula(g), snr:r.snr, t:S, msg:r.t||r.texto};
+		}
+		function cargarLeaflet(){
+			if(window.L) return Promise.resolve();
+			return new Promise(function(ok, mal){ var l=document.createElement('link'); l.rel='stylesheet'; l.href=LEAFLET.css; document.head.appendChild(l); var s=document.createElement('script'); s.src=LEAFLET.js; s.onload=ok; s.onerror=mal; document.head.appendChild(s); });
+		}
+		function pintarMapa(){
+			var cont=$('rx-ft-mapa'); if(cont.classList.contains('hidden')) return;
+			cargarLeaflet().then(function(){
+				if(!ftMapa){ ftMapa={m:L.map(cont, {worldCopyJump:true}).setView([10, -60], 2), capa:null};
+					L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:8, attribution:'© colaboradores de OpenStreetMap'}).addTo(ftMapa.m); }
+				if(ftMapa.capa) ftMapa.capa.remove();
+				var capa=L.layerGroup(), ahora=Date.now(), pts=[];
+				if(SDR_POS){ L.circleMarker([SDR_POS.lat, SDR_POS.lng], {radius:7, color:'#0b0f17', weight:2, fillColor:'#ffb547', fillOpacity:1}).bindTooltip('Receptor HK4RAU · '+SDR_POS.n).addTo(capa); pts.push([SDR_POS.lat, SDR_POS.lng]); }
+				Object.keys(ftEst).forEach(function(k){
+					var e=ftEst[k], min=(ahora-e.t)/60000; if(min>30){ delete ftEst[k]; return; }
+					var co=/^(HK|HJ|5J|5K)[0-9]/.test(e.c), color=co?'#67e8f9':min<2?'#86efac':'#94a3b8';
+					if(SDR_POS) L.polyline([[SDR_POS.lat, SDR_POS.lng], [e.p.lat, e.p.lng]], {color:color, weight:1, opacity:0.35}).addTo(capa);
+					L.circleMarker([e.p.lat, e.p.lng], {radius:5, color:'#0b0f17', weight:1, fillColor:color, fillOpacity:0.9})
+						.bindTooltip(e.c+' · '+e.g+' · '+(e.snr>0?'+':'')+e.snr+' dB'+(SDR_POS?' · '+km(SDR_POS, e.p).toLocaleString('es-CO')+' km':'')+' · hace '+Math.round(min)+' min').addTo(capa);
+					pts.push([e.p.lat, e.p.lng]);
+				});
+				capa.addTo(ftMapa.m); ftMapa.capa=capa; ftMapa.m.invalidateSize();
+				if(pts.length>1 && !ftMapa.ajustado){ ftMapa.m.fitBounds(pts, {padding:[20,20], maxZoom:5}); ftMapa.ajustado=true; }
+			}).catch(function(){ cont.textContent='No se pudo cargar el mapa.'; });
 		}
 		var CO=/\b(HK|HJ|5J|5K)[0-9][A-Z0-9]{1,4}\b/g;
 		function pintarFt(){
@@ -668,7 +756,10 @@ function rau_receptor_kiwi( $args = array() ) {
 		function reproducir(m){
 			var ctx=st.ctx; if(!ctx || !m.length) return;
 			if(st.grab) grabar(m);
-			if(st.modo==='cw' && st.decod==='cw' && window.RauCW){ if(!st.cw) st.cw=RauCW.crear(st.rate, cwTexto, cwInfo); st.cw.procesar(m); }
+			if(st.modo==='cw' && st.decod==='cw' && window.RauCW){
+				if(st.skimOn){ if(!st.skim) st.skim=RauCW.crearSkimmer(st.rate, pintarSkim, {fmin:200, fmax:1100}); st.skim.procesar(m); }
+				else { if(!st.cw) st.cw=RauCW.crear(st.rate, cwTexto, cwInfo); st.cw.procesar(m); }
+			}
 			if(st.ft) ftGuardar(m);
 			m=remuestrear(m); if(!m.length) return;
 			var buf=ctx.createBuffer(1, m.length, ctx.sampleRate); buf.getChannelData(0).set(m);
@@ -754,6 +845,7 @@ function rau_receptor_kiwi( $args = array() ) {
 					send(st.snd, 'SET squelch=0 max=0'); send(st.snd, 'SET genattn=0'); send(st.snd, 'SET gen=0 mix=-1');
 					agc(); send(st.snd, 'SET compression=1'); send(st.snd, 'SET ident_user=hk4rau.com');
 					sintonizar(st.freq, st.modo);
+					if(st.ft) audioDatos(true);
 					msg('Escuchando. Toca una señal en la cascada para sintonizarla o arrástrala para recorrer la banda.');
 					$('rx-libres').textContent='Conectado: usas uno de los canales del receptor';
 					if(st.primera){ st.primera=false; buscarEmisora(0); }
@@ -940,10 +1032,19 @@ function rau_receptor_kiwi( $args = array() ) {
 		});
 		$('rx-power').addEventListener('click', function(){ st.on ? apagar() : encender(); });
 		$('rx-avisar').addEventListener('click', vigilarCanal);
-		$('rx-cw-borrar').addEventListener('click', function(){ cwLetras=[]; $('rx-cw-texto').textContent=''; if(st.cw) st.cw.reiniciar(); });
+		$('rx-cw-borrar').addEventListener('click', function(){ cwLetras=[]; $('rx-cw-texto').textContent=''; if(st.cw) st.cw.reiniciar(); if(st.skim) st.skim.reiniciar(); });
+		$('rx-cw-skim').addEventListener('change', function(){
+			st.skimOn=this.checked; st.skim=null;
+			$('rx-cw-canales').classList.toggle('hidden', !st.skimOn); $('rx-cw-texto').classList.toggle('hidden', st.skimOn);
+			// El skimmer necesita ver varias señales: filtro ancho
+			if(st.skimOn && st.filtro!==2){ st.filtro=2; enviarModo(); pintarFreq(); }
+			if(st.skimOn) pintarSkim(); else $('rx-cw-info').textContent='Esperando una señal…';
+		});
+		$('rx-cw-canales').addEventListener('click', function(e){ var b=e.target.closest('.rx-cw-canal'); if(b) sintonizar(+b.dataset.f, 'cw', false); });
 		$('rx-decs').addEventListener('click', function(e){ var b=e.target.closest('.rx-dec'); if(b) elegirDecodificador(b.dataset.d); });
 		$('rx-ft-borrar').addEventListener('click', function(){ ftFilas=[]; pintarFt(); });
 		$('rx-ft-cq').addEventListener('change', pintarFt);
+		$('rx-ft-mapa-b').addEventListener('click', function(){ var on=$('rx-ft-mapa').classList.toggle('hidden')===false; this.setAttribute('aria-pressed', on); if(on) pintarMapa(); });
 		// En la consola los ajustes avanzados van plegados para que la lista de estaciones quede cerca
 		$('rx-ajustes').addEventListener('click', function(){ var ab=$('rx-avanzado').classList.toggle('abierto'); this.setAttribute('aria-expanded', ab); });
 

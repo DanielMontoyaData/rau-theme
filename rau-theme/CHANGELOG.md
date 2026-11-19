@@ -264,6 +264,48 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.56.0 — OSD, mapa, skimmer de CW, ajustes de audio y hora; centro de mando más liviano
+
+- **FT8/FT4: OSD** (decodificación por estadísticas ordenadas, como `osd174_91` de WSJT-X).
+  - Cuando falla la decodificación normal, toma los 91 bits más confiables como base y prueba
+    cambiar uno o dos de los menos seguros.
+  - En las 22 grabaciones de prueba sube de 337 a **351 de los 362 mensajes de WSJT-X (97 %)**.
+  - En sintéticos, a −21 dB pasa de 7 a 12 de 24 en FT8; a −16 dB, de 11 a 16 en FT4.
+  - Para no inventar mensajes, por OSD solo se acepta un mensaje estándar con indicativos bien
+    formados. Resultado: cero falsos en 45 ranuras de solo ruido y en 480 señales sintéticas.
+    Los 13 mensajes nuevos que salen de las grabaciones tienen locator coherente con el país del
+    indicativo.
+- **FT8/FT4 en el receptor**
+  - Ganancia fija y audio sin compresión ADPCM mientras decodifica; se restauran al salir.
+  - La hora del equipo se compara con la del servidor (nueva acción AJAX `rau_hora`, en
+    milisegundos): si está corrida más de 1 s se avisa, y la corrección de hora arranca ya
+    compensada.
+  - **Mapa** de las estaciones oídas que envían su locator, con la distancia al receptor.
+  - **Modo rápido** automático si el equipo tarda más de media ranura en decodificar.
+- **Skimmer de CW** («todas las señales»)
+  - Lee a la vez todas las estaciones de CW que caben en el filtro ancho, cada una con su propio
+    decodificador. Probado con 4 estaciones simultáneas de 15 a 28 PPM.
+  - Tocar una línea sintoniza esa estación.
+  - Los clics de manipulación de una estación fuerte no abren canales falsos.
+- **CW**
+  - El nivel de marca tiene memoria: tras una pausa entre turnos la primera raya ya no se acorta
+    (antes «CQ» salía «FQ»).
+  - Una E o T sola y dudosa al final de una transmisión se descarta.
+  - Banco de pruebas: 39,8 % de caracteres errados (el decodificador anterior al de la 19.55.0,
+    67,9 %).
+- **Centro de mando más liviano**
+  - El esquema y el directorio salen del HTML: el esquema pasa a un archivo estático versionado
+    (lo guarda el service worker) y el directorio se pide a la API, con copia para usar sin
+    internet.
+  - La configuración en la página baja de 24 KB a 1,9 KB, y la página comprimida de unos 6,4 KB a
+    2,4 KB.
+- **Pruebas**
+  - FT8/FT4: 10, con la de OSD (y la opcional con grabaciones exige ≥95 %).
+  - CW: 9, con la del skimmer.
+  - Receptor: 5, con ajustes de audio, mapa, skimmer y hora del servidor.
+
+---
+
 ## 19.55.0 — Decodificadores FT8, FT4 y CW nuevo en el receptor
 
 En las dos pestañas del receptor KiwiSDR: la página /receptor/ y la pestaña de Herramientas. Ambas

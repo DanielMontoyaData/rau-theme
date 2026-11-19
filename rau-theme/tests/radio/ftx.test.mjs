@@ -66,6 +66,18 @@ test('señal débil escondida bajo una fuerte en la misma frecuencia se recupera
 	assert.ok(debil.pasada >= 1);
 });
 
+test('OSD: rescata mensajes al borde de la sensibilidad sin inventar otros', () => {
+	let con = 0, sin = 0, falsos = 0;
+	for (let rep = 0; rep < 3; rep++) {
+		semilla = 51 + rep; const x = ranura(F.FT8, MSGS, -21);
+		const a = F.decodificar(x, 12000, { modo: 'FT8', osd: false }), b = F.decodificar(x, 12000, { modo: 'FT8' });
+		sin += a.filter((d) => MSGS.some(([m]) => m === d.texto)).length; con += b.filter((d) => MSGS.some(([m]) => m === d.texto)).length;
+		falsos += b.filter((d) => !MSGS.some(([m]) => m === d.texto)).length;
+	}
+	assert.ok(con > sin, 'con OSD ' + con + ', sin OSD ' + sin);
+	assert.equal(falsos, 0);
+});
+
 test('grabaciones reales de ft8_lib frente a WSJT-X (opcional)', { skip: !process.env.FT8LIB_WAV }, () => {
 	const dir = process.env.FT8LIB_WAV; let ok = 0, ref = 0;
 	fs.readdirSync(dir).filter((f) => f.endsWith('.txt')).forEach((t) => {
@@ -75,5 +87,5 @@ test('grabaciones reales de ft8_lib frente a WSJT-X (opcional)', { skip: !proces
 		const textos = new Set(F.decodificar(x, 12000, { modo: 'FT8' }).map((d) => d.texto));
 		fs.readFileSync(dir + '/' + t, 'utf8').trim().split('\n').forEach((l) => { const m = l.match(/~\s+(.*?)\s*$/); if (m) { ref++; if (textos.has(m[1].replace(/\s{2,}.*$/, '').trim())) ok++; } });
 	});
-	assert.ok(ok / ref >= 0.9, ok + ' de ' + ref);
+	assert.ok(ok / ref >= 0.95, ok + ' de ' + ref);
 });

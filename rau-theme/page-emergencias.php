@@ -22,9 +22,10 @@ $em_cfg = array(
 	'login'      => wp_login_url( home_url( '/emergencias/' ) ),
 	'admin'      => admin_url( 'tools.php?page=rau-em' ),
 	'version'    => $em_ver,
-	'esquema'    => rau_em_esquema(),
+	// El esquema y el directorio ya no van aquí: el esquema es un archivo estático versionado (lo guarda el
+	// service worker) y el directorio se pide a la API. La página, que no se guarda en caché, pesa 4 KB menos.
+	'esquemaUrl' => $em_uri . 'esquema.json?ver=' . $em_ver,
 	'roles'      => rau_em_roles_nombres(),
-	'directorio' => $em_dir,
 	'repes'      => $em_rep,
 	'turnos'     => home_url( '/turnos-de-guardia/' ),
 	'checkin'    => home_url( '/check-in-de-malla/' ),

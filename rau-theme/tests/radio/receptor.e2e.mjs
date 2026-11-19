@@ -44,7 +44,7 @@ before(async () => {
 		function msg(ws, t){ var e=new TextEncoder().encode('MSG '+t), u=new Uint8Array(e.length); u.set(e); ws.onmessage && ws.onmessage({data:u.buffer}); }
 		window.WebSocket=function(url){
 			var ws=this, timer=null, ult=Date.now(), seq=0; ws.url=url; ws.readyState=0;
-			ws.send=function(t){ var m=/mod=(\\w+)/.exec(t); if(m) modo=m[1]; };
+			ws.send=function(t){ (window.__enviados=window.__enviados||[]).push(t); var m=/mod=(\\w+)/.exec(t); if(m) modo=m[1]; };
 			ws.close=function(){ clearInterval(timer); ws.readyState=3; };
 			setTimeout(function(){
 				ws.readyState=1; ws.onopen && ws.onopen();
@@ -80,17 +80,41 @@ test('FT4: decodifica en el navegador, alinea con la hora UTC y resalta CQ y col
 	// Con la corrección de hora, en las ranuras siguientes el DT queda cerca de 0
 	await p.waitForFunction(() => { const f = [...document.querySelectorAll('#rx-ft-filas tr.rx-ft-ult td:nth-child(3)')].map(td => Math.abs(+td.textContent)); return f.length && f.every(v => v <= 0.2); }, null, { timeout: 40000 });
 	if (process.env.CAPTURA) { await p.$eval('#rx-ft', x => x.scrollIntoView({ block: 'center' })); await p.screenshot({ path: process.env.CAPTURA + '/receptor-ft4.png' }); }
+	// Para decodificar: ganancia fija y audio sin compresión
+	const env = await p.evaluate(() => window.__enviados.join('\n'));
+	assert.match(env, /SET agc=0 [^\n]*manGain=50/); assert.match(env, /SET compression=0/);
+	// Mapa: el que llama CQ con su locator queda ubicado, con la distancia al receptor
+	await p.click('#rx-ft-mapa-b');
+	await p.waitForSelector('#rx-ft-mapa .leaflet-interactive', { timeout: 10000 });
+	assert.ok(await p.evaluate(() => [...document.querySelectorAll('#rx-ft-mapa path.leaflet-interactive')].length >= 1));
 	await p.check('#rx-ft-cq');
 	assert.doesNotMatch(await p.textContent('#rx-ft-filas'), /HK4ABC K1ABC/, 'el filtro deja solo los CQ');
 });
 
 test('CW: el decodificador nuevo lee la señal del receptor', async () => {
+	await p.evaluate(() => { window.__enviados = []; });
 	await p.click('.rx-dec[data-d=cw]');
 	assert.match(await p.textContent('#rx-modo-txt'), /CW/);
+	assert.match(await p.evaluate(() => window.__enviados.join('\n')), /SET compression=1/, 'al salir de FT se restaura la compresión');
 	assert.equal(await p.isHidden('#rx-ft'), true);
-	await p.waitForFunction(() => /CQ CQ DE HK4RAU/.test(document.querySelector('#rx-cw-texto').textContent), null, { timeout: 40000 });
+	try { await p.waitForFunction(() => /CQ CQ DE HK4RAU/.test(document.querySelector('#rx-cw-texto').textContent), null, { timeout: 40000 }); } catch (e) { console.log('DEP', await p.textContent('#rx-cw-texto'), '|', await p.textContent('#rx-cw-info'), '|', await p.evaluate(() => window.__enviados.slice(-6).join(' ; '))); throw e; }
 	assert.match(await p.textContent('#rx-cw-info'), /2\d PPM · tono 7\d\d Hz/);
 	if (process.env.CAPTURA) { await p.$eval('#rx-cw', x => x.scrollIntoView({ block: 'center' })); await p.screenshot({ path: process.env.CAPTURA + '/receptor-cw.png' }); }
+});
+
+test('CW skimmer: lista la estación y tocarla la sintoniza', async () => {
+	await p.check('#rx-cw-skim');
+	await p.waitForFunction(() => /HK4RAU/.test(document.querySelector('#rx-cw-canales').textContent), null, { timeout: 40000 });
+	const f0 = await p.inputValue('#rx-input');
+	const fCanal = await p.$eval('.rx-cw-canal', (b) => b.dataset.f);
+	assert.ok(Math.abs(+fCanal - (+f0 + 0.2)) < 0.02, 'tono de 700 Hz con portadora en 500: +0,2 kHz (' + fCanal + ' frente a ' + f0 + ')');
+	await p.click('.rx-cw-canal');
+	assert.equal(+(await p.inputValue('#rx-input')), +fCanal);
+});
+
+test('hora del servidor disponible para comparar el reloj', async () => {
+	const r = await p.evaluate(async () => { const t0 = Date.now(), j = await (await fetch('/wp-admin/admin-ajax.php?action=rau_hora', { cache: 'no-store' })).json(); return { off: (t0 + Date.now()) / 2 - j.t }; });
+	assert.ok(Math.abs(r.off) < 2000, 'diferencia ' + r.off);
 });
 
 test('sin errores de JavaScript', () => { assert.deepEqual(errores, []); });

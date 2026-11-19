@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.55.0' );
+define( 'RAU_THEME_VERSION', '19.56.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -3564,6 +3564,18 @@ function rau_sdr_posicion() {
  * Nombre del lugar donde está el receptor, según su GPS (departamento, por OpenStreetMap). Solo se
  * consulta desde el cron, nunca al pintar una página, y se repite únicamente si el GPS se mueve.
  */
+/**
+ * Hora del servidor en milisegundos. El receptor la compara con el reloj del equipo: las ranuras de
+ * FT8 y FT4 se cortan por la hora UTC y un reloj corrido más de un segundo hace perder decodificaciones.
+ */
+function rau_hora_ajax() {
+	nocache_headers();
+	header( 'X-LiteSpeed-Cache-Control: no-cache' );
+	wp_send_json( array( 't' => (int) round( microtime( true ) * 1000 ) ) );
+}
+add_action( 'wp_ajax_rau_hora', 'rau_hora_ajax' );
+add_action( 'wp_ajax_nopriv_rau_hora', 'rau_hora_ajax' );
+
 function rau_sdr_lugar( $con_articulo = false ) {
 	$l = get_option( 'rau_sdr_lugar' );
 	$n = is_array( $l ) && ! empty( $l['nombre'] ) ? $l['nombre'] : 'Quindío';

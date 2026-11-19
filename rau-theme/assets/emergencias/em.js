@@ -12,7 +12,7 @@
 (function(){
 'use strict';
 var C = window.RAU_EM || {}, core = window.RauEmCore, DB = window.RauEmDB;
-core.usarEsquema(C.esquema);
+if(C.esquema) core.usarEsquema(C.esquema);
 var E = window.RauEm = { C:C, core:core, db:DB, VISTAS:{}, VIVO:{}, op:null, eventos:[], S:core.reducir([]), yo:{ind:'', nombre:''}, cuenta:null, actor:null, ventana:60, filtros:{}, vista:'sala', params:{} };
 
 /* ── Utilidades de interfaz ──────────────────────────────────────────────── */
@@ -566,7 +566,10 @@ E.tema = function(t){ document.documentElement.dataset.tema=t; DB.kvSet('tema', 
 /* ── Arranque ────────────────────────────────────────────────────────────── */
 function arrancar(){
 	armar();
-	DB.abrir().then(function(){ return Promise.all([DB.kvGet('yo'), DB.kvGet('prep'), DB.kvGet('tema'), DB.kvGet('compacto'), DB.kvGet('ventana'), DB.kvGet('cuenta')]); }).then(function(r){
+	// El esquema de los registros llega como archivo estático (sin internet, del service worker)
+	(C.esquema ? Promise.resolve() : fetch(C.esquemaUrl).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(j){ core.usarEsquema(j); C.esquema=j; }))
+	.catch(function(){ $('#em-main').innerHTML='<p class="em-error">No se pudo cargar el esquema de registros. Abre el centro de mando una vez con internet.</p>'; throw new Error('sin esquema'); })
+	.then(function(){ return DB.abrir(); }).then(function(){ return Promise.all([DB.kvGet('yo'), DB.kvGet('prep'), DB.kvGet('tema'), DB.kvGet('compacto'), DB.kvGet('ventana'), DB.kvGet('cuenta')]); }).then(function(r){
 		if(r[0]) E.yo=r[0]; E.prep=r[1]||{}; if(r[2]) document.documentElement.dataset.tema=r[2]; if(r[3]) document.documentElement.classList.add('em-compacto'); if(r[4]) E.ventana=r[4]; E.cuenta=r[5]||null;
 		if(DB.enMemoria()) setTimeout(function(){ E.aviso('Este navegador no permite guardar datos: todo se pierde al cerrar. Exporta respaldos.', 'peligro'); }, 1500);
 		var cod=null; try { cod=sessionStorage.getItem('rau_em_op'); } catch(e){}
@@ -578,7 +581,7 @@ function arrancar(){
 		// Cuenta de WordPress (si hay sesión iniciada en el sitio)
 		// Solo se redibuja el inicio: el formulario del indicativo no, para no borrar lo que la persona está escribiendo
 		E.rest('yo', {token:false}).then(function(x){ if(x.estado===200){ E.cuenta=x.j.usuario; DB.kvSet('cuenta', E.cuenta); if(!E.op && E.yo.ind && !$('#em-main').contains(document.activeElement)) pintarVista(); } }).catch(function(){});
-	});
+	}).catch(function(){});
 }
 E.alArrancar=[];
 document.addEventListener('DOMContentLoaded', arrancar);

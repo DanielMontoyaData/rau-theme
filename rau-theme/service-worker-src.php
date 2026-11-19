@@ -8,7 +8,7 @@ $herramientas_url = home_url( '/herramientas/' );
 $cache_version    = 'rau-cache-' . RAU_THEME_VERSION;
 $em_url           = home_url( '/emergencias/' );
 $em_base          = get_template_directory_uri() . '/assets/';
-$em_assets        = array( $em_base . 'emergencias/em.css?ver=' . RAU_THEME_VERSION, $em_base . 'emergencias/colombia.geojson?ver=' . RAU_THEME_VERSION,
+$em_assets        = array( $em_base . 'emergencias/em.css?ver=' . RAU_THEME_VERSION, $em_base . 'emergencias/colombia.geojson?ver=' . RAU_THEME_VERSION, $em_base . 'emergencias/esquema.json?ver=' . RAU_THEME_VERSION,
 	$em_base . 'vendor/leaflet/leaflet.js?ver=1.9.4', $em_base . 'vendor/leaflet/leaflet.css?ver=1.9.4', $em_base . 'vendor/leaflet/images/layers.png', $em_base . 'vendor/leaflet/images/layers-2x.png', $em_base . 'vendor/qrcode/qrcode.js?ver=1.4.4' );
 foreach ( array( 'em-core', 'em-db', 'em', 'em-vistas', 'em-sala', 'em-herr', 'em-mapa', 'em-sim' ) as $js ) $em_assets[] = $em_base . 'emergencias/' . $js . '.js?ver=' . RAU_THEME_VERSION;
 ?>
@@ -17,6 +17,8 @@ const APP_SHELL_URL = '<?php echo esc_js( $herramientas_url ); ?>';
 // Centro de Mando de Emergencias: tiene que abrir sin internet, que es justo cuando más se necesita
 const EM_URL = '<?php echo esc_js( $em_url ); ?>';
 const EM_ASSETS = <?php echo wp_json_encode( $em_assets ); ?>;
+// Directorio de frecuencias: la página ya no lo trae adentro; red primero y la última copia si no hay internet
+const EM_DIRECTORIO = '<?php echo esc_js( rest_url( 'rau-em/v1/directorio' ) ); ?>';
 /* Mosaicos de OpenStreetMap: solo los que la persona ya vio (nada se descarga por adelantado, como pide
    la política de uso de OSM), hasta 1500, para que el mapa siga sirviendo sin internet en esa zona. */
 const CACHE_MOSAICOS = 'rau-mosaicos';
@@ -66,6 +68,11 @@ self.addEventListener('fetch', function(event){
 	// Archivos del centro de mando (llevan la versión en la URL): primero la copia guardada
 	if(EM_ASSETS.indexOf(event.request.url) !== -1){
 		event.respondWith(caches.match(event.request).then(function(c){ return c || fetch(event.request).then(function(r){ var copia=r.clone(); caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, copia); }); return r; }); }));
+		return;
+	}
+	if(event.request.url.split('?')[0] === EM_DIRECTORIO){
+		event.respondWith(fetch(event.request).then(function(r){ if(r.ok){ var copia=r.clone(); caches.open(CACHE_NAME).then(function(c){ c.put(EM_DIRECTORIO, copia); }); } return r; })
+			.catch(function(){ return caches.match(EM_DIRECTORIO).then(function(m){ return m || new Response('{}', {status:503, headers:{'Content-Type':'application/json'}}); }); }));
 		return;
 	}
 	var esEm = event.request.url.split('?')[0] === EM_URL;
