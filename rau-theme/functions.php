@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.59.1' );
+define( 'RAU_THEME_VERSION', '19.60.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -24,6 +24,7 @@ require get_template_directory() . '/inc/vigia-receptor.php';
 require get_template_directory() . '/inc/turnos.php';
 require get_template_directory() . '/inc/capacidades.php';
 require get_template_directory() . '/inc/libro-adif.php';
+require get_template_directory() . '/inc/uso-herramientas.php';
 
 /**
  * Configuración básica del tema
@@ -829,7 +830,7 @@ function rau_get_herramientas_tabs() {
 		['id'=>'dxcc',       'label'=>'Rastreador DXCC/WAS',       'cat'=>'Operar'],
 		['id'=>'pskreporter','label'=>'PSK Reporter — ¿quién me oye?', 'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'rbn',        'label'=>'Reverse Beacon Network',    'cat'=>'Explorar', 'oculta'=>true],
-		['id'=>'aprs',       'label'=>'Mapa APRS Colombia',        'cat'=>'Localizar'],
+		['id'=>'aprs',       'label'=>'Mapa APRS (aprs.fi)',       'cat'=>'Localizar', 'externo'=>'https://aprs.fi/#!lat=6.24&lng=-75.58&z=8'], // aprs.fi no deja mostrar su mapa sin clave: se abre allá
 		['id'=>'smith',      'label'=>'Carta de Smith',            'cat'=>'Calcular'],
 		['id'=>'tarjeta',    'label'=>'Tarjeta de Campo (imprimir)', 'cat'=>'Aprender'],
 		['id'=>'receptor',   'label'=>'Receptor KiwiSDR',          'cat'=>'Escuchar'],
@@ -1519,7 +1520,7 @@ function rau_imagen_galeria( $post_id, $url, $alt ) {
 	return $url ? '<img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105">' : '';
 }
 function rau_csp_politica() {
-	return "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://www.youtube.com https://www.googletagmanager.com https://cdn-reach.hostinger.com; "
+	return "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://www.youtube.com https://www.googletagmanager.com https://cdn-reach.hostinger.com https://cdnjs.cloudflare.com; "
 		. "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; "
 		. "img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; worker-src 'self' blob:; "
 		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com https://dxheat.com https://www.dxheat.com; report-uri " . rest_url( 'rau/v1/csp' );

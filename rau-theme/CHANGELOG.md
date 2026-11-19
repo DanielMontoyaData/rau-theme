@@ -264,6 +264,33 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.60.0 — Cada herramienta carga solo lo suyo
+
+**Velocidad.** Antes, abrir cualquier herramienta descargaba también la consola completa y las otras 60: en el sitio en vivo, la carta de Smith pesaba 2,25 MB con 50 peticiones. Ahora:
+- `/herramientas/` lleva la consola y el catálogo, sin los 60 paneles. Medido en local: de 5.873 a 2.130 elementos.
+- `/herramientas/{id}/` lleva solo esa herramienta y las que agrupa, sin consola. La carta de Smith pasa de 24 a 7 peticiones y de 4.957 a 256 elementos.
+- Abrir otra herramienta, «Centro de mando» y «Todas las categorías» llevan a su propia dirección. El JavaScript común queda guardado en el navegador después de la primera visita.
+- Doce bloques daban por hecho que su panel estaba en la página. El error cortaba el script y se ejecutaba una copia de respaldo, todo dos veces. Se corrigieron, y los manejadores van por `rauOn`, que no falla si el elemento no está.
+
+**Herramientas**
+- **DX Spots**: lista propia en lugar del recuadro de DXheat, que traía su propio diseño y cookies de seguimiento.
+  - Filtro por banda y búsqueda.
+  - País y distancia desde «Mi estación».
+  - 🎧 abre el receptor del club en esa frecuencia y 📝 anota la estación en tu Log ADIF.
+- **DMR BrandMeister**: muestra en vivo quién sale al aire en el TG 732 (Colombia) u otro talkgroup o indicativo. Antes era una casilla que abría su sitio.
+  - El ejemplo decía «214 para Colombia»; 214 es España.
+  - Si BrandMeister no envía datos en 90 segundos, lo dice. No se pudo comprobar desde aquí que su servicio público siga activo: el sitio bloquea las consultas automáticas.
+- **APRS** se marca como enlace externo (↗) y se abre directo en aprs.fi, que no permite mostrar su mapa sin clave.
+- **Un solo título**: el título interno de la herramienta, que repetía el de la página, queda solo para lectores de pantalla.
+- **Satélites** calcula las próximas pasadas al abrir, con el locator de «Mi estación».
+- **En el celular**:
+  - botones y casillas de al menos 44 px;
+  - las tablas de hasta 8 columnas se leen como tarjetas;
+  - las más anchas avisan que se deslizan.
+- **Conteo de uso** anónimo: cuántas veces se abre cada herramienta por mes. Se ve en el Escritorio → «Herramientas más usadas», con la lista de las que nadie abrió en 3 meses. No guarda IP ni nada de quien la usa.
+
+---
+
 ## 19.59.1 — Correcciones del estudio de Herramientas en vivo
 
 - **POTA se quedaba en «Consultando spots activos…» para siempre** al entrar por `/herramientas/pota/`, el buscador o un acceso rápido: solo cargaba si se tocaba su botón en el catálogo. Ahora carga al abrirse por cualquier camino.

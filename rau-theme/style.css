@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.59.1
+Version: 19.60.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v3 or later
@@ -1039,3 +1039,21 @@ html.rau-splash-active body {
    (se vuelve con «Centro de mando» o «Todas las categorías», que están justo encima de la herramienta). */
 #rau-tools.rau-vista-herramienta #rau-consola { display: none; }
 body:has(#rau-tools.rau-vista-herramienta) #rau-intro { display: none; }
+
+/* 19.60.0 — Herramientas en pantallas táctiles: blancos de al menos 44 px (los había de 24 a 31 en ROE,
+   Calculadoras, Coordenadas, CW y Aperturas) y tablas que en el celular se leen como tarjetas. */
+@media (pointer: coarse) {
+	#rau-cat-panels button, #rau-cat-panels select, #rau-cat-jumps button, #rau-cat-dashboard > div button,
+	#rau-cat-panels input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]) { min-height: 44px; }
+	#rau-cat-panels input[type=checkbox], #rau-cat-panels input[type=radio] { width: 1.25rem; height: 1.25rem; }
+}
+@media (max-width: 640px) {
+	.rau-tabla-movil thead { display: none; }
+	.rau-tabla-movil, .rau-tabla-movil tbody, .rau-tabla-movil tr, .rau-tabla-movil td { display: block; width: 100%; }
+	.rau-tabla-movil tr { padding: .6rem .75rem; border-bottom: 1px solid hsl(var(--border) / .5); }
+	.rau-tabla-movil td { display: flex; justify-content: space-between; gap: .75rem; padding: .15rem 0 !important; border: 0 !important; text-align: right; }
+	.rau-tabla-movil td::before { content: attr(data-label); color: hsl(var(--muted-foreground)); font-size: .75rem; text-align: left; flex: 0 0 40%; }
+	.rau-tabla-movil td:not([data-label])::before, .rau-tabla-movil td[data-label=""]::before { content: none; }
+	.rau-tabla-ancha-aviso { display: block; }
+}
+.rau-tabla-ancha-aviso { display: none; font-size: .75rem; color: hsl(var(--muted-foreground)); margin: .25rem 0; }

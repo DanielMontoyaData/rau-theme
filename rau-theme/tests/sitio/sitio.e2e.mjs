@@ -103,4 +103,38 @@ test('Herramientas: POTA carga al entrar por su dirección, y los datos comparti
 	assert.equal(solar, 1, 'los índices solares se piden una vez aunque varios bloques los usen');
 	await p.close();
 });
+test('19.60: cada herramienta carga solo lo suyo y se navega por dirección', async () => {
+	nav = nav || await chromium.launch({ args: ['--no-proxy-server'] });
+	const p = await nav.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errores.push(e.message));
+	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+	await p.goto(BASE + '/herramientas/smith/'); await p.waitForSelector('#panel-smith');
+	const r = await p.evaluate(() => ({ consola: !!document.getElementById('rau-consola'), paneles: document.querySelectorAll('.rau-panel').length, nodos: document.getElementsByTagName('*').length,
+		h2oculto: document.querySelector('#panel-smith h2').classList.contains('sr-only') }));
+	assert.equal(r.consola, false, 'sin consola en la página de una herramienta');
+	assert.equal(r.paneles, 1, 'solo su panel');
+	assert.ok(r.nodos < 1500, 'página liviana: ' + r.nodos + ' elementos');
+	assert.ok(r.h2oculto, 'un solo título visible');
+	await p.click('#rau-cat-jumps button:has-text("Conversor RF")'); await p.waitForURL(/\/herramientas\/rfconv\/$/);
+	await p.click('#rau-volver-consola'); await p.waitForURL(/\/herramientas\/$/);
+	assert.ok(await p.$('#rau-consola'));
+	assert.equal(await p.$$eval('.rau-panel', l => l.filter(x => x.id !== 'panel-receptor').length), 0, 'la principal no trae los paneles');
+	await p.close();
+});
+test('19.60: DX propio con escuchar y anotar; tablas como tarjetas y botones de 44 px en el celular', async () => {
+	const c = await nav.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const p = await c.newPage(); p.on('pageerror', e => errores.push(e.message));
+	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+	await p.route(/action=rau_dx_spots/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: [{ dx: 'EA7XYZ', freq: '14.205', sp: 'K1AA', t: '12:00', info: 'CQ SSB' }, { dx: 'JA1ABC', freq: '7.074', sp: 'W1AW', t: '12:01', info: 'FT8' }] }) }));
+	await p.goto(BASE + '/herramientas/dx/'); await p.waitForSelector('#dxl-lista > div');
+	assert.match(await p.innerText('#dxl-lista'), /EA7XYZ[\s\S]*España/);
+	assert.equal(await p.$$eval('#panel-dx iframe', l => l.length), 0, 'sin el recuadro de DXheat');
+	assert.match(await p.getAttribute('#dxl-lista a', 'href'), /\/receptor\/\?f=14205\.0&m=usb/);
+	await p.click('.dxl-anotar');
+	assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('rau_log_adif')).slice(-1)[0].call), 'EA7XYZ');
+	await p.goto(BASE + '/herramientas/ctcss/'); await p.waitForSelector('#panel-ctcss table');
+	const alto = await p.$eval('#panel-ctcss button, #panel-ctcss input, #panel-ctcss select', e => e.getBoundingClientRect().height).catch(() => 44);
+	assert.ok(alto >= 43.5, 'blancos táctiles de 44 px: ' + alto);
+	await p.goto(BASE + '/herramientas/brandmeister/');
+	assert.equal(await p.inputValue('#bm-buscar'), '732', 'Colombia es el TG 732');
+	await c.close();
+});
 test('sin errores de JavaScript', () => { assert.deepEqual(errores, []); });

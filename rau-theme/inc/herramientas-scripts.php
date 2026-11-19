@@ -322,7 +322,7 @@ const MORSE={
 };
 
 /* Enlaza un manejador solo si el elemento existe.
-   Había 21 llamadas del tipo document.getElementById('x').addEventListener(...) sueltas a nivel
+   Había 21 llamadas del tipo rauOn('x', ...) sueltas a nivel
    superior del script. Si UNO solo de esos elementos falta —porque se renombró un id, porque un
    panel se quitó, o porque el HTML no llegó a renderizarse— getElementById devuelve null,
    .addEventListener lanza un TypeError y el navegador ABORTA el resto del script. Todo lo que
@@ -390,14 +390,15 @@ function rauLogExportar(l){
 	document.body.appendChild(a); a.click(); a.remove();
 }
 
-function rauOn(id, evento, fn){
+function rauOn(id, evento, fn, opts){
 	var el=document.getElementById(id);
 	if(!el){
-		// Deja rastro en la consola para poder localizar el id que falta, sin romper nada
-		if(window.console && console.warn) console.warn('[RAU] No existe el elemento #'+id+'; se omite el manejador "'+evento+'".');
+		// Desde la 19.60.0 cada página trae solo su herramienta: que falte un elemento es lo normal.
+		// Con window.RAU_DEBUG se ve cuál, para localizar un id mal escrito.
+		if(window.RAU_DEBUG && window.console) console.warn('[RAU] No existe el elemento #'+id+'; se omite el manejador "'+evento+'".');
 		return null;
 	}
-	el.addEventListener(evento, fn);
+	el.addEventListener(evento, fn, opts);
 	return el;
 }
 
@@ -501,7 +502,7 @@ function rauFaseLunar(frac){
 	}
 
 	var estadoEl=document.getElementById('mi-qth-estado');
-	document.getElementById('mi-qth-guardar').addEventListener('click', function(){
+	rauOn('mi-qth-guardar', 'click', function(){
 		var grid=(document.getElementById('mi-qth-grid').value||'').trim();
 		var coords=gridACoordenadas(grid);
 		if(!coords){ estadoEl.textContent='Grid inválido — usa formato como FJ26 o FJ26ff.'; return; }
@@ -510,7 +511,7 @@ function rauFaseLunar(frac){
 		setTimeout(function(){ location.reload(); }, 600);
 	});
 
-	document.getElementById('mi-qth-geoloc').addEventListener('click', function(){
+	rauOn('mi-qth-geoloc', 'click', function(){
 		if(!navigator.geolocation){ estadoEl.textContent='Este dispositivo no soporta geolocalización.'; return; }
 		estadoEl.textContent='Obteniendo tu ubicación…';
 		navigator.geolocation.getCurrentPosition(function(pos){
@@ -970,7 +971,7 @@ function rauFaseLunar(frac){
 
 	// Contador de QSO — misma fórmula ya verificada en Contador de Tasa de QSO
 	var total=0, inicio=Date.now();
-	document.getElementById('cm-qso-add').addEventListener('click', function(){
+	rauOn('cm-qso-add', 'click', function(){
 		total++;
 		document.getElementById('cm-qso-total').textContent=total;
 		var segundos=(Date.now()-inicio)/1000;
@@ -1334,7 +1335,7 @@ function rauFaseLunar(frac){
 				});
 			}).catch(function(e){ rauErr(e);});
 
-		document.getElementById('mapa-mostrar-comunidad').addEventListener('change', function(){
+		rauOn('mapa-mostrar-comunidad', 'change', function(){
 			marcadoresComunidad.forEach(function(m){
 				if(this.checked) m.addTo(map); else map.removeLayer(m);
 			}.bind(this));
@@ -2000,8 +2001,8 @@ function rauFaseLunar(frac){
 		var h=Math.floor(horas), m=Math.round((horas-h)*60);
 		document.getElementById('campo-bat-horas').textContent = horas>0 ? h+'h '+m+'m' : '—';
 	}
-	document.getElementById('campo-bat-cap').addEventListener('input', calcBateria);
-	document.getElementById('campo-bat-tx').addEventListener('input', calcBateria);
+	rauOn('campo-bat-cap', 'input', calcBateria);
+	rauOn('campo-bat-tx', 'input', calcBateria);
 	calcBateria();
 })();
 
@@ -2127,8 +2128,8 @@ function rauFaseLunar(frac){
 	}
 
 	freqEl.addEventListener('input', actualizar);
-	document.getElementById('banco-r').addEventListener('input', actualizarSmith);
-	document.getElementById('banco-x').addEventListener('input', actualizarSmith);
+	rauOn('banco-r', 'input', actualizarSmith);
+	rauOn('banco-x', 'input', actualizarSmith);
 	actualizar();
 })();
 
@@ -2142,6 +2143,7 @@ function rauFaseLunar(frac){
 		// conserva panel y URL propios, así que los enlaces ya compartidos siguen funcionando.
 		'incluye' => $t['incluye'] ?? [],
 		'oculta'  => ! empty( $t['oculta'] ),
+		'externo' => $t['externo'] ?? '',
 	], $tabs ) ); ?>;
 	var TOOLS_BY_ID = {};
 	TOOLS.forEach(function(t){ TOOLS_BY_ID[t.id] = t; });
@@ -2198,8 +2200,12 @@ function rauFaseLunar(frac){
 		document.head.appendChild(s);
 	}
 
+	/* 19.60.0: cada herramienta vive en su dirección. Si su panel no está en esta página (la principal no
+	   los trae; la de una herramienta trae solo la suya), se va a /herramientas/{id}/. */
+	function panelDe(id){ var t=TOOLS_BY_ID[id]; if(t && t.oculta){ var m=TOOLS.find(function(x){ return (x.incluye||[]).indexOf(id)>-1; }); if(m) id=m.id; } return document.getElementById('panel-'+id); }
 	function showGrid(opts){
 		opts = opts || {};
+		if(!gridEl){ location.href=BASE_URL+'#catalogo'; return; }
 		gridEl.classList.remove('hidden');
 		dashEl.classList.add('hidden');
 		// Devolver todos los paneles abiertos a su almacenamiento (nunca se destruyen, solo se mueven)
@@ -2244,7 +2250,12 @@ function rauFaseLunar(frac){
 		var btnCatalogo=document.querySelector('.consola-modo-btn[data-modo="catalogo"]');
 		if(btnCatalogo && btnCatalogo.getAttribute('aria-selected')!=='true') btnCatalogo.click();
 
-		gridEl.classList.add('hidden');
+		if(!mostrar.some(function(t){ return panelDe(t.id); })){
+			// Página principal sin los paneles: la categoría se ve en el catálogo
+			if(gridEl){ var card=document.querySelector('.rau-cat-card[data-cat="'+catName+'"]'); if(card) card.scrollIntoView({block:'start', behavior:'smooth'}); }
+			return true;
+		}
+		if(gridEl) gridEl.classList.add('hidden');
 		dashEl.classList.remove('hidden');
 
 		// Devolver lo que estuviera mostrado antes, y traer los paneles de esta categoría
@@ -2288,6 +2299,13 @@ function rauFaseLunar(frac){
 		});
 
 		ubicarReceptor();
+		// Un solo título: el H1 de la página ya es el nombre de la herramienta. El título interno del
+		// primer panel (y su antetítulo) quedan solo para lectores de pantalla.
+		var primero=panelsEl.firstElementChild, h2=primero && primero.querySelector('h2');
+		if(h2 && opts.solo && primero.firstElementChild && primero.firstElementChild.contains(h2)){
+			h2.classList.add('sr-only');
+			var ante=h2.previousElementSibling; if(ante && ante.tagName==='P' && /uppercase/.test(ante.className)) ante.classList.add('sr-only');
+		}
 		if(!opts.skipHash) history.replaceState(null,'','#'+catName.toLowerCase().replace(/[^a-z0-9]+/g,'-'));
 		if(!opts.skipScroll) dashEl.scrollIntoView({block:'start', behavior:'smooth'});
 		return true;
@@ -2296,7 +2314,7 @@ function rauFaseLunar(frac){
 	/* Qué hace cada herramienta, en una línea: la primera frase de la explicación de su propio panel.
 	   Se muestra en los resultados y al pasar sobre el catálogo, y también cuenta para la búsqueda
 	   («impedancia» encuentra la carta de Smith aunque la palabra no esté en el nombre). */
-	var DESC_FIJA = {"ahora": "Junta propagación, línea gris y actividad en una sola respuesta: qué trabajar ya.", "utc": "La hora UTC y la local, para registrar contactos y entrar a tiempo a una malla.", "prop": "Índices solares, bandas abiertas y alertas de banda, con su historial.", "grayline": "Dónde amanece y anochece ahora: la franja que favorece el DX en bandas bajas.", "luna": "Fase y posición de la Luna para rebote lunar (EME).", "calc": "Largo de antenas (dipolo, vertical, Yagi, loop), cable coaxial, potencia y dB.", "rfconv": "Convierte entre dBm, vatios, voltios y unidades S.", "colores": "Valor de una resistencia por sus bandas de color, y al revés.", "roe": "Cuéntale cómo se comporta tu ROE y te dice la causa probable.", "bateria": "Cuántas horas te dura la batería en una activación según cuánto transmites.", "angulo": "Hacia qué ángulo sale tu señal según la altura de la antena: NVIS o DX.", "maidenhead": "Tu cuadrícula (locator), y distancia y rumbo hacia otra estación.", "terreno": "Perfil del terreno entre dos puntos para saber si hay línea de vista.", "cobertura": "Desde dónde se alcanza una repetidora, sobre el mapa.", "satpass": "Cuándo pasan los satélites de aficionado, sus frecuencias y el Doppler.", "coords": "Convierte coordenadas entre grados, minutos, segundos y cuadrícula.", "prefijos": "De qué país es un indicativo por su prefijo.", "ics213": "Redacta y comparte un mensaje formal ICS-213 para tráfico de emergencia.", "frecemerg": "Frecuencias de emergencia y de las redes nacionales e internacionales.", "emergencia": "Frecuencias designadas para tráfico de emergencia y socorro.", "ctcss": "Tonos CTCSS y códigos DCS para abrir repetidoras.", "codigosq": "Código Q, escala RST y alfabeto fonético.", "glosario": "Términos de radioafición explicados en español.", "cw": "Aprende y practica telegrafía: copia, velocidad y abreviaturas.", "modos": "Cómo suenan y para qué sirven FT8, JS8, RTTY, PSK31 y otros modos.", "qsl": "Diseña tu tarjeta QSL digital y descárgala para enviarla.", "certificado": "Certificado descargable por participar en un simulacro, malla o Field Day de RAU.", "log": "Anota tus contactos de una sesión y expórtalos en ADIF para WSJT-X, Log4OM o QRZ.", "pota": "Activadores POTA de Colombia en este momento.", "dx": "Estaciones reportadas ahora en el cluster DX, Reverse Beacon y PSK Reporter.", "concursos": "Los concursos internacionales más importantes y cuándo caen este año.", "cabrillo": "Revisa tu log Cabrillo antes de enviarlo a un concurso.", "radiales": "Cuántos radiales poner bajo una vertical y de qué largo.", "split": "Ayuda para trabajar a una estación DX que escucha en otra frecuencia.", "qsorate": "Cuántos contactos por hora llevas durante un concurso.", "dxcc": "Qué países (DXCC) y estados (WAS) llevas confirmados.", "aprs": "Estaciones APRS de Colombia en el mapa.", "smith": "Ubica tu impedancia en la carta de Smith y calcula la ROE.", "tarjeta": "Una hoja para imprimir con frecuencias, alfabeto fonético y código Q.", "receptor": "Escucha el receptor del club y decodifica FT8, CW, JS8, RTTY y más.", "aperturas": "Qué tan seguido el receptor del club oye cada región, por banda y hora.", "radiofaros": "Qué radiofaro internacional transmite ahora en cada banda, para probar propagación.", "brandmeister": "Actividad en vivo de cualquier talkgroup o indicativo en la red DMR BrandMeister.", "planbandas": "Plan de bandas de Colombia: segmentos, modos y bandas WARC.", "examen": "Practica con preguntas tipo examen para la licencia colombiana.", "licencia": "Guarda la fecha de vencimiento de tu licencia y descarga un recordatorio.", "diplomas": "Verifica la autenticidad de un diploma emitido por RAU."};
+	var DESC_FIJA = {"ahora": "Junta propagación, línea gris y actividad en una sola respuesta: qué trabajar ya.", "utc": "La hora UTC y la local, para registrar contactos y entrar a tiempo a una malla.", "prop": "Índices solares, bandas abiertas y alertas de banda, con su historial.", "grayline": "Dónde amanece y anochece ahora: la franja que favorece el DX en bandas bajas.", "luna": "Fase y posición de la Luna para rebote lunar (EME).", "calc": "Largo de antenas (dipolo, vertical, Yagi, loop), cable coaxial, potencia y dB.", "rfconv": "Convierte entre dBm, vatios, voltios y unidades S.", "colores": "Valor de una resistencia por sus bandas de color, y al revés.", "roe": "Cuéntale cómo se comporta tu ROE y te dice la causa probable.", "bateria": "Cuántas horas te dura la batería en una activación según cuánto transmites.", "angulo": "Hacia qué ángulo sale tu señal según la altura de la antena: NVIS o DX.", "maidenhead": "Tu cuadrícula (locator), y distancia y rumbo hacia otra estación.", "terreno": "Perfil del terreno entre dos puntos para saber si hay línea de vista.", "cobertura": "Desde dónde se alcanza una repetidora, sobre el mapa.", "satpass": "Cuándo pasan los satélites de aficionado, sus frecuencias y el Doppler.", "coords": "Convierte coordenadas entre grados, minutos, segundos y cuadrícula.", "prefijos": "De qué país es un indicativo por su prefijo.", "ics213": "Redacta y comparte un mensaje formal ICS-213 para tráfico de emergencia.", "frecemerg": "Frecuencias de emergencia y de las redes nacionales e internacionales.", "emergencia": "Frecuencias designadas para tráfico de emergencia y socorro.", "ctcss": "Tonos CTCSS y códigos DCS para abrir repetidoras.", "codigosq": "Código Q, escala RST y alfabeto fonético.", "glosario": "Términos de radioafición explicados en español.", "cw": "Aprende y practica telegrafía: copia, velocidad y abreviaturas.", "modos": "Cómo suenan y para qué sirven FT8, JS8, RTTY, PSK31 y otros modos.", "qsl": "Diseña tu tarjeta QSL digital y descárgala para enviarla.", "certificado": "Certificado descargable por participar en un simulacro, malla o Field Day de RAU.", "log": "Anota tus contactos de una sesión y expórtalos en ADIF para WSJT-X, Log4OM o QRZ.", "pota": "Activadores POTA de Colombia en este momento.", "dx": "Estaciones reportadas ahora en el cluster DX, con país y distancia, para oírlas o anotarlas.", "concursos": "Los concursos internacionales más importantes y cuándo caen este año.", "cabrillo": "Revisa tu log Cabrillo antes de enviarlo a un concurso.", "radiales": "Cuántos radiales poner bajo una vertical y de qué largo.", "split": "Ayuda para trabajar a una estación DX que escucha en otra frecuencia.", "qsorate": "Cuántos contactos por hora llevas durante un concurso.", "dxcc": "Qué países (DXCC) y estados (WAS) llevas confirmados.", "aprs": "Abre el mapa de aprs.fi centrado en Medellín (sitio externo).", "smith": "Ubica tu impedancia en la carta de Smith y calcula la ROE.", "tarjeta": "Una hoja para imprimir con frecuencias, alfabeto fonético y código Q.", "receptor": "Escucha el receptor del club y decodifica FT8, CW, JS8, RTTY y más.", "aperturas": "Qué tan seguido el receptor del club oye cada región, por banda y hora.", "radiofaros": "Qué radiofaro internacional transmite ahora en cada banda, para probar propagación.", "brandmeister": "Quién sale al aire ahora en DMR BrandMeister: el TG 732 de Colombia u otro que elijas.", "planbandas": "Plan de bandas de Colombia: segmentos, modos y bandas WARC.", "examen": "Practica con preguntas tipo examen para la licencia colombiana.", "licencia": "Guarda la fecha de vencimiento de tu licencia y descarga un recordatorio.", "diplomas": "Verifica la autenticidad de un diploma emitido por RAU."};
 	var DESC_CACHE = {};
 	function desc(id){
 		if(id in DESC_CACHE) return DESC_CACHE[id];
@@ -2317,13 +2335,24 @@ function rauFaseLunar(frac){
 		if(pre) pre.textContent=t ? 'Herramientas de Radio · '+t.cat : 'Utilidades técnicas';
 		if(d){ d.textContent=t ? desc(id) : ''; d.classList.toggle('hidden', !t || !d.textContent); }
 	}
+	/* Conteo anónimo de uso (inc/uso-herramientas.php): una vez por sesión y herramienta */
+	function contarUso(id){
+		try { var k='rau_uso_'+id; if(sessionStorage.getItem(k)) return; sessionStorage.setItem(k,'1'); } catch(e){}
+		var url=<?php echo wp_json_encode( rest_url( 'rau/v1/uso' ) ); ?>+'?h='+encodeURIComponent(id);
+		try { if(navigator.sendBeacon && navigator.sendBeacon(url)) return; } catch(e){}
+		fetch(url, {method:'POST', keepalive:true}).catch(function(){});
+	}
 	function openTool(id, opts){
 		opts = opts || {};
 		var t = TOOLS_BY_ID[id];
 		if(!t) return false;
 		// «Dashboard en Vivo» quedó dentro del centro de mando: su dirección lleva a la consola
 		if(id==='dashboard'){ volverConsola(); return true; }
+		// Las que son un enlace a otro sitio se abren allá, en otra pestaña
+		if(t.externo && !panelDe(id)){ contarUso(id); window.open(t.externo, '_blank', 'noopener'); return true; }
+		if(!panelDe(id)){ location.href=BASE_URL+id+'/'; return true; }
 		activateCategory(t.cat, {skipScroll:true, skipHash:true, solo:id});
+		contarUso(id);
 		encabezado(id);
 		// URL propia real (/herramientas/{id}/) — no un ancla. pushState para que
 		// atrás/adelante del navegador funcione como si fueran páginas distintas.
@@ -2335,6 +2364,7 @@ function rauFaseLunar(frac){
 		return true;
 	}
 	function volverConsola(){
+		if(!document.getElementById('rau-consola')){ location.href=BASE_URL; return; }
 		var antena=document.querySelector('.consola-modo-btn[data-modo="antena"]');
 		if(antena) antena.click();
 		showGrid({skipHash:true});
@@ -2411,6 +2441,11 @@ function rauFaseLunar(frac){
 		}
 		var startId = location.hash.replace('#','');
 		if(!startId){ ubicarReceptor(); return; } // se queda en la consola, que es la pantalla de entrada
+		if(startId==='catalogo'){
+			var bc=document.querySelector('.consola-modo-btn[data-modo="catalogo"]'); if(bc) bc.click();
+			var mc=document.querySelector('.consola-modos'); if(mc) setTimeout(function(){ mc.scrollIntoView({block:'start'}); }, 50);
+			ubicarReceptor(); return;
+		}
 		if(TOOLS_BY_ID[startId]){ openTool(startId, {skipScroll:true}); return; }
 		var catNames = TOOLS.reduce(function(a,t){ if(a.indexOf(t.cat)===-1) a.push(t.cat); return a; }, []);
 		var cat = catNames.find(function(c){ return c.toLowerCase().replace(/[^a-z0-9]+/g,'-')===startId; });
@@ -2583,7 +2618,7 @@ function rauFaseLunar(frac){
 					resultsEl.innerHTML = r.length ? r.map(function(x){
 						var padre = x.abre!==x.t.id && TOOLS_BY_ID[x.abre] ? ' · en «'+TOOLS_BY_ID[x.abre].label+'»' : '';
 						return '<button type="button" role="option" data-tab="'+x.abre+'" class="rau-search-item flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted/40 border-b border-border/40 last:border-0">'
-							+'<span class="min-w-0"><span class="block">'+x.t.label+'<span class="text-muted-foreground">'+padre+'</span></span>'+(desc(x.t.id)?'<span class="block truncate text-xs text-muted-foreground">'+desc(x.t.id).replace(/[<&]/g,'')+'</span>':'')+'</span>'
+							+'<span class="min-w-0"><span class="block">'+x.t.label+(x.t.externo?' <span class="text-muted-foreground" title="Abre otro sitio">↗</span>':'')+'<span class="text-muted-foreground">'+padre+'</span></span>'+(desc(x.t.id)?'<span class="block truncate text-xs text-muted-foreground">'+desc(x.t.id).replace(/[<&]/g,'')+'</span>':'')+'</span>'
 							+'<span class="font-mono text-[10px] uppercase text-muted-foreground">'+x.t.cat+'</span></button>';
 					}).join('') : '<p class="px-4 py-3 text-sm text-muted-foreground">Sin resultados para «'+this.value.replace(/[<&]/g,'')+'»</p>';
 					resultsEl.classList.remove('hidden');
@@ -2641,6 +2676,8 @@ function rauFaseLunar(frac){
 /* ── RELOJ UTC ── */
 function pad(n){return String(n).padStart(2,'0');}
 function tickClock(){
+	// 19.60.0: el reloj vive en el panel «Reloj UTC», que ya no está en todas las páginas
+	if(!document.getElementById('clock-utc')) return;
 	const now=new Date();
 	const days=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 	const months=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -2690,7 +2727,7 @@ tickClock(); setInterval(tickClock,1000);
 				return !/^text-(emerald|amber|rose|primary|muted)/.test(c);
 			}).join(' ')+' '+cls;
 		}).catch((e)=>{ rauErr(e);
-			document.getElementById('prop-status').textContent='No se pudo cargar el panel solar. Consulta los enlaces externos abajo.';
+			var ps=document.getElementById('prop-status'); if(ps) ps.textContent='No se pudo cargar el panel solar. Consulta los enlaces externos abajo.';
 		});
 })();
 
@@ -3278,15 +3315,47 @@ rauOn('gain-dbd','input',function(){
 	});
 })();
 
-/* ── BRANDMEISTER LAST HEARD (arma el link con la búsqueda puesta) ── */
+/* ── BRANDMEISTER EN VIVO (19.60.0): la misma conexión que usa la consola, con filtro ──
+   Antes era una casilla que abría el sitio de BrandMeister; y el ejemplo decía «214 para Colombia»,
+   que es España (Colombia es el 732). */
 (function(){
-	var input=document.getElementById('bm-buscar');
-	if(!input) return;
-	var link=document.getElementById('bm-link');
-	input.addEventListener('input', function(){
-		var q=this.value.trim();
-		link.href = q ? 'https://brandmeister.network/?page=lh&q='+encodeURIComponent(q) : 'https://brandmeister.network/?page=lh';
-	});
+	var input=document.getElementById('bm-buscar'); if(!input) return;
+	var link=document.getElementById('bm-link'), lista=document.getElementById('bm-lista'), estado=document.getElementById('bm-estado');
+	var eventos=[], socket=null, iniciado=false;
+	function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+	function filtro(){ var q=input.value.trim().toUpperCase(); return /^\d+$/.test(q) ? {tg:+q} : q ? {call:q} : {tg:732}; }
+	function coincide(e, f){ return f.tg ? e.tg===f.tg : String(e.call).toUpperCase().indexOf(f.call)===0; }
+	function pintar(){
+		var f=filtro(), l=eventos.filter(function(e){ return coincide(e, f); }).slice(0,25);
+		link.href='https://brandmeister.network/?page=lh'+(input.value.trim()?'&q='+encodeURIComponent(input.value.trim()):'');
+		lista.innerHTML=l.length ? l.map(function(e){ return '<div class="flex items-center justify-between gap-3 px-3 py-2"><div><span class="font-mono font-bold">'+esc(e.call)+'</span> <span class="text-sm text-muted-foreground">'+esc(e.nombre)+'</span></div><div class="text-right font-mono text-xs text-muted-foreground">TG '+e.tg+'<br>'+esc(e.hora)+'</div></div>'; }).join('')
+			: '<p class="px-3 py-5 text-center text-sm text-muted-foreground">Nadie ha salido al aire '+(f.tg?'en el TG '+f.tg:'con «'+esc(f.call)+'»')+' desde que abriste la página. Esperando…</p>';
+	}
+	function conectar(){
+		if(iniciado) return; iniciado=true;
+		var sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js';
+		sc.onerror=function(){ estado.textContent='No se pudo cargar la conexión con BrandMeister. Usa el enlace a su sitio.'; };
+		sc.onload=function(){
+			try { socket=io('https://api.brandmeister.network', {path:'/lh/socket.io', transports:['websocket'], reconnectionAttempts:3}); }
+			catch(e){ estado.textContent='No se pudo conectar con BrandMeister.'; return; }
+			socket.on('connect', function(){ estado.textContent='Conectado: mostrando en vivo.'; pintar(); });
+			// Conectado pero sin ningún evento de la red en 90 s (de ningún talkgroup): BrandMeister no está
+			// enviando datos a páginas externas. Se dice claro en vez de quedarse «esperando».
+			setTimeout(function(){ if(!eventos.length) estado.innerHTML='BrandMeister no ha enviado datos a esta página en 90 segundos: puede que su servicio público no esté disponible. <a class="text-primary underline" target="_blank" rel="noopener" href="'+link.href+'">Míralo en su sitio ↗</a>'; }, 90000);
+			socket.on('connect_error', function(){ estado.textContent='No se pudo conectar con BrandMeister ahora mismo. Usa el enlace a su sitio.'; });
+			socket.on('mqtt', function(data){
+				var x; try { x=JSON.parse(data.payload); } catch(e){ return; }
+				if(!x || x.Event!=='Session-Start') return;
+				eventos.unshift({call:x.SourceCall||('ID '+x.SourceID), nombre:x.SourceName||'', tg:parseInt(x.DestinationID,10), hora:new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',second:'2-digit'})});
+				if(eventos.length>3000) eventos.length=2000;
+				if(coincide(eventos[0], filtro())) pintar();
+			});
+		};
+		document.head.appendChild(sc); pintar();
+	}
+	input.addEventListener('input', pintar);
+	document.addEventListener('rau:panel', function(e){ if(e.detail==='panel-brandmeister') conectar(); });
+	var panel=document.getElementById('panel-brandmeister'); if(panel && (panel.dataset.rauVisto || panel.offsetParent)) setTimeout(conectar, 0);
 })();
 
 /* ── SMITH CHART ── */
@@ -3345,7 +3414,7 @@ rauOn('gain-dbd','input',function(){
 			+'<div class="flex justify-between"><span class="text-muted-foreground">ROE</span><span class="font-mono font-bold text-primary">'+(isFinite(vswr)?vswr.toFixed(2):'∞')+':1</span></div>'
 			+'<div class="flex justify-between"><span class="text-muted-foreground">Pérdida de retorno</span><span class="font-mono">'+(isFinite(rl)?rl.toFixed(1)+' dB':'∞')+'</span></div>';
 	}
-	['smith-r','smith-x','smith-z0'].forEach(function(id){ document.getElementById(id).addEventListener('input', actualizar); });
+	['smith-r','smith-x','smith-z0'].forEach(function(id){ rauOn(id, 'input', actualizar); });
 	actualizar();
 })();
 
@@ -3372,7 +3441,7 @@ rauOn('gain-dbd','input',function(){
 			}).catch(function(e){ rauErr(e); el.innerHTML='<p class="text-sm text-rose-400">Error de conexión.</p>'; });
 	}
 	btn.addEventListener('click', buscar);
-	document.getElementById('psk-indicativo').addEventListener('keydown', function(e){ if(e.key==='Enter') buscar(); });
+	rauOn('psk-indicativo', 'keydown', function(e){ if(e.key==='Enter') buscar(); });
 })();
 
 /* ── REVERSE BEACON NETWORK (arma el link con el indicativo puesto) ── */
@@ -3411,7 +3480,7 @@ rauOn('gain-dbd','input',function(){
 		document.getElementById('split-tx').textContent=(freq+offset).toFixed(1)+' kHz';
 	}
 	freqEl.addEventListener('input', calc);
-	document.getElementById('split-offset').addEventListener('input', calc);
+	rauOn('split-offset', 'input', calc);
 	calc();
 })();
 
@@ -3430,7 +3499,7 @@ rauOn('gain-dbd','input',function(){
 		document.getElementById('qso-rate').textContent=horas>0 ? Math.round(total/horas) : 0;
 	}
 
-	document.getElementById('qso-start').addEventListener('click', function(){
+	rauOn('qso-start', 'click', function(){
 		if(!inicio){
 			inicio=Date.now();
 			intervalo=setInterval(actualizarTiempo, 1000);
@@ -3446,7 +3515,7 @@ rauOn('gain-dbd','input',function(){
 		document.getElementById('qso-total').textContent=total;
 		actualizarTiempo();
 	});
-	document.getElementById('qso-reset').addEventListener('click', function(){
+	rauOn('qso-reset', 'click', function(){
 		total=0; inicio=null; clearInterval(intervalo);
 		document.getElementById('qso-total').textContent='0';
 		document.getElementById('qso-tiempo').textContent='00:00';
@@ -3496,7 +3565,7 @@ rauOn('gain-dbd','input',function(){
 		guardar();
 	}
 	['dxcc-trabajadas','dxcc-confirmadas','was-trabajados','was-confirmados'].forEach(function(id){
-		document.getElementById(id).addEventListener('input', actualizar);
+		rauOn(id, 'input', actualizar);
 	});
 	cargar();
 	actualizar();
@@ -3654,7 +3723,7 @@ rauOn('gain-dbd','input',function(){
 		}).join('') || '<p class="col-span-2 text-sm text-muted-foreground">Sin resultados.</p>';
 	}
 	render();
-	document.getElementById('glo-buscar').addEventListener('input', function(){ render(this.value); });
+	rauOn('glo-buscar', 'input', function(){ render(this.value); });
 })();
 
 /* ── CÓDIGO DE COLORES (resistencias + capacitores) ── */
@@ -4949,6 +5018,7 @@ rauOn('loc-input','input',function(){this.value=this.value.toUpperCase();});
 (function(){
 	const tones=[67.0,71.9,74.4,77.0,79.7,82.5,85.4,88.5,91.5,94.8,97.4,100.0,103.5,107.2,110.9,114.8,118.8,123.0,127.3,131.8,136.5,141.3,146.2,151.4,156.7,162.2,167.9,173.8,179.9,186.2,192.8,203.5,210.7,218.1,225.7,233.6,241.8,250.3];
 	const tb=document.getElementById('ctcss-table');
+	if(!tb) return;
 	let html='';
 	for(let i=0;i<tones.length;i+=3){
 		html+='<tr class="border-b border-border/50 last:border-0">';
@@ -4975,11 +5045,11 @@ rauOn('loc-input','input',function(){this.value=this.value.toUpperCase();});
 		table.innerHTML=html;
 	}
 
-	document.getElementById('cw-wpm').addEventListener('input',function(){document.getElementById('cw-wpm-val').textContent=this.value;});
-	document.getElementById('cw-freq').addEventListener('input',function(){document.getElementById('cw-freq-val').textContent=this.value;});
+	rauOn('cw-wpm', 'input',function(){document.getElementById('cw-wpm-val').textContent=this.value;});
+	rauOn('cw-freq', 'input',function(){document.getElementById('cw-freq-val').textContent=this.value;});
 
 	let ctx=null,playing=false,stopReq=false;
-	document.getElementById('cw-play').addEventListener('click',async()=>{
+	rauOn('cw-play', 'click',async()=>{
 		if(playing){return;}
 		const text=document.getElementById('cw-text').value.toUpperCase()||'HK4RAU DE HK4RAU AR';
 		const wpm=parseInt(document.getElementById('cw-wpm').value)||15;
@@ -5018,7 +5088,7 @@ rauOn('loc-input','input',function(){this.value=this.value.toUpperCase();});
 		playing=false;
 		if(ctx){ctx.close();ctx=null;}
 	});
-	document.getElementById('cw-stop').addEventListener('click',()=>{stopReq=true;playing=false;if(ctx){ctx.close();ctx=null;}});
+	rauOn('cw-stop', 'click',()=>{stopReq=true;playing=false;if(ctx){ctx.close();ctx=null;}});
 })();
 
 })();
@@ -5091,7 +5161,7 @@ rauOn('az-calc','click',function(){
 		+'<div class="flex justify-between items-center"><span class="text-sm text-muted-foreground">Dirección cardinal</span><span class="font-mono text-xl font-bold text-foreground">'+dir+'</span></div>'
 		+'</div>';
 });
-['az-origen','az-destino'].forEach(function(id){document.getElementById(id).addEventListener('input',function(){this.value=this.value.toUpperCase();});});
+['az-origen','az-destino'].forEach(function(id){rauOn(id, 'input',function(){this.value=this.value.toUpperCase();});});
 
 /* ── COBERTURA DE REPETIDOR (horizonte de radio geométrico) ── */
 (function(){
@@ -5118,7 +5188,7 @@ rauOn('az-calc','click',function(){
 		return 4.12*Math.sqrt(Math.max(alturaM,0)); // horizonte de RADIO (modelo Tierra 4/3, ITU-R P.452) — no confundir con el óptico (3.57)
 	}
 
-	document.getElementById('cov-gps').addEventListener('click',function(){
+	rauOn('cov-gps', 'click',function(){
 		if(!navigator.geolocation){alert('Tu navegador no soporta geolocalización.');return;}
 		navigator.geolocation.getCurrentPosition(function(pos){
 			// Reutiliza latLngToMH si ya existe en la página (pestaña Maidenhead); si no, deja lat/lng crudos.
@@ -5129,9 +5199,9 @@ rauOn('az-calc','click',function(){
 			}
 		},function(){alert('No se pudo obtener la ubicación.');});
 	});
-	document.getElementById('cov-grid').addEventListener('input',function(){this.value=this.value.toUpperCase();});
+	rauOn('cov-grid', 'input',function(){this.value=this.value.toUpperCase();});
 
-	document.getElementById('cov-calc').addEventListener('click',function(){
+	rauOn('cov-calc', 'click',function(){
 		if(!REPEATERS.length) return;
 		var raw=document.getElementById('cov-grid').value.trim();
 		var origen=null;
@@ -5223,6 +5293,13 @@ rauOn('az-calc','click',function(){
 
 			satSelect.innerHTML=TLES.map(function(s,i){ return '<option value="'+i+'">'+s.name+'</option>'; }).join('');
 			statusEl.textContent='Listo — '+TLES.length+' satélite(s) cargado(s). Ingresa tu grid y calcula.';
+			// 19.60.0: con el locator de «Mi estación» (o el que ya trae la casilla) calcula solo al abrir;
+			// antes había que pulsar «Calcular» aunque el dato ya estuviera.
+			var gEl=document.getElementById('sp-grid'), miLoc='';
+			try { miLoc=String((JSON.parse(localStorage.getItem('rau_estacion')||'{}')||{}).locator||''); } catch(e){}
+			if(gEl && miLoc && /^[A-Ra-r]{2}\d{2}/.test(miLoc)) gEl.value=miLoc.toUpperCase();
+			var auto=function(){ var b=document.getElementById('sp-calc'); if(b && gEl && gEl.value.trim() && window.satellite && !b.disabled) b.click(); };
+			if(window.satellite) auto(); else { var antes=window.rauOnSatReady; window.rauOnSatReady=function(){ if(typeof antes==='function') antes(); auto(); }; }
 		}).catch(function(e){ rauErr(e);
 			statusEl.textContent='No se pudieron cargar los datos orbitales. Revisa tu conexión e intenta de nuevo.';
 		});
@@ -5230,7 +5307,7 @@ rauOn('az-calc','click',function(){
 	// Delega en rauGridACoords (definida junto a la herramienta Maidenhead)
 	function gridCenter(g){ return rauGridACoords(g); }
 
-	document.getElementById('sp-gps').addEventListener('click',function(){
+	rauOn('sp-gps', 'click',function(){
 		if(!navigator.geolocation){ alert('Tu navegador no soporta geolocalización.'); return; }
 		navigator.geolocation.getCurrentPosition(function(pos){
 			if(typeof latLngToMH==='function'){
@@ -5240,7 +5317,7 @@ rauOn('az-calc','click',function(){
 			}
 		},function(){ alert('No se pudo obtener la ubicación.'); });
 	});
-	document.getElementById('sp-grid').addEventListener('input',function(){this.value=this.value.toUpperCase();});
+	rauOn('sp-grid', 'input',function(){this.value=this.value.toUpperCase();});
 
 	function compass(az){
 		var dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
@@ -5254,7 +5331,7 @@ rauOn('az-calc','click',function(){
 		return min+'m '+seg+'s';
 	}
 
-	document.getElementById('sp-calc').addEventListener('click',function(){
+	rauOn('sp-calc', 'click',function(){
 		if(typeof satellite==='undefined'){
 			alert('La librería de cálculo orbital no cargó. Recarga la página e intenta de nuevo.');
 			return;
@@ -5593,10 +5670,10 @@ rauOn('az-calc','click',function(){
 	}
 
 	['cert-nombre','cert-indicativo','cert-actividad','cert-fecha'].forEach(function(id){
-		document.getElementById(id).addEventListener('input', drawCert);
+		rauOn(id, 'input', drawCert);
 	});
 
-	document.getElementById('cert-download').addEventListener('click', function(){
+	rauOn('cert-download', 'click', function(){
 		var nombre=document.getElementById('cert-nombre').value||'certificado';
 		var a=document.createElement('a');
 		a.download='Certificado-RAU-'+nombre.replace(/\s+/g,'-')+'.png';
@@ -5615,7 +5692,7 @@ function updateRST(){
 	document.getElementById('rst-fonia').textContent=r+''+s;
 	document.getElementById('rst-cw').textContent=r+''+s+''+t;
 }
-['rst-r','rst-s','rst-t'].forEach(function(id){document.getElementById(id).addEventListener('change',updateRST);});
+['rst-r','rst-s','rst-t'].forEach(function(id){rauOn(id, 'change',updateRST);});
 
 /* ── CÓDIGO Q ── */
 var CODIGOS_Q=[
@@ -5646,6 +5723,7 @@ var CODIGOS_Q=[
 ];
 (function(){
 	var tbody=document.getElementById('cq-tbody');
+	if(!tbody) return;
 	function render(filter){
 		var html='';
 		CODIGOS_Q.forEach(function(row){
@@ -5655,7 +5733,7 @@ var CODIGOS_Q=[
 		tbody.innerHTML=html||'<tr><td colspan="3" class="px-3 py-4 text-center text-sm text-muted-foreground">Sin resultados</td></tr>';
 	}
 	render('');
-	document.getElementById('cq-search').addEventListener('input',function(){render(this.value.toLowerCase());});
+	rauOn('cq-search', 'input',function(){render(this.value.toLowerCase());});
 })();
 
 /* ── POTA Colombia (carga al activar pestaña) ── */
@@ -5695,6 +5773,86 @@ var CODIGOS_Q=[
 			document.getElementById('pota-loading').innerHTML='<p class="text-sm text-muted-foreground">No se pudo cargar la API de POTA. Intenta más tarde.</p>';
 		});
 	}
+})();
+
+/* ── Tablas de las herramientas en el celular (19.60.0) ──
+   Las de hasta 8 columnas se leen como tarjetas: cada celda lleva el nombre de su columna. Las más
+   anchas (mapas de calor por hora) siguen deslizándose de lado, con un aviso. Las filas que las
+   herramientas agregan después (filtros, búsquedas) se etiquetan al llegar. */
+(function(){
+	var cont=document.getElementById('rau-cat-panels'); if(!cont || !window.MutationObserver) return;
+	function etiquetar(t){
+		var th=[].map.call(t.querySelectorAll('thead th'), function(x){ return x.textContent.trim(); });
+		t.querySelectorAll('tbody tr').forEach(function(tr){ [].forEach.call(tr.children, function(td, i){ if(th[i] && !td.hasAttribute('colspan') && !td.dataset.label) td.dataset.label=th[i]; }); });
+	}
+	function preparar(t){
+		if(t.dataset.rauMovil) return; t.dataset.rauMovil='1';
+		var cols=t.querySelectorAll('thead th').length;
+		if(cols>=2 && cols<=8){ t.classList.add('rau-tabla-movil'); etiquetar(t); var tb=t.querySelector('tbody'); if(tb) new MutationObserver(function(){ etiquetar(t); }).observe(tb, {childList:true}); }
+		else if(cols>8 && t.parentNode){ var a=document.createElement('p'); a.className='rau-tabla-ancha-aviso'; a.textContent='Desliza la tabla de lado para ver todas las columnas →'; t.parentNode.insertBefore(a, t); }
+	}
+	function revisar(){ cont.querySelectorAll('table').forEach(preparar); }
+	new MutationObserver(revisar).observe(cont, {childList:true, subtree:true}); revisar();
+})();
+
+/* ── DX SPOTS EN VIVO (19.60.0): lista propia en vez del recuadro de DXheat ──
+   El recuadro traía otro diseño, cookies de seguimiento y no se podía usar con el receptor ni con la
+   bitácora. Usa el mismo proxy que la consola (rau_dx_spots) y la tabla de prefijos del sitio. */
+(function(){
+	var lista=document.getElementById('dxl-lista'); if(!lista) return;
+	var estado=document.getElementById('dxl-estado'), buscar=document.getElementById('dxl-buscar'), bandasEl=document.getElementById('dxl-bandas');
+	var RECEPTOR=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>, AJAX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+	var BANDAS=[['160m',1800,2000],['80m',3500,4000],['60m',5300,5410],['40m',7000,7300],['30m',10100,10150],['20m',14000,14350],['17m',18068,18168],['15m',21000,21450],['12m',24890,24990],['10m',28000,29700],['6m',50000,54000]];
+	var datos=[], banda='', aqui=[6.24,-75.58], cargado=false;
+	function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+	function bandaDe(k){ for(var i=0;i<BANDAS.length;i++) if(k>=BANDAS[i][1] && k<=BANDAS[i][2]) return BANDAS[i][0]; return ''; }
+	function geo(c){ c=String(c||'').toUpperCase(); var partes=c.split('/'), raw=partes.length>1 && partes[0].length<=3 ? partes[0] : partes[0];
+		for(var l=4;l>=1;l--){ var p=(typeof PFX_GEO!=='undefined') && PFX_GEO[raw.slice(0,l)]; if(p){ var x=p.split('|'); return {pais:(x[0]||'').replace(/^[^\s]+\s/,''), lat:parseFloat(x[4]), lng:parseFloat(x[5])}; } } return null; }
+	function km(lat,lng){ var r=Math.PI/180, a=Math.sin((lat-aqui[0])*r/2), b=Math.sin((lng-aqui[1])*r/2); return Math.round(12742*Math.asin(Math.sqrt(a*a+Math.cos(aqui[0]*r)*Math.cos(lat*r)*b*b))); }
+	function modo(info, k){ var m=String(info||'').toUpperCase().match(/\b(FT8|FT4|CW|SSB|USB|LSB|RTTY|PSK31|FM|AM|JS8)\b/); if(m) return m[1]==='USB'||m[1]==='LSB'?'SSB':m[1];
+		var f=k%1000; if([74,75,80,47.5].some(function(x){ return Math.abs(f-x)<1.6; })) return 'FT8'; return ''; }
+	function minutos(t){ if(!/^\d{2}:\d{2}$/.test(t||'')) return null; var d=new Date(), m=d.getUTCHours()*60+d.getUTCMinutes()-(parseInt(t.slice(0,2),10)*60+parseInt(t.slice(3),10)); if(m<0) m+=1440; return m; }
+	// Distancias desde el locator de «Mi estación» si está configurado; si no, desde Medellín
+	try { var g=String((JSON.parse(localStorage.getItem('rau_estacion')||'{}')||{}).locator||''), A='ABCDEFGHIJKLMNOPQR', a='abcdefghijklmnopqrstuvwx';
+		if(/^[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2})?$/.test(g)){ var lng=A.indexOf(g[0].toUpperCase())*20-180+parseInt(g[2],10)*2+(g.length>=6?a.indexOf(g[4].toLowerCase())/12+1/24:1), lat=A.indexOf(g[1].toUpperCase())*10-90+parseInt(g[3],10)+(g.length>=6?a.indexOf(g[5].toLowerCase())/24+1/48:0.5); aqui=[lat, lng]; } } catch(e){}
+	function pintarBandas(){
+		var cuenta={}; datos.forEach(function(s){ cuenta[s.b]=(cuenta[s.b]||0)+1; });
+		bandasEl.innerHTML=[''].concat(BANDAS.map(function(b){ return b[0]; }).filter(function(b){ return cuenta[b]; })).map(function(b){
+			var on=b===banda; return '<button type="button" data-b="'+b+'" aria-pressed="'+on+'" class="rounded-md border px-2.5 py-1.5 font-mono text-xs '+(on?'border-primary bg-primary/15 text-primary':'border-border text-muted-foreground hover:text-foreground')+'">'+(b||'Todas')+(b?' · '+cuenta[b]:'')+'</button>'; }).join('');
+	}
+	function pintar(){
+		var q=String(buscar.value||'').toUpperCase().trim();
+		var l=datos.filter(function(s){ return (!banda || s.b===banda) && (!q || (s.dx+' '+s.pais+' '+s.info).toUpperCase().indexOf(q)>=0); });
+		estado.textContent=datos.length ? l.length+' de '+datos.length+' spots · actualizado '+new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : 'Sin spots en este momento.';
+		lista.innerHTML=l.slice(0,120).map(function(s, i){
+			var mhz=(s.khz/1000).toFixed(3);
+			return '<div class="flex items-center gap-3 px-3 py-2.5">'
+				+'<div class="min-w-0 flex-1"><div class="flex flex-wrap items-baseline gap-x-2"><span class="font-mono font-bold text-foreground">'+esc(s.dx)+'</span><span class="font-mono text-primary">'+mhz+'</span>'+(s.modo?'<span class="font-mono text-[11px] text-muted-foreground">'+esc(s.modo)+'</span>':'')+'<span class="font-mono text-[11px] text-muted-foreground">'+esc(s.b)+'</span></div>'
+				+'<div class="text-xs text-muted-foreground">'+esc([s.pais, s.km!=null?s.km.toLocaleString('es-CO')+' km':'', s.min!=null?(s.min<1?'ahora':'hace '+s.min+' min'):'', s.sp?'por '+s.sp:'', s.info].filter(Boolean).join(' · '))+'</div></div>'
+				+(s.khz<30000?'<a class="shrink-0 rounded-md px-2 py-1.5 text-lg hover:bg-primary/15" href="'+esc(RECEPTOR+'?f='+s.khz.toFixed(1)+(s.modo==='CW'?'&m=cw':s.modo==='FT8'||s.modo==='FT4'||s.modo==='JS8'||s.khz>10000?'&m=usb':'&m=lsb'))+'" title="Escuchar en el receptor del club" aria-label="Escuchar '+esc(s.dx)+' en '+mhz+' MHz">🎧</a>':'')
+				+'<button type="button" class="dxl-anotar shrink-0 rounded-md px-2 py-1.5 text-lg hover:bg-primary/15" data-i="'+i+'" title="Anotar en tu Log ADIF" aria-label="Anotar '+esc(s.dx)+' en tu Log ADIF">📝</button></div>';
+		}).join('') || '<p class="px-3 py-6 text-center text-sm text-muted-foreground">Nada coincide con el filtro.</p>';
+		lista._vista=l;
+	}
+	function cargar(){
+		fetch(AJAX+'?action=rau_dx_spots', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+			if(!j || !j.success || !Array.isArray(j.data)) throw new Error('sin datos');
+			datos=j.data.map(function(s){ var k=parseFloat(s.freq)*1000, g=geo(s.dx); return {dx:String(s.dx||'').toUpperCase(), khz:k, b:bandaDe(k), modo:modo(s.info, k), pais:g?g.pais:'', km:g?km(g.lat,g.lng):null, min:minutos(s.t), sp:String(s.sp||'').replace(/-@$/,''), info:String(s.info||'')}; })
+				.filter(function(s){ return s.khz>0 && s.dx; });
+			pintarBandas(); pintar();
+		}).catch(function(){ estado.textContent='No se pudo consultar el cluster DX ahora. Prueba en un minuto, o abre DXheat.'; });
+	}
+	function iniciar(){ if(cargado) return; cargado=true; cargar(); setInterval(function(){ if(!document.hidden && lista.offsetParent) cargar(); }, 60000); }
+	document.addEventListener('rau:panel', function(e){ if(e.detail==='panel-dx') iniciar(); });
+	var panel=document.getElementById('panel-dx'); if(panel && (panel.dataset.rauVisto || panel.offsetParent)) setTimeout(iniciar, 0);
+	bandasEl.addEventListener('click', function(e){ var b=e.target.closest('[data-b]'); if(!b) return; banda=b.dataset.b; pintarBandas(); pintar(); });
+	buscar.addEventListener('input', pintar);
+	lista.addEventListener('click', function(e){
+		var b=e.target.closest('.dxl-anotar'); if(!b) return; var s=lista._vista[+b.dataset.i]; if(!s) return;
+		var l=rauLogLeer(), d=new Date();
+		l.push({call:s.dx, date:d.toISOString().slice(0,10).replace(/-/g,''), time:d.toISOString().slice(11,19), freq:(s.khz/1000).toFixed(3), mode:s.modo||'SSB', rstS:'', rstR:'', name:''});
+		rauLogGuardar(l, 'dx'); b.textContent='✓'; b.setAttribute('aria-label', s.dx+' anotado'); setTimeout(function(){ b.textContent='📝'; }, 2000);
+	});
 })();
 
 /* ── DX SPOTS ──
@@ -5846,7 +6004,7 @@ var CODIGOS_Q=[
 		} catch(e){}
 	}
 	mostrarEstadisticas();
-	document.getElementById('exam-next').addEventListener('click',function(){
+	rauOn('exam-next', 'click',function(){
 		currentIdx++;
 		if(currentIdx>=questions.length){
 			document.getElementById('exam-container').classList.add('hidden');
@@ -5882,12 +6040,12 @@ var CODIGOS_Q=[
 			}
 		}else showQuestion();
 	});
-	document.getElementById('exam-restart').addEventListener('click',function(){
+	rauOn('exam-restart', 'click',function(){
 		document.getElementById('exam-container').classList.add('hidden');
 		document.getElementById('exam-start').classList.remove('hidden');
 		mostrarEstadisticas();
 	});
-	document.getElementById('exam-retry').addEventListener('click',function(){startExam(currentCat);});
+	rauOn('exam-retry', 'click',function(){startExam(currentCat);});
 })();
 
 
@@ -6141,7 +6299,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 
 	inp2.addEventListener('keydown',function(e){if(e.key==='Enter')checkBtn.click();});
 
-	document.getElementById('train-reset').addEventListener('click',function(){
+	rauOn('train-reset', 'click',function(){
 		tCorrect=0;tWrong=0;tRacha=0;currentChar='';
 		document.getElementById('train-correct').textContent=0;
 		document.getElementById('train-wrong').textContent=0;
@@ -6489,7 +6647,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		if(navigator.share && navigator.canShare) shareBtn.classList.remove('hidden');
 	}
 
-	document.getElementById('qsl-gen').addEventListener('click', drawQSL);
+	rauOn('qsl-gen', 'click', drawQSL);
 
 	['qsl-de','qsl-to','qsl-fecha','qsl-hora','qsl-freq','qsl-modo','qsl-rst','qsl-nombre','qsl-qthl','qsl-fondo','qsl-forma'].forEach(function(id){
 		var el = document.getElementById(id);
@@ -6513,7 +6671,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		return 'QSL-'+de+'-'+to+'-'+fecha+'.png';
 	}
 
-	document.getElementById('qsl-download').addEventListener('click',function(){
+	rauOn('qsl-download', 'click',function(){
 		var a=document.createElement('a');
 		a.download=qslFilename();
 		a.href=canvas.toDataURL('image/png');
@@ -6539,6 +6697,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 (function(){
 	var log=rauLogLeer();
 	var tbody=document.getElementById('log-tbody');
+	if(!tbody) return;
 
 	function guardar(){ rauLogGuardar(log, 'log'); }
 	// Lo que anota la bitácora rápida de la consola aparece aquí sin recargar
@@ -6565,7 +6724,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 
 	window.removeQSO=function(i){log.splice(i,1); guardar(); render();};
 
-	document.getElementById('log-add').addEventListener('click',function(){
+	rauOn('log-add', 'click',function(){
 		var call=(document.getElementById('log-call').value||'').toUpperCase().trim();
 		if(!call){alert('Ingresa el indicativo DX.');return;}
 		log.push({
@@ -6586,21 +6745,21 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		render();
 	});
 
-	document.getElementById('log-export').addEventListener('click',function(){ rauLogExportar(log); });
+	rauOn('log-export', 'click',function(){ rauLogExportar(log); });
 
-	document.getElementById('log-clear').addEventListener('click',function(){
+	rauOn('log-clear', 'click',function(){
 		if(confirm('¿Borrar todos los QSOs guardados en este navegador?')){log=[]; guardar(); render();}
 	});
 
-	document.getElementById('log-call').addEventListener('keydown',function(e){
+	rauOn('log-call', 'keydown',function(e){
 		if(e.key==='Enter') document.getElementById('log-add').click();
 	});
 
 	/* Importar ADIF — parseo simple de los campos que ya usa este log */
-	document.getElementById('log-import-btn').addEventListener('click', function(){
+	rauOn('log-import-btn', 'click', function(){
 		document.getElementById('log-import-file').click();
 	});
-	document.getElementById('log-import-file').addEventListener('change', function(e){
+	rauOn('log-import-file', 'change', function(e){
 		var archivo=e.target.files[0];
 		if(!archivo) return;
 		var lector=new FileReader();
@@ -6698,7 +6857,7 @@ document.querySelectorAll('.cw-sub-tab').forEach(function(btn){
 		document.getElementById('bitacora-indicativo').focus();
 		render();
 	});
-	document.getElementById('bitacora-indicativo').addEventListener('keydown', function(e){ if(e.key==='Enter') btnGuardar.click(); });
+	rauOn('bitacora-indicativo', 'keydown', function(e){ if(e.key==='Enter') btnGuardar.click(); });
 	var exportar=document.getElementById('bitacora-exportar');
 	if(exportar) exportar.addEventListener('click', function(){ rauLogExportar(rauLogLeer()); });
 	document.addEventListener('rau:log', function(e){ if(e.detail!=='bitacora') render(); });
@@ -7020,7 +7179,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 			}
 		}
 	});
-	document.getElementById('consola-banda-conteo').addEventListener('click', function(e){
+	rauOn('consola-banda-conteo', 'click', function(e){
 		var b=e.target.closest('.rau-banda-conteo'); if(!b) return;
 		filtro='banda'; marcarFiltro();
 		if(window.RauRx) window.RauRx.sintonizar(inicioBanda[b.dataset.banda]); else { khzActual=inicioBanda[b.dataset.banda]; render(); }
@@ -7291,9 +7450,9 @@ rauCuandoVisible('consola-wspr-lista', function(){
 		});
 	});
 	function alCambiar(){ pintarPush(); if(pushActivo()) sincronizar(false).catch(function(){}); }
-	document.getElementById('avisos-agregar').addEventListener('click', function(){ agregar(); alCambiar(); });
-	document.getElementById('avisos-nuevo').addEventListener('keydown', function(e){ if(e.key==='Enter'){ agregar(); alCambiar(); } });
-	document.getElementById('avisos-lista').addEventListener('click', function(e){ var b=e.target.closest('.avisos-quitar'); if(!b) return; var l=leer(); l.splice(+b.dataset.i,1); guardar(l); pintarLista(); alCambiar(); });
+	rauOn('avisos-agregar', 'click', function(){ agregar(); alCambiar(); });
+	rauOn('avisos-nuevo', 'keydown', function(e){ if(e.key==='Enter'){ agregar(); alCambiar(); } });
+	rauOn('avisos-lista', 'click', function(e){ var b=e.target.closest('.avisos-quitar'); if(!b) return; var l=leer(); l.splice(+b.dataset.i,1); guardar(l); pintarLista(); alCambiar(); });
 	// Al volver a la página se renueva la suscripción (vence a los 30 días)
 	if(pushActivo() && 'serviceWorker' in navigator) sincronizar(false).catch(function(){});
 	pintarPush();
@@ -7382,8 +7541,8 @@ rauCuandoVisible('consola-wspr-lista', function(){
 		f.classList.toggle('hidden', !on); b.setAttribute('aria-expanded', on); b.textContent=on?'Cerrar':'Configurar';
 		if(on){ var e=leer(); campos.forEach(function(c){ document.getElementById('estacion-'+c).value=e[c]||''; }); }
 	}
-	document.getElementById('estacion-editar').addEventListener('click', function(){ abrir(document.getElementById('estacion-form').classList.contains('hidden')); });
-	document.getElementById('estacion-guardar').addEventListener('click', function(){
+	rauOn('estacion-editar', 'click', function(){ abrir(document.getElementById('estacion-form').classList.contains('hidden')); });
+	rauOn('estacion-guardar', 'click', function(){
 		var e={}, estado=document.getElementById('estacion-estado');
 		campos.forEach(function(c){ e[c]=(document.getElementById('estacion-'+c).value||'').trim(); });
 		e.indicativo=e.indicativo.toUpperCase(); e.locator=e.locator ? e.locator.slice(0,2).toUpperCase()+e.locator.slice(2,4)+e.locator.slice(4).toLowerCase() : '';

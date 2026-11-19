@@ -34,6 +34,21 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 	// En /herramientas/{id}/ el H1 es la herramienta: las 60 URLs ya tenían su propio <title> y su
 	// descripción, pero compartían "Herramientas de Radio" como encabezado principal.
 	$tool_h1 = get_query_var( 'rau_tool' ) ? rau_find_tool_by_id( sanitize_title( get_query_var( 'rau_tool' ) ) ) : null;
+	/* 19.60.0 — Cada dirección carga solo lo suyo. Antes las 60 herramientas y la consola completa iban en
+	   todas las páginas (624 KB de HTML, 2,25 MB y 50 peticiones para abrir la carta de Smith). Ahora:
+	   · /herramientas/ lleva la consola y el catálogo; las herramientas se abren en su propia dirección.
+	   · /herramientas/{id}/ lleva esa herramienta y las que agrupa, sin consola.
+	   Una herramienta agrupada (p. ej. «doppler») abre la que la contiene. */
+	$rau_tool_actual = '';
+	$rau_paneles = array( 'receptor' ); // el receptor de la consola vive en su panel
+	if ( $tool_h1 && empty( $tool_h1['redirige'] ) ) {
+		$madre = $tool_h1;
+		if ( ! empty( $tool_h1['oculta'] ) ) foreach ( rau_get_herramientas_tabs() as $t ) if ( ! empty( $t['incluye'] ) && in_array( $tool_h1['id'], $t['incluye'], true ) ) { $madre = $t; break; }
+		$rau_tool_actual = $madre['id'];
+		$rau_paneles = array_merge( array( $madre['id'] ), $madre['incluye'] ?? array() );
+	}
+	$GLOBALS['rau_paneles'] = $rau_paneles;
+	if ( ! function_exists( 'rau_herr_mostrar' ) ) { function rau_herr_mostrar( $id ) { return in_array( $id, $GLOBALS['rau_paneles'], true ); } }
 	?>
 	<p id="rau-h1-pre" class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary"><?php echo $tool_h1 ? 'Herramientas de Radio · ' . esc_html( $tool_h1['cat'] ) : 'Utilidades técnicas'; ?></p>
 	<h1 id="rau-h1" class="mb-2 font-display text-3xl font-bold sm:text-4xl"><?php echo esc_html( $tool_h1 ? $tool_h1['label'] : 'Herramientas de Radio' ); ?></h1>
@@ -74,6 +89,8 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 			</div>
 		</div>
 
+	<?php // 19.60.0: en /herramientas/{id}/ no va la consola: la herramienta sola pesa una fracción.
+	if ( ! $rau_tool_actual ) : ?>
 	<div id="rau-tour-banner" class="rau-solo-consola mb-4 hidden items-start justify-between gap-4 rounded-xl border-2 border-primary/40 bg-primary/5 p-4">
 			<div>
 				<p class="font-display text-sm font-bold">👋 ¿Primera vez aquí?</p>
@@ -723,6 +740,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 
 		</div>
 	</div>
+	<?php endif; // consola ?>
 
 		<?php
 		$cat_icons = [
@@ -738,9 +756,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 
 
 	<!-- ACCESO SECUNDARIO: EL CATÁLOGO POR CATEGORÍA — controlado por el mismo selector de modo -->
-	<div id="rau-cat-grid-wrap" class="hidden">
+	<div id="rau-cat-grid-wrap" class="<?php echo $rau_tool_actual ? '' : 'hidden'; ?>">
 
 		<!-- GRID DE CATEGORÍAS (pantalla de entrada) -->
+		<?php if ( ! $rau_tool_actual ) : // el catálogo completo, solo en la página principal ?>
 		<div id="rau-cat-grid" class="mt-6 space-y-5">
 			<?php foreach ( $tabs_by_cat as $cat_name => $cat_tabs ) : ?>
 			<div data-cat="<?php echo esc_attr( $cat_name ); ?>" data-label="<?php echo esc_attr( mb_strtolower( $cat_name . ' ' . implode( ' ', wp_list_pluck( $cat_tabs, 'label' ) ) ) ); ?>"
@@ -757,7 +776,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 							class="rau-fav-star flex items-center border-r border-border/70 px-2 text-sm text-muted-foreground hover:text-amber-400">☆</button>
 						<button type="button" data-tab="<?php echo esc_attr( $t['id'] ); ?>"
 							class="rau-tool-pill inline-flex items-center px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-ring">
-							<?php echo esc_html( $t['label'] ); ?>
+							<?php echo esc_html( $t['label'] ); ?><?php if ( ! empty( $t['externo'] ) ) : ?><span class="ml-1 text-muted-foreground" aria-label="(abre otro sitio)">↗</span><?php endif; ?>
 						</button>
 					</span>
 					<?php endforeach; ?>
@@ -766,6 +785,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 			<?php endforeach; ?>
 			<p id="rau-tool-noresults" class="hidden py-2 text-sm text-muted-foreground">No hay ninguna herramienta que coincida con esa búsqueda.</p>
 		</div>
+		<?php endif; ?>
 
 		<div id="rau-panel-storage" class="hidden" aria-hidden="true"></div>
 
@@ -786,6 +806,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 	</div><!-- /rau-cat-grid-wrap -->
 
 		<!-- DASHBOARD EN VIVO -->
+<?php if ( rau_herr_mostrar( 'dashboard' ) ) : ?>
 		<div id="panel-dashboard" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'dashboard' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 				<div>
@@ -891,8 +912,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 			</div>
 			<p class="mt-4 text-center font-mono text-[10px] text-muted-foreground">Propagación cada 30 min · SDR cada 2 min · Datos reutilizados de las demás herramientas de esta página</p>
 		</div>
+<?php endif; ?>
 
 		<!-- UTC -->
+<?php if ( rau_herr_mostrar( 'utc' ) ) : ?>
 		<div id="panel-utc" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'utc' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="grid gap-6 lg:grid-cols-2">
 				<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
@@ -938,8 +961,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- PROPAGACIÓN -->
+<?php if ( rau_herr_mostrar( 'prop' ) ) : ?>
 		<div id="panel-prop" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'prop' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Condiciones actuales</p>
@@ -1006,8 +1031,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- ALERTAS DE BANDA ABIERTA -->
+<?php if ( rau_herr_mostrar( 'bandalert' ) ) : ?>
 		<div id="panel-bandalert" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'bandalert' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Condiciones por banda</p>
@@ -1033,9 +1060,11 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- ANTENAS -->
 				<!-- Panel calculadoras unificado -->
+<?php if ( rau_herr_mostrar( 'calc' ) ) : ?>
 		<div id="panel-calc" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'calc' ) ); ?>" class="rau-panel" style="display:none">
 		<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Herramientas técnicas</p>
@@ -1265,8 +1294,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 
 		</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CONVERSOR RF -->
+<?php if ( rau_herr_mostrar( 'rfconv' ) ) : ?>
 		<div id="panel-rfconv" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'rfconv' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Unidades de RF</p>
@@ -1314,8 +1345,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- HISTORIAL SFI/K -->
+<?php if ( rau_herr_mostrar( 'sfihist' ) ) : ?>
 		<div id="panel-sfihist" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'sfihist' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Tendencia solar</p>
@@ -1326,8 +1359,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- GRAYLINE -->
+<?php if ( rau_herr_mostrar( 'grayline' ) ) : ?>
 		<div id="panel-grayline" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'grayline' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Propagación por terminador</p>
@@ -1348,8 +1383,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<p class="mt-4 text-xs text-muted-foreground">La ventana útil suele ser ± 30-60 minutos alrededor de estas horas. Calculado para Medellín (6.24°N, 75.58°O) — variará algo según tu ubicación exacta.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- FASE LUNAR (EME) -->
+<?php if ( rau_herr_mostrar( 'luna' ) ) : ?>
 		<div id="panel-luna" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'luna' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Moonbounce</p>
@@ -1365,8 +1402,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- GLOSARIO -->
+<?php if ( rau_herr_mostrar( 'glosario' ) ) : ?>
 		<div id="panel-glosario" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'glosario' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Para quienes llegan a RAU</p>
@@ -1377,8 +1416,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<div id="glo-lista" class="grid gap-3 sm:grid-cols-2"></div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CÓDIGO DE COLORES -->
+<?php if ( rau_herr_mostrar( 'colores' ) ) : ?>
 		<div id="panel-colores" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'colores' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Componentes electrónicos</p>
@@ -1418,8 +1459,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- AUTONOMÍA DE BATERÍA -->
+<?php if ( rau_herr_mostrar( 'bateria' ) ) : ?>
 		<div id="panel-bateria" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'bateria' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Operación portátil / POTA</p>
@@ -1457,8 +1500,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- ÁNGULO DE RADIACIÓN -->
+<?php if ( rau_herr_mostrar( 'angulo' ) ) : ?>
 		<div id="panel-angulo" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'angulo' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Altura sobre el suelo</p>
@@ -1503,8 +1548,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- AHORA MISMO, ¿QUÉ TRABAJO? -->
+<?php if ( rau_herr_mostrar( 'ahora' ) ) : ?>
 		<div id="panel-ahora" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'ahora' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Síntesis</p>
@@ -1550,8 +1597,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CONVERSOR DE COORDENADAS -->
+<?php if ( rau_herr_mostrar( 'coords' ) ) : ?>
 		<div id="panel-coords" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'coords' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Localizar</p>
@@ -1577,8 +1626,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<p class="mt-4 text-xs text-muted-foreground">MAGNA-SIRGAS, el datum oficial de Colombia, usa el elipsoide GRS80. Para el uso práctico coincide con WGS84 (las diferencias quedan por debajo del metro), así que las coordenadas UTM de aquí sirven para reportar posición. Para levantamientos topográficos o catastro, usa el software oficial del IGAC.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- DIAGNÓSTICO DE ROE -->
+<?php if ( rau_herr_mostrar( 'roe' ) ) : ?>
 		<div id="panel-roe" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'roe' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Diagnóstico</p>
@@ -1647,8 +1698,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- FRECUENCIAS DE EMERGENCIA -->
+<?php if ( rau_herr_mostrar( 'frecemerg' ) ) : ?>
 		<div id="panel-frecemerg" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'frecemerg' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-accent">Emergencias</p>
@@ -1703,8 +1756,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<div id="fe-aviso" class="mt-4 hidden rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-4 py-2 font-mono text-xs text-emerald-400"></div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- MENSAJE FORMAL ICS-213 -->
+<?php if ( rau_herr_mostrar( 'ics213' ) ) : ?>
 		<div id="panel-ics213" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'ics213' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-accent">Emergencias</p>
@@ -1774,8 +1829,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<p class="mt-4 text-xs text-muted-foreground">Se guarda en este navegador mientras escribes, así que si se corta la luz o recargas la página no pierdes el mensaje a medias. No se envía a ningún servidor.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- PERFIL DE TERRENO -->
+<?php if ( rau_herr_mostrar( 'terreno' ) ) : ?>
 		<div id="panel-terreno" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'terreno' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Localizar</p>
@@ -1825,8 +1882,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<p class="mt-4 text-xs text-muted-foreground">Las elevaciones las consulta tu navegador a la API pública de Open-Meteo, que usa el modelo digital de terreno de Copernicus (resolución de unos 90 m). Ese modelo describe el suelo desnudo: no incluye edificios ni vegetación, así que en ciudad el despeje real puede ser peor que el que se ve aquí. El cálculo usa radio terrestre efectivo 4/3, que es la refracción atmosférica estándar en VHF y UHF.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CALENDARIO DE CONCURSOS -->
+<?php if ( rau_herr_mostrar( 'concursos' ) ) : ?>
 		<div id="panel-concursos" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'concursos' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">No te enteres tarde</p>
@@ -1835,8 +1894,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				<div id="concursos-list" class="grid gap-3 sm:grid-cols-2"></div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- VALIDADOR DE LOG CABRILLO -->
+<?php if ( rau_herr_mostrar( 'cabrillo' ) ) : ?>
 		<div id="panel-cabrillo" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'cabrillo' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Antes de enviar tu log</p>
@@ -1860,8 +1921,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<div id="cab-resultado" class="mt-6 hidden"></div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- RADIOFAROS NCDXF/IARU -->
+<?php if ( rau_herr_mostrar( 'radiofaros' ) ) : ?>
 		<div id="panel-radiofaros" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'radiofaros' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Red internacional de radiofaros</p>
@@ -1887,8 +1950,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<div id="faro-proximos" class="space-y-1 font-mono text-sm"></div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CICLO SOLAR -->
+<?php if ( rau_herr_mostrar( 'ciclosolar' ) ) : ?>
 		<div id="panel-ciclosolar" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'ciclosolar' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Contexto de 11 años</p>
@@ -1913,8 +1978,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<p class="mt-4 text-xs text-muted-foreground">Máximo solar declarado oficialmente por NASA/NOAA: 15 de octubre de 2024. Próximo mínimo estimado: entre 2029 y 2032 (rango oficial del panel de predicción).</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- PREDICTOR DE APAGÓN HF -->
+<?php if ( rau_herr_mostrar( 'apagon' ) ) : ?>
 		<div id="panel-apagon" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'apagon' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">A partir del X-ray actual</p>
@@ -1931,7 +1998,9 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</table>
 			</div>
 		</div>
+<?php endif; ?>
 		<!-- RADIALES DE TIERRA -->
+<?php if ( rau_herr_mostrar( 'radiales' ) ) : ?>
 		<div id="panel-radiales" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'radiales' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Vertical / GP</p>
@@ -1959,8 +2028,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</table>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- AYUDANTE DE SPLIT -->
+<?php if ( rau_herr_mostrar( 'split' ) ) : ?>
 		<div id="panel-split" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'split' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Pileups de DX</p>
@@ -1991,8 +2062,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<p class="mt-3 text-xs text-muted-foreground">"Escucha arriba" es lo más común (el DX está más solicitado y sube su ventana de escucha) — cambia a negativo si el DX dice que escucha abajo.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CONTADOR DE TASA DE QSO -->
+<?php if ( rau_herr_mostrar( 'qsorate' ) ) : ?>
 		<div id="panel-qsorate" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'qsorate' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Concursos</p>
@@ -2012,8 +2085,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- RASTREADOR DXCC/WAS -->
+<?php if ( rau_herr_mostrar( 'dxcc' ) ) : ?>
 		<div id="panel-dxcc" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'dxcc' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Progreso personal, guardado en tu navegador</p>
@@ -2042,8 +2117,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- PSK REPORTER -->
+<?php if ( rau_herr_mostrar( 'pskreporter' ) ) : ?>
 		<div id="panel-pskreporter" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'pskreporter' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Red pública en tiempo real</p>
@@ -2057,8 +2134,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<div id="psk-resultado" class="mt-4"></div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- REVERSE BEACON NETWORK -->
+<?php if ( rau_herr_mostrar( 'rbn' ) ) : ?>
 		<div id="panel-rbn" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'rbn' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Para CW y RTTY</p>
@@ -2072,8 +2151,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<p class="text-xs text-muted-foreground">RBN no tiene una API pública estable para embeber resultados aquí — te llevamos directo a su buscador oficial con tu indicativo ya puesto.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- APRS -->
+<?php if ( rau_herr_mostrar( 'aprs' ) ) : ?>
 		<div id="panel-aprs" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'aprs' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Estaciones y trackers en vivo</p>
@@ -2090,8 +2171,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<p class="mt-3 text-xs text-muted-foreground">aprs.fi requiere una clave de API gratuita para embeber datos directamente — por ahora te llevamos a su mapa oficial, ya centrado en la zona.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- SMITH CHART -->
+<?php if ( rau_herr_mostrar( 'smith' ) ) : ?>
 		<div id="panel-smith" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'smith' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Adaptación de impedancia</p>
@@ -2116,8 +2199,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- TARJETA DE CAMPO -->
+<?php if ( rau_herr_mostrar( 'tarjeta' ) ) : ?>
 		<div id="panel-tarjeta" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'tarjeta' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Para llevar impresa</p>
@@ -2156,21 +2241,25 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- BRANDMEISTER LAST HEARD -->
+<?php if ( rau_herr_mostrar( 'brandmeister' ) ) : ?>
 		<div id="panel-brandmeister" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'brandmeister' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Red DMR mundial</p>
 				<h2 class="mb-2 font-display text-2xl font-bold">DMR BrandMeister en vivo</h2>
-				<p class="mb-6 text-sm text-muted-foreground">Ve en vivo la actividad reciente de cualquier talkgroup o indicativo en la red DMR BrandMeister — la más grande del mundo.</p>
-
-				<div class="flex gap-2">
-					<input aria-label="Indicativo o talkgroup (ej. 214 para Colombia)" type="text" id="bm-buscar" placeholder="Indicativo o talkgroup (ej. 214 para Colombia)" class="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-					<a id="bm-link" href="https://brandmeister.network/?page=lh" target="_blank" rel="noopener" class="shrink-0 inline-flex items-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Abrir →</a>
+				<p class="mb-5 text-sm text-muted-foreground">Quién está saliendo al aire ahora en la red DMR BrandMeister. Por defecto, el talkgroup nacional de Colombia (TG 732); escribe otro talkgroup o un indicativo para seguirlo.</p>
+				<div class="flex flex-wrap gap-2">
+					<input aria-label="Talkgroup o indicativo a seguir" type="text" id="bm-buscar" value="732" placeholder="Talkgroup (732 Colombia) o indicativo" class="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+					<a id="bm-link" href="https://brandmeister.network/?page=lh" target="_blank" rel="noopener" class="shrink-0 inline-flex items-center rounded-md border border-border/70 px-4 py-2 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary">BrandMeister ↗</a>
 				</div>
-				<p class="mt-3 text-xs text-muted-foreground">BrandMeister transmite su Last Heard por WebSocket en tiempo real, no por una simple consulta pública — te llevamos directo a su panel oficial, ya con tu búsqueda lista.</p>
+				<p id="bm-estado" class="mt-3 font-mono text-xs text-muted-foreground" aria-live="polite">Conectando con BrandMeister…</p>
+				<div id="bm-lista" class="mt-2 divide-y divide-border/40 rounded-xl border border-border/70"></div>
+				<p class="mt-3 text-xs text-muted-foreground">Cada fila es alguien que empezó a transmitir mientras esta página está abierta (BrandMeister no publica un historial sin cuenta). Talkgroups útiles: 732 Colombia, 7321 a 7329 regionales, 91 mundial.</p>
 			</div>
 		</div>
+<?php endif; ?>
 
 
 
@@ -2178,6 +2267,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 
 
 		<!-- APERTURAS DESDE COLOMBIA -->
+<?php if ( rau_herr_mostrar( 'aperturas' ) ) : ?>
 		<div id="panel-aperturas" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'aperturas' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-5 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-sky-400">Propagación medida · HK4RAU</p>
@@ -2203,8 +2293,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				<p id="ap-nota" class="mt-4 text-xs text-muted-foreground"></p>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- RECEPTOR KIWISDR -->
+<?php if ( rau_herr_mostrar( 'receptor' ) ) : ?>
 		<div id="panel-receptor" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'receptor' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="mb-4">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Receptor SDR · <?php echo esc_html( rau_sdr_lugar() ); ?></p>
@@ -2213,8 +2305,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 			</div>
 			<div id="panel-receptor-slot"><?php require_once get_template_directory() . '/inc/receptor-kiwi.php'; rau_receptor_kiwi(); ?></div>
 		</div>
+<?php endif; ?>
 
 		<!-- RECORDATORIO DE LICENCIA -->
+<?php if ( rau_herr_mostrar( 'licencia' ) ) : ?>
 		<div id="panel-licencia" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'licencia' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Trámites RABCA</p>
@@ -2233,8 +2327,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- VERIFICADOR DE DIPLOMAS -->
+<?php if ( rau_herr_mostrar( 'diplomas' ) ) : ?>
 		<div id="panel-diplomas" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'diplomas' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Verificación pública</p>
@@ -2249,8 +2345,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- MAIDENHEAD -->
+<?php if ( rau_herr_mostrar( 'maidenhead' ) ) : ?>
 		<div id="panel-maidenhead" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'maidenhead' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Localizador geográfico</p>
@@ -2304,8 +2402,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- PREFIJOS -->
+<?php if ( rau_herr_mostrar( 'prefijos' ) ) : ?>
 		<div id="panel-prefijos" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'prefijos' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Identificación de indicativos</p>
@@ -2371,8 +2471,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- LOCALIZADOR DE INDICATIVO -->
+<?php if ( rau_herr_mostrar( 'indicativo' ) ) : ?>
 		<div id="panel-indicativo" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'indicativo' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Identificación de indicativos</p>
@@ -2418,8 +2520,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CTCSS -->
+<?php if ( rau_herr_mostrar( 'ctcss' ) ) : ?>
 		<div id="panel-ctcss" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'ctcss' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Repetidores y canales</p>
@@ -2490,8 +2594,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 				</div>
 			</div>
 		</div>
+<?php endif; ?>
 
 		<!-- CW -->
+<?php if ( rau_herr_mostrar( 'cw' ) ) : ?>
 		<div id="panel-cw" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'cw' ) ); ?>" class="rau-panel" style="display:none">
 		<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Telegrafía</p>
@@ -2615,6 +2721,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 
 		</div>
 		</div>
+<?php endif; ?>
 	</div>
 
 
@@ -2627,6 +2734,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 <!-- ═══════════════════════════════════════════════════════
      PANEL: Azimuth y distancia entre grid squares
 ═══════════════════════════════════════════════════════ -->
+<?php if ( rau_herr_mostrar( 'azimuth' ) ) : ?>
 <div id="panel-azimuth" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'azimuth' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Antenas direccionales</p>
@@ -2652,8 +2760,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- COBERTURA DE REPETIDOR -->
+<?php if ( rau_herr_mostrar( 'cobertura' ) ) : ?>
 <div id="panel-cobertura" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'cobertura' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Línea de vista VHF/UHF</p>
@@ -2709,8 +2819,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- FRECUENCIAS DE SATÉLITES -->
+<?php if ( rau_herr_mostrar( 'satfreq' ) ) : ?>
 <div id="panel-satfreq" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'satfreq' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Satélites de radioaficionados</p>
@@ -2752,8 +2864,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		<p class="mt-3 text-xs text-muted-foreground">Fuente: <a href="https://www.amsat.org/live-fm-satellites/" target="_blank" rel="noopener" class="text-primary hover:underline">AMSAT — Live FM Satellites</a>. Los satélites de radioaficionados cambian de estado con frecuencia (baterías, eclipses, actividad programada) — esta tabla es una referencia, no un estado en vivo.</p>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- DOPPLER -->
+<?php if ( rau_herr_mostrar( 'doppler' ) ) : ?>
 <div id="panel-doppler" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'doppler' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Corrección de frecuencia</p>
@@ -2797,8 +2911,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- PREDICCIÓN DE PASADAS -->
+<?php if ( rau_herr_mostrar( 'satpass' ) ) : ?>
 <div id="panel-satpass" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'satpass' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Mecánica orbital</p>
@@ -2845,10 +2961,12 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- ═══════════════════════════════════════════════════════
      PANEL: Bandas Colombia
 ═══════════════════════════════════════════════════════ -->
+<?php if ( rau_herr_mostrar( 'bandas' ) ) : ?>
 <div id="panel-bandas" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'bandas' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Normativa MinTIC</p>
@@ -2955,8 +3073,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		<p class="mt-3 text-xs text-muted-foreground">* Tabla de referencia rápida. Los rangos y potencias pueden cambiar por actualizaciones normativas — confirma siempre contra el <a href="https://normograma.mintic.gov.co/mintic/compilacion/docs/decreto_1078_2015.htm" target="_blank" rel="noopener" class="text-primary hover:underline">Decreto 1078 de 2015</a> vigente (Título 5, Parte 2, Libro 2) antes de transmitir.</p>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- PLAN DE BANDAS VISUAL -->
+<?php if ( rau_herr_mostrar( 'planbandas' ) ) : ?>
 <div id="panel-planbandas" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'planbandas' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Mismos datos, vista visual</p>
@@ -2972,6 +3092,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		<div id="pb-tooltip" class="mt-4 hidden rounded-xl border border-border/70 bg-background p-4 text-sm"></div>
 	</div>
 </div>
+<?php endif; ?>
 
 
 
@@ -2979,6 +3100,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 <!-- ═══════════════════════════════════════════════════════
      PANEL: Reportes RST
 ═══════════════════════════════════════════════════════ -->
+<?php if ( rau_herr_mostrar( 'rst' ) ) : ?>
 <div id="panel-rst" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'rst' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Reportes de señal</p>
@@ -3050,10 +3172,12 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- ═══════════════════════════════════════════════════════
      PANEL: Código Q
 ═══════════════════════════════════════════════════════ -->
+<?php if ( rau_herr_mostrar( 'codigosq' ) ) : ?>
 <div id="panel-codigosq" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'codigosq' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Referencia operativa</p>
@@ -3075,12 +3199,14 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- ═══════════════════════════════════════════════════════
      PANEL: POTA Colombia
 ═══════════════════════════════════════════════════════ -->
 
 		<!-- Panel Alfabeto Fonético -->
+<?php if ( rau_herr_mostrar( 'fonetico' ) ) : ?>
 		<div id="panel-fonetico" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'fonetico' ) ); ?>" class="rau-panel" style="display:none">
 		<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">OTAN / ICAO</p>
@@ -3143,7 +3269,9 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 			<p class="mt-4 text-xs text-muted-foreground">▶ Haz clic en cualquier tarjeta para escuchar la pronunciación usando síntesis de voz del navegador (Web Speech API). La pronunciación varía según el idioma configurado en tu sistema.</p>
 		</div>
 		</div>
+<?php endif; ?>
 <!-- PANEL: Bandas WARC -->
+<?php if ( rau_herr_mostrar( 'warc' ) ) : ?>
 <div id="panel-warc" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'warc' ) ); ?>" class="rau-panel" style="display:none">
 <div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 	<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Bandas especiales</p>
@@ -3171,8 +3299,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 	</div>
 </div>
 </div>
+<?php endif; ?>
 
 <!-- PANEL: Frecuencias de Emergencia -->
+<?php if ( rau_herr_mostrar( 'emergencia' ) ) : ?>
 <div id="panel-emergencia" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'emergencia' ) ); ?>" class="rau-panel" style="display:none">
 <div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 	<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-accent">Red de emergencia</p>
@@ -3235,8 +3365,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 	</div>
 </div>
 </div>
+<?php endif; ?>
 
 <!-- PANEL: Modos Digitales -->
+<?php if ( rau_herr_mostrar( 'modos' ) ) : ?>
 <div id="panel-modos" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'modos' ) ); ?>" class="rau-panel" style="display:none">
 <div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 	<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Comunicaciones digitales</p>
@@ -3274,8 +3406,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 	</div>
 </div>
 </div>
+<?php endif; ?>
 
 <!-- PANEL: QSL Digital -->
+<?php if ( rau_herr_mostrar( 'qsl' ) ) : ?>
 <div id="panel-qsl" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'qsl' ) ); ?>" class="rau-panel" style="display:none">
 <div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 	<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Confirmación de contacto</p>
@@ -3354,8 +3488,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 	</div>
 </div>
 </div>
+<?php endif; ?>
 
 <!-- CERTIFICADO DE PARTICIPACIÓN -->
+<?php if ( rau_herr_mostrar( 'certificado' ) ) : ?>
 <div id="panel-certificado" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'certificado' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Reconocimiento de actividades</p>
@@ -3392,8 +3528,10 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- PANEL: Log ADIF -->
+<?php if ( rau_herr_mostrar( 'log' ) ) : ?>
 <div id="panel-log" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'log' ) ); ?>" class="rau-panel" style="display:none">
 <div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 	<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Registro de QSOs</p>
@@ -3446,7 +3584,9 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 	<p class="mt-3 text-xs text-muted-foreground">Los QSOs se guardan en memoria durante esta sesión. Exporta el ADIF antes de cerrar el navegador.</p>
 </div>
 </div>
+<?php endif; ?>
 
+<?php if ( rau_herr_mostrar( 'pota' ) ) : ?>
 <div id="panel-pota" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'pota' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Parks on the Air</p>
@@ -3469,49 +3609,38 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- ═══════════════════════════════════════════════════════
      PANEL: DX Spots
 ═══════════════════════════════════════════════════════ -->
+<?php if ( rau_herr_mostrar( 'dx' ) ) : ?>
 <div id="panel-dx" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'dx' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">DX Cluster</p>
 		<h2 class="mb-2 font-display text-2xl font-bold">DX Spots en Vivo</h2>
-		<p class="mb-5 text-sm text-muted-foreground">Spots en tiempo real del cluster DXheat.com — actualización automática cada 60 segundos.</p>
-
-		<!-- Widget oficial DXheat (iframe HTTPS, sin restricciones CORS) -->
-		<div class="overflow-hidden rounded-xl border border-border/70" style="height:520px;">
-			<iframe
-				data-src="https://dxheat.com/dxc/?spotted_filter=0&band_filter=ALL&limit=50&theme=dark&hide_header=1"
-				width="100%"
-				height="520"
-				frameborder="0"
-				scrolling="auto"
-				title="DX Spots en vivo — DXheat"
-				loading="lazy"
-				style="display:block;width:100%;height:520px;border:none;background:#0d1321;">
-			</iframe>
+		<p class="mb-4 text-sm text-muted-foreground">Las estaciones que la comunidad está reportando en el cluster DX, con país y distancia desde Colombia. Toca 🎧 para oírla en el receptor del club o 📝 para anotarla en tu Log ADIF. Se actualiza sola cada minuto.</p>
+		<div class="mb-3 flex flex-wrap items-center gap-2">
+			<div id="dxl-bandas" class="flex flex-wrap gap-1.5" role="group" aria-label="Banda"></div>
+			<input type="search" id="dxl-buscar" aria-label="Buscar indicativo, país o comentario" placeholder="Indicativo, país o comentario…" class="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
 		</div>
-
+		<p id="dxl-estado" class="mb-2 font-mono text-xs text-muted-foreground" aria-live="polite">Consultando el cluster…</p>
+		<div id="dxl-lista" class="divide-y divide-border/40 rounded-xl border border-border/70"></div>
 		<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-			<p class="text-xs text-muted-foreground">Fuente: <a href="https://dxheat.com" target="_blank" rel="noopener" class="text-primary hover:underline">DXheat.com</a> · Los spots son aportados por la comunidad de radioaficionados.</p>
+			<p class="text-xs text-muted-foreground">Fuente: cluster DX vía <a href="https://dxheat.com" target="_blank" rel="noopener" class="text-primary hover:underline">DXheat</a>. Los spots los aporta la comunidad; que alguien reporte una estación no garantiza que se oiga desde aquí.</p>
 			<div class="flex gap-2">
-				<a href="https://dxheat.com" target="_blank" rel="noopener"
-					class="inline-flex items-center gap-1.5 rounded-md border border-border/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary">
-					Ver en DXheat →
-				</a>
-				<a href="https://www.dxsummit.fi" target="_blank" rel="noopener"
-					class="inline-flex items-center gap-1.5 rounded-md border border-border/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary">
-					DX Summit →
-				</a>
+				<a href="https://dxheat.com" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-md border border-border/70 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/50 hover:text-primary">DXheat ↗</a>
+				<a href="https://www.dxsummit.fi" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-md border border-border/70 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/50 hover:text-primary">DX Summit ↗</a>
 			</div>
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- ═══════════════════════════════════════════════════════
      PANEL: Examen RABCA
 ═══════════════════════════════════════════════════════ -->
+<?php if ( rau_herr_mostrar( 'examen' ) ) : ?>
 <div id="panel-examen" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'examen' ) ); ?>" class="rau-panel" style="display:none">
 	<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Licencia MinTIC</p>
@@ -3555,6 +3684,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 
 
