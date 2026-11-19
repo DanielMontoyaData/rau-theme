@@ -1,0 +1,56 @@
+# Pruebas del tema en cada cambio: unidades sin servidor y, aparte, un WordPress de prueba con SQLite
+# donde corren las pruebas de PHP, de la API y de navegador (Playwright con Chromium).
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unidades:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: none
+      - name: Sintaxis, verificador y pruebas de unidades
+        run: bash rau-theme/tests/ci/todo.sh unidades
+
+  integracion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, gd, curl, zip, mbstring, intl
+          tools: none
+      - name: Playwright con Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: WordPress de prueba con el tema
+        run: bash rau-theme/tests/ci/montar-wp.sh "$RUNNER_TEMP/wp" rau-theme
+      - name: Pruebas de integración y de navegador
+        run: bash rau-theme/tests/ci/todo.sh integracion "$RUNNER_TEMP/wp/wordpress"
+      - name: Registro del servidor si algo falló
+        if: failure()
+        run: tail -n 80 "$RUNNER_TEMP/wp/servidor.log"

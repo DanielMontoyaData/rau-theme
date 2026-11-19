@@ -3,3 +3,7 @@ main = "kiwi-relay.js"
 # 2024-09-02 o posterior: desde esa fecha los Workers pueden conectarse a puertos como el 8073 del
 # receptor (antes hacía falta la marca allow_custom_ports, que con fechas nuevas da error).
 compatibility_date = "2025-01-15"
+
+# Despierta las tareas programadas de WordPress cada 5 minutos (función scheduled de kiwi-relay.js)
+[triggers]
+crons = ["*/5 * * * *"]

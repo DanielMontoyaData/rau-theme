@@ -1,0 +1,56 @@
+# Vigila el sitio cada 30 minutos. Si algo deja de responder abre un issue «Sitio: …» (GitHub avisa por
+# correo a quien vigila el repositorio) y lo cierra solo cuando vuelve. No usa ninguna clave: solo
+# consulta páginas públicas.
+# Ojo: GitHub solo corre los horarios del flujo que está en la rama principal.
+name: Monitoreo del sitio
+
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Revisar el sitio, la API y los datos en vivo
+        id: rev
+        run: |
+          set -u
+          BASE=https://hk4rau.com; malos=""
+          chk() { # nombre url patrón
+            local cuerpo cod
+            cuerpo=$(curl -sS -L --max-time 30 -A "RAU-monitoreo/1.0" -w '\n%{http_code}' "$2") || { malos="$malos\n- $1: no respondió"; return; }
+            cod=$(printf '%s' "$cuerpo" | tail -n1)
+            [ "$cod" = 200 ] || { malos="$malos\n- $1: HTTP $cod"; return; }
+            printf '%s' "$cuerpo" | grep -q -- "$3" || malos="$malos\n- $1: respondió, pero sin el contenido esperado"
+          }
+          chk "Portada" "$BASE/" "rau-theme/style.css"
+          chk "Herramientas" "$BASE/herramientas/" "rau-tool-search"
+          chk "Centro de mando" "$BASE/emergencias/" "em-app"
+          chk "Módem sin datos" "$BASE/modem/" "modem"
+          chk "API de propagación" "$BASE/wp-json/rau/v1/propagacion" '"actualizado"'
+          # Los datos en vivo deben ser de las últimas 2 horas (si no, el cron del sitio está quieto)
+          act=$(curl -s --max-time 30 "$BASE/wp-json/rau/v1/propagacion" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("actualizado") or 0)' 2>/dev/null || echo 0)
+          [ $(( $(date +%s) - act )) -lt 7200 ] || malos="$malos\n- Propagación: el último dato tiene más de 2 horas (¿se detuvieron las tareas programadas?)"
+          printf 'malos<<FIN\n%b\nFIN\n' "$malos" >> "$GITHUB_OUTPUT"
+      - name: Abrir, actualizar o cerrar el aviso
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MALOS: ${{ steps.rev.outputs.malos }}
+        run: |
+          titulo="Sitio: algo dejó de responder"
+          num=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"$titulo\" in:title" --json number -q '.[0].number')
+          ahora=$(date -u '+%Y-%m-%d %H:%M UTC')
+          if [ -n "$(printf '%s' "$MALOS" | tr -d '[:space:]')" ]; then
+            cuerpo=$(printf 'Revisión de %s:\n%s\n\nSe cierra solo cuando todo vuelve a responder.' "$ahora" "$MALOS")
+            if [ -n "$num" ]; then gh issue comment "$num" -R "$GITHUB_REPOSITORY" -b "$cuerpo"; else gh issue create -R "$GITHUB_REPOSITORY" -t "$titulo" -b "$cuerpo"; fi
+            exit 1
+          elif [ -n "$num" ]; then
+            gh issue close "$num" -R "$GITHUB_REPOSITORY" -c "Todo responde otra vez ($ahora)."
+          fi

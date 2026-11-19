@@ -1642,6 +1642,8 @@ function rauFaseLunar(frac){
 						}
 						el.innerHTML=json.data.slice(0,5).map(function(a){
 							var limpio=a.contexto.replace(new RegExp(a.satelite.replace('-','-0?'),'i'),'').trim();
+							// hams.at responde en inglés («in 2d 23:58»)
+							limpio=limpio.replace(/\bin\s+(\d+)d\b/i,'en $1 d').replace(/^in\s+/i,'en ').replace(/\bnow\b/i,'ahora');
 							var valorDropdown = (a.satelite==='ISS') ? 'ZARYA' : a.satelite;
 							return '<div class="font-mono text-[8px] text-muted-foreground"><button type="button" class="rau-hamsat-seleccionar text-primary font-bold hover:underline" data-valor="'+valorDropdown+'">🛰️ '+a.satelite+'</button> — '+limpio+'</div>';
 						}).join('');
@@ -2185,7 +2187,7 @@ function rauFaseLunar(frac){
 		// Devolver todos los paneles abiertos a su almacenamiento (nunca se destruyen, solo se mueven)
 		Array.prototype.slice.call(panelsEl.children).forEach(function(p){ storageEl.appendChild(p); });
 		if(!opts.skipHash) history.replaceState(null,'',BASE_URL);
-		vistaHerramienta(false); ubicarReceptor();
+		vistaHerramienta(false); ubicarReceptor(); encabezado(null);
 	}
 
 	// Los iframes de terceros llevan data-src y se cargan la primera vez que su panel se muestra.
@@ -2271,6 +2273,30 @@ function rauFaseLunar(frac){
 		return true;
 	}
 
+	/* Qué hace cada herramienta, en una línea: la primera frase de la explicación de su propio panel.
+	   Se muestra en los resultados y al pasar sobre el catálogo, y también cuenta para la búsqueda
+	   («impedancia» encuentra la carta de Smith aunque la palabra no esté en el nombre). */
+	var DESC_FIJA = {"ahora": "Junta propagación, línea gris y actividad en una sola respuesta: qué trabajar ya.", "utc": "La hora UTC y la local, para registrar contactos y entrar a tiempo a una malla.", "prop": "Índices solares, bandas abiertas y alertas de banda, con su historial.", "grayline": "Dónde amanece y anochece ahora: la franja que favorece el DX en bandas bajas.", "luna": "Fase y posición de la Luna para rebote lunar (EME).", "calc": "Largo de antenas (dipolo, vertical, Yagi, loop), cable coaxial, potencia y dB.", "rfconv": "Convierte entre dBm, vatios, voltios y unidades S.", "colores": "Valor de una resistencia por sus bandas de color, y al revés.", "roe": "Cuéntale cómo se comporta tu ROE y te dice la causa probable.", "bateria": "Cuántas horas te dura la batería en una activación según cuánto transmites.", "angulo": "Hacia qué ángulo sale tu señal según la altura de la antena: NVIS o DX.", "maidenhead": "Tu cuadrícula (locator), y distancia y rumbo hacia otra estación.", "terreno": "Perfil del terreno entre dos puntos para saber si hay línea de vista.", "cobertura": "Desde dónde se alcanza una repetidora, sobre el mapa.", "satpass": "Cuándo pasan los satélites de aficionado, sus frecuencias y el Doppler.", "coords": "Convierte coordenadas entre grados, minutos, segundos y cuadrícula.", "prefijos": "De qué país es un indicativo por su prefijo.", "ics213": "Redacta y comparte un mensaje formal ICS-213 para tráfico de emergencia.", "frecemerg": "Frecuencias de emergencia y de las redes nacionales e internacionales.", "emergencia": "Frecuencias designadas para tráfico de emergencia y socorro.", "ctcss": "Tonos CTCSS y códigos DCS para abrir repetidoras.", "codigosq": "Código Q, escala RST y alfabeto fonético.", "glosario": "Términos de radioafición explicados en español.", "cw": "Aprende y practica telegrafía: copia, velocidad y abreviaturas.", "modos": "Cómo suenan y para qué sirven FT8, JS8, RTTY, PSK31 y otros modos.", "qsl": "Diseña tu tarjeta QSL digital y descárgala para enviarla.", "certificado": "Certificado descargable por participar en un simulacro, malla o Field Day de RAU.", "log": "Anota tus contactos de una sesión y expórtalos en ADIF para WSJT-X, Log4OM o QRZ.", "pota": "Activadores POTA de Colombia en este momento.", "dx": "Estaciones reportadas ahora en el cluster DX, Reverse Beacon y PSK Reporter.", "concursos": "Los concursos internacionales más importantes y cuándo caen este año.", "cabrillo": "Revisa tu log Cabrillo antes de enviarlo a un concurso.", "radiales": "Cuántos radiales poner bajo una vertical y de qué largo.", "split": "Ayuda para trabajar a una estación DX que escucha en otra frecuencia.", "qsorate": "Cuántos contactos por hora llevas durante un concurso.", "dxcc": "Qué países (DXCC) y estados (WAS) llevas confirmados.", "aprs": "Estaciones APRS de Colombia en el mapa.", "smith": "Ubica tu impedancia en la carta de Smith y calcula la ROE.", "tarjeta": "Una hoja para imprimir con frecuencias, alfabeto fonético y código Q.", "receptor": "Escucha el receptor del club y decodifica FT8, CW, JS8, RTTY y más.", "aperturas": "Qué tan seguido el receptor del club oye cada región, por banda y hora.", "radiofaros": "Qué radiofaro internacional transmite ahora en cada banda, para probar propagación.", "brandmeister": "Actividad en vivo de cualquier talkgroup o indicativo en la red DMR BrandMeister.", "planbandas": "Plan de bandas de Colombia: segmentos, modos y bandas WARC.", "examen": "Practica con preguntas tipo examen para la licencia colombiana.", "licencia": "Guarda la fecha de vencimiento de tu licencia y descarga un recordatorio.", "diplomas": "Verifica la autenticidad de un diploma emitido por RAU."};
+	var DESC_CACHE = {};
+	function desc(id){
+		if(id in DESC_CACHE) return DESC_CACHE[id];
+		if(DESC_FIJA[id]) return DESC_CACHE[id]=DESC_FIJA[id];
+		var p=null, panel=document.getElementById('panel-'+id);
+		if(panel) p=[].find.call(panel.querySelectorAll('p'), function(x){ return x.textContent.trim().length>30; });
+		var t=p ? p.textContent.replace(/\s+/g,' ').trim() : '';
+		var fr=t.match(/[^.!?]+[.!?]+(\s|$)/g)||[t], r=''; for(var i=0;i<fr.length && r.length<60;i++) r+=fr[i]; t=r.trim(); if(t.length>110) t=t.slice(0,107).replace(/\s\S*$/,'')+'…';
+		return DESC_CACHE[id]=t;
+	}
+	document.querySelectorAll('.rau-tool-pill').forEach(function(b){ var d=desc(b.dataset.tab); if(d) b.title=d; });
+	/* Encabezado de la página: en la vista de una herramienta, su nombre y qué hace; en la consola, el
+	   texto general. Antes el H1 cambiaba solo al cargar /herramientas/{id}/ y el párrafo de la consola
+	   seguía debajo del nombre de cualquier herramienta. */
+	function encabezado(id){
+		var t=id && TOOLS_BY_ID[id], h=document.getElementById('rau-h1'), pre=document.getElementById('rau-h1-pre'), d=document.getElementById('rau-tool-desc');
+		if(h) h.textContent=t ? t.label : 'Herramientas de Radio';
+		if(pre) pre.textContent=t ? 'Herramientas de Radio · '+t.cat : 'Utilidades técnicas';
+		if(d){ d.textContent=t ? desc(id) : ''; d.classList.toggle('hidden', !t || !d.textContent); }
+	}
 	function openTool(id, opts){
 		opts = opts || {};
 		var t = TOOLS_BY_ID[id];
@@ -2278,6 +2304,7 @@ function rauFaseLunar(frac){
 		// «Dashboard en Vivo» quedó dentro del centro de mando: su dirección lleva a la consola
 		if(id==='dashboard'){ volverConsola(); return true; }
 		activateCategory(t.cat, {skipScroll:true, skipHash:true, solo:id});
+		encabezado(id);
 		// URL propia real (/herramientas/{id}/) — no un ancla. pushState para que
 		// atrás/adelante del navegador funcione como si fueran páginas distintas.
 		if(!opts.skipHash){
@@ -2510,7 +2537,7 @@ function rauFaseLunar(frac){
 	function buscar(q){
 		var pal = norm(q).split(/\s+/).filter(Boolean); if(!pal.length) return [];
 		return TOOLS.filter(function(t){ return t.id!=='dashboard'; }).map(function(t){
-			var nombre = norm(t.label), todo = nombre+' '+norm(t.cat)+' '+norm(CLAVES[t.id]||'')+' '+t.id, pts = 0;
+			var nombre = norm(t.label), todo = nombre+' '+norm(t.cat)+' '+norm(CLAVES[t.id]||'')+' '+t.id+' '+norm(desc(t.id)), pts = 0;
 			for(var i=0;i<pal.length;i++){
 				var w = pal[i];
 				if(todo.indexOf(w)<0) return null;
@@ -2523,7 +2550,8 @@ function rauFaseLunar(frac){
 	var selIdx = -1;
 	function marcar(){ if(!resultsEl) return; var it=resultsEl.querySelectorAll('.rau-search-item'); it.forEach(function(b,i){ b.classList.toggle('bg-muted/40', i===selIdx); b.setAttribute('aria-selected', i===selIdx); }); }
 	if(searchEl){
-		searchEl.setAttribute('placeholder', 'Buscar una herramienta… (atajo: /)');
+		// El atajo solo sirve con teclado: en el celular cortaba el texto y no aplicaba
+		searchEl.setAttribute('placeholder', window.matchMedia && matchMedia('(pointer: fine)').matches ? 'Buscar una herramienta… (atajo: /)' : 'Buscar una herramienta…');
 		searchEl.setAttribute('aria-controls', 'rau-search-results'); searchEl.setAttribute('aria-autocomplete', 'list');
 		if(resultsEl) resultsEl.setAttribute('role', 'listbox');
 		searchEl.addEventListener('input', function(){
@@ -2534,8 +2562,8 @@ function rauFaseLunar(frac){
 					var r = buscar(q).slice(0, 8);
 					resultsEl.innerHTML = r.length ? r.map(function(x){
 						var padre = x.abre!==x.t.id && TOOLS_BY_ID[x.abre] ? ' · en «'+TOOLS_BY_ID[x.abre].label+'»' : '';
-						return '<button type="button" role="option" data-tab="'+x.abre+'" class="rau-search-item flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted/40 border-b border-border/40 last:border-0">'
-							+'<span>'+x.t.label+'<span class="text-muted-foreground">'+padre+'</span></span>'
+						return '<button type="button" role="option" data-tab="'+x.abre+'" class="rau-search-item flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted/40 border-b border-border/40 last:border-0">'
+							+'<span class="min-w-0"><span class="block">'+x.t.label+'<span class="text-muted-foreground">'+padre+'</span></span>'+(desc(x.t.id)?'<span class="block truncate text-xs text-muted-foreground">'+desc(x.t.id).replace(/[<&]/g,'')+'</span>':'')+'</span>'
 							+'<span class="font-mono text-[10px] uppercase text-muted-foreground">'+x.t.cat+'</span></button>';
 					}).join('') : '<p class="px-4 py-3 text-sm text-muted-foreground">Sin resultados para «'+this.value.replace(/[<&]/g,'')+'»</p>';
 					resultsEl.classList.remove('hidden');
@@ -6885,7 +6913,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 			return '<button type="button" class="rau-banda-conteo flex flex-col items-center gap-0.5 rounded-md border px-0.5 py-1 font-mono text-[10px] '+(activa?'border-amber-400/70 text-amber-400':'border-border/60 text-muted-foreground hover:border-primary/40')+'" data-banda="'+b+'" aria-label="'+b+': '+n+' estaciones. Sintonizar">'
 				+'<span class="flex h-6 w-full items-end"><span class="w-full rounded-sm '+(activa?'bg-amber-400':'bg-primary/60')+'" style="height:'+alto+'%"></span></span>'+b+'<span>'+n+'</span></button>';
 		}).join('');
-		document.getElementById('consola-banda-nombre').textContent = filtro==='banda' && banda ? banda : 'todas las bandas';
+		document.getElementById('consola-banda-nombre').textContent = filtro==='banda' && banda ? banda : (filtro==='banda' ? 'todas las bandas (el receptor no está en una banda de aficionado)' : 'todas las bandas');
 		var vis=l.filter(function(s){ return filtro==='todas' || !banda || bandaDe(s.khz)===banda; })
 			.sort(function(a,b){ return (a.min==null?999:a.min)-(b.min==null?999:b.min); }).slice(0,40);
 		if(!vis.length){
@@ -6899,7 +6927,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 			return '<div class="flex items-center gap-2 border-b border-border/30 py-1 last:border-0">'
 				+'<span class="'+color+'" aria-hidden="true">▼</span>'
 				+'<div class="min-w-0 flex-1"><div class="flex items-baseline gap-2"><span class="font-bold text-foreground">'+esc(s.dx)+'</span><span class="text-primary">'+mhz+'</span>'+(s.modo?'<span class="text-[10px] text-muted-foreground">'+esc(s.modo)+'</span>':'')+'</div>'
-				+'<div class="truncate text-[10px] text-muted-foreground" title="'+esc(s.info)+'">'+esc(lugar)+'</div></div>'
+				+'<div class="text-[10px] text-muted-foreground sm:truncate" title="'+esc(s.info)+'">'+esc(lugar)+'</div></div>'
 				+'<button type="button" class="rau-escuchar shrink-0 rounded px-1.5 py-1 hover:bg-primary/15" data-khz="'+s.khz+'" data-modo="'+esc(s.modo)+'" title="Sintonizar en el receptor" aria-label="Escuchar '+esc(s.dx)+' en '+mhz+' MHz">🎧</button>'
 				+'<button type="button" class="rau-anotar shrink-0 rounded px-1.5 py-1 hover:bg-primary/15" data-dx="'+esc(s.dx)+'" data-mhz="'+mhz+'" data-modo="'+esc(s.modo)+'" title="Pasar a la bitácora" aria-label="Anotar '+esc(s.dx)+' en la bitácora">📝</button>'
 				+'<button type="button" class="rau-ubicar shrink-0 rounded px-1.5 py-1 hover:bg-primary/15" data-dx="'+esc(s.dx)+'" title="Ubicar en el mapa" aria-label="Ubicar '+esc(s.dx)+' en el mapa">📏</button>'
@@ -7172,11 +7200,15 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	var guardar=document.getElementById('bitacora-guardar');
 	if(guardar) guardar.addEventListener('click', function(){ setTimeout(function(){ if(fr){ fr.dataset.auto='1'; aplicar(window.RauRx && window.RauRx.estado()); } if(mo) mo.dataset.auto='1'; }, 0); });
 
+	// Las calculadoras de antena siguen al receptor solo en bandas de aficionado: una emisora de onda corta
+	// (11,85 MHz) no es una frecuencia para la que alguien vaya a cortar un dipolo.
+	var AFICIONADO=[[1800,2000],[3500,4000],[5351,5367],[7000,7300],[10100,10150],[14000,14350],[18068,18168],[21000,21450],[24890,24990],[28000,29700],[50000,54000]];
+	function esAficionado(k){ return AFICIONADO.some(function(x){ return k>=x[0] && k<=x[1]; }); }
 	function aplicar(d){
 		if(!d) return;
 		if(fr && fr.dataset.auto==='1' && document.activeElement!==fr) fr.value=(d.khz/1000).toFixed(3);
 		if(mo && mo.dataset.auto==='1' && aBitacora[d.modo]) mo.value=aBitacora[d.modo];
-		if(banco && document.activeElement!==banco && d.khz>=1800){ banco.value=(d.khz/1000).toFixed(3); banco.dispatchEvent(new Event('input')); }
+		if(banco && document.activeElement!==banco && esAficionado(d.khz)){ banco.value=(d.khz/1000).toFixed(3); banco.dispatchEvent(new Event('input')); }
 		var b=null; bandas.forEach(function(x){ if(d.khz>=x[1] && d.khz<=x[2]) b=x[0]; });
 		document.querySelectorAll('.rau-banda-tile').forEach(function(t){ t.classList.toggle('rau-banda-actual', t.dataset.banda===b); });
 	}
@@ -7260,6 +7292,15 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	resumen(); prellenar();
 })();
 
+/* ── «Ver las N herramientas»: abre el catálogo y baja hasta él ── */
+(function(){
+	var b=document.getElementById('rau-ir-catalogo'); if(!b) return;
+	b.addEventListener('click', function(){
+		var cat=document.querySelector('.consola-modo-btn[data-modo="catalogo"]'); if(cat) cat.click();
+		var ex=document.querySelector('.consola-modos'); if(ex) ex.scrollIntoView({block:'start', behavior:'smooth'});
+	});
+})();
+
 /* ── CENTRO DE MANDO: PESTAÑAS EN CELULAR Y ESTADO DEL RECEPTOR EN LA FRANJA SUPERIOR ── */
 (function(){
 	var cols=document.getElementById('consola-columnas'), nav=document.getElementById('consola-pestanas');
@@ -7267,7 +7308,7 @@ rauCuandoVisible('consola-wspr-lista', function(){
 	function ir(p){
 		if(p==='explorar'){
 			var cat=document.querySelector('.consola-modo-btn[data-modo="catalogo"]'); if(cat) cat.click();
-			var ex=document.getElementById('rau-explorar'); if(ex) ex.scrollIntoView({block:'start', behavior:'smooth'});
+			var ex=document.querySelector('.consola-modos'); if(ex) ex.scrollIntoView({block:'start', behavior:'smooth'});
 			return;
 		}
 		var cambia=cols.dataset.pestana!==p;

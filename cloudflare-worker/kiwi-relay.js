@@ -21,8 +21,15 @@ const RECEPTORES = {
 // interfaz del KiwiSDR servida por el Worker. Un cliente que no sea navegador puede falsear Origin;
 // esto solo evita que otras páginas gasten la cuota gratuita del Worker.
 const ORIGENES_PERMITIDOS = ['https://hk4rau.com', 'https://www.hk4rau.com'];
+const SITIO = 'https://hk4rau.com';
 
 export default {
+	// Cada 5 minutos (ver [triggers] en wrangler.toml) despierta las tareas programadas de WordPress:
+	// avisos por tiempo, propagación, PSK Reporter y limpiezas. Sin esto solo corrían cuando alguien
+	// visitaba el sitio, y de madrugada podían pasar horas.
+	async scheduled(evento, env, ctx) {
+		ctx.waitUntil(fetch(SITIO + '/wp-cron.php?doing_wp_cron=' + Date.now() / 1000, { headers: { 'User-Agent': 'RAU-cron/1.0 (Cloudflare Worker)' } }));
+	},
 	async fetch(request) {
 		const url = new URL(request.url);
 		const esWebSocket = (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket';

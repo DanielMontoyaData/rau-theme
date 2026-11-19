@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 get_header();
 
 $tabs = rau_get_herramientas_tabs();
+$n_visibles = count( array_filter( $tabs, fn( $t ) => empty( $t['oculta'] ) ) );
 $repetidores_consola = rau_get_repeaters_data();
 $tabs_by_cat_sin_orden = [];
 foreach ( $tabs as $t ) {
@@ -34,12 +35,44 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 	// descripción, pero compartían "Herramientas de Radio" como encabezado principal.
 	$tool_h1 = get_query_var( 'rau_tool' ) ? rau_find_tool_by_id( sanitize_title( get_query_var( 'rau_tool' ) ) ) : null;
 	?>
-	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary"><?php echo $tool_h1 ? 'Herramientas de Radio' : 'Utilidades técnicas'; ?></p>
-	<h1 class="mb-2 font-display text-3xl font-bold sm:text-4xl"><?php echo esc_html( $tool_h1 ? $tool_h1['label'] : 'Herramientas de Radio' ); ?></h1>
-	<p class="mb-6 max-w-2xl text-muted-foreground">Escucha el receptor del club, mira cómo están las bandas y lleva tu bitácora, todo en un mismo lugar. Y <?php echo count( $tabs ); ?> herramientas más en el catálogo.</p>
+	<p id="rau-h1-pre" class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary"><?php echo $tool_h1 ? 'Herramientas de Radio · ' . esc_html( $tool_h1['cat'] ) : 'Utilidades técnicas'; ?></p>
+	<h1 id="rau-h1" class="mb-2 font-display text-3xl font-bold sm:text-4xl"><?php echo esc_html( $tool_h1 ? $tool_h1['label'] : 'Herramientas de Radio' ); ?></h1>
+	<p id="rau-tool-desc" class="mb-6 hidden max-w-2xl text-muted-foreground"></p>
+	<p id="rau-intro" class="mb-6 max-w-2xl text-muted-foreground">Escucha el receptor del club, mira cómo están las bandas y lleva tu bitácora, todo en un mismo lugar. Y <?php echo (int) $n_visibles; ?> herramientas más en el catálogo: búscalas aquí abajo.</p>
 
 	<!-- ── TABS ─────────────────────────────────────────────── -->
 	<div id="rau-tools">
+
+	<?php // 19.59.0: el buscador y los accesos van arriba. Estaban debajo del centro de mando, a más de
+	      // 4.000 px en computador y 13.000 en celular, y quien venía a buscar una calculadora no los encontraba. ?>
+		<div id="rau-explorar" class="mb-6 rounded-2xl border border-border/60 bg-card/40 p-4 sm:p-5">
+			<div class="relative mb-4 rau-mb-0-herr">
+				<svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="M21 21l-4.35-4.35"></path></svg>
+				<input aria-label="Buscar una herramienta" type="search" id="rau-tool-search" autocomplete="off" placeholder="Buscar una herramienta…"
+					class="w-full rounded-xl border border-input bg-background py-3 pl-11 pr-4 text-base focus:outline-none focus:ring-2 focus:ring-ring">
+				<div id="rau-search-results" class="hidden absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg"></div>
+			</div>
+
+			<p class="rau-solo-consola mb-2 font-mono text-xs font-semibold uppercase tracking-wider text-primary">Accesos rápidos</p>
+			<div class="rau-solo-consola flex flex-wrap gap-2">
+				<?php foreach ( [ 'receptor', 'aperturas', 'qsl', 'cobertura' ] as $qid ) :
+					$qt = current( array_filter( $tabs, fn( $x ) => $x['id'] === $qid ) );
+					if ( ! $qt ) continue;
+				?>
+				<button type="button" data-tab="<?php echo esc_attr( $qt['id'] ); ?>" data-cat="<?php echo esc_attr( $qt['cat'] ); ?>"
+					class="rau-quick-chip inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background border-primary/40 bg-primary/10 text-primary hover:bg-primary/20">
+					<?php echo esc_html( $qt['label'] ); ?>
+				</button>
+				<?php endforeach; ?>
+				<button type="button" id="rau-ir-catalogo" class="inline-flex items-center rounded-lg border border-border/70 bg-background px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:border-primary/40 hover:text-primary">📂 Ver las <?php echo (int) $n_visibles; ?> herramientas ↓</button>
+			</div>
+
+			<!-- FAVORITOS (poblado por JS desde localStorage, sin cuenta) -->
+			<div id="rau-favoritos" class="rau-solo-consola mt-5 hidden border-t border-border/50 pt-4">
+				<p class="mb-2 font-mono text-xs font-semibold uppercase tracking-wider text-amber-400">★ Tus favoritas</p>
+				<div id="rau-favoritos-lista" class="flex flex-wrap gap-2"></div>
+			</div>
+		</div>
 
 	<div id="rau-tour-banner" class="rau-solo-consola mb-4 hidden items-start justify-between gap-4 rounded-xl border-2 border-primary/40 bg-primary/5 p-4">
 			<div>
@@ -400,7 +433,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 				</div>
 
 				<div>
-					<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🌐 D-STAR Last Heard (global)</p>
+					<p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-primary/70">🌐 D-STAR: últimas estaciones oídas (mundo)</p>
 					<div class="rounded-xl border border-border/70 bg-card p-2.5">
 						<div id="consola-dstar-lista" class="space-y-1 font-mono text-[10px] text-muted-foreground">Cargando…</div>
 					</div>
@@ -500,7 +533,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 		</div>
 
 		<!-- Selector de modo: elegir uno REEMPLAZA el contenido, no se apila -->
-		<div class="consola-modos flex gap-1.5 overflow-x-auto border-b border-primary/20 bg-black/20 px-3 py-2.5 sm:px-4" role="tablist">
+		<div class="consola-modos flex flex-wrap gap-1.5 sm:flex-nowrap sm:overflow-x-auto border-b border-primary/20 bg-black/20 px-3 py-2.5 sm:px-4" role="tablist">
 			<button type="button" role="tab" aria-selected="true" tabindex="0" data-modo="antena" class="consola-modo-btn is-active shrink-0 rounded-lg px-3 py-2 font-mono text-xs font-bold uppercase tracking-wide">🔧 Construir antena</button>
 			<button type="button" role="tab" aria-selected="false" tabindex="-1" data-modo="transmitir" class="consola-modo-btn shrink-0 rounded-lg px-3 py-2 font-mono text-xs font-bold uppercase tracking-wide">📡 Antes de transmitir</button>
 				<button type="button" role="tab" aria-selected="false" tabindex="-1" data-modo="concurso" class="consola-modo-btn shrink-0 rounded-lg px-3 py-2 font-mono text-xs font-bold uppercase tracking-wide">🏆 En concurso</button>
@@ -508,7 +541,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 			<span class="mx-1 hidden h-6 w-px shrink-0 self-center bg-primary/20 sm:block"></span>
 			<?php // El número estaba escrito a mano y se quedó en 53 al agregar una herramienta nueva.
 			      // Contarlo del mismo array que genera las pestañas evita que se vuelva a desfasar. ?>
-			<button type="button" role="tab" aria-selected="false" tabindex="-1" data-modo="catalogo" class="consola-modo-btn shrink-0 rounded-lg px-3 py-2 font-mono text-xs font-bold uppercase tracking-wide">📂 Catálogo (<?php echo count( array_filter( rau_get_herramientas_tabs(), fn( $t ) => empty( $t['oculta'] ) ) ); ?>)</button>
+			<button type="button" role="tab" aria-selected="false" tabindex="-1" data-modo="catalogo" class="consola-modo-btn shrink-0 rounded-lg px-3 py-2 font-mono text-xs font-bold uppercase tracking-wide">📂 Catálogo (<?php echo (int) $n_visibles; ?>)</button>
 		</div>
 
 		<!-- Contenido del modo activo -->
@@ -532,7 +565,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 					<div class="rounded-xl border border-border/70 bg-card p-4">
 						<p class="mb-2 font-mono text-xs font-bold uppercase text-primary">Yagi 2 el.</p>
 						<p class="font-mono text-sm" id="banco-yagi">—</p>
-						<p class="text-[10px] text-muted-foreground">driven / reflector</p>
+						<p class="text-[10px] text-muted-foreground">radiador / reflector</p>
 					</div>
 					<div class="rounded-xl border border-border/70 bg-card p-4">
 						<p class="mb-2 font-mono text-xs font-bold uppercase text-primary">Radiales de tierra</p>
@@ -540,10 +573,10 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 						<p class="text-[10px] text-muted-foreground">largo por radial (λ/4)</p>
 					</div>
 					<div class="rounded-xl border border-border/70 bg-card p-4">
-						<p class="mb-2 font-mono text-xs font-bold uppercase text-primary">Smith Chart</p>
+						<p class="mb-2 font-mono text-xs font-bold uppercase text-primary">ROE de una carga</p>
 						<div class="mb-1 flex gap-1">
-							<input aria-label="R" type="number" id="banco-r" value="75" placeholder="R" class="w-1/2 rounded border border-input bg-background px-1.5 py-1 font-mono text-xs">
-							<input aria-label="X" type="number" id="banco-x" value="25" placeholder="X" class="w-1/2 rounded border border-input bg-background px-1.5 py-1 font-mono text-xs">
+							<label class="w-1/2 font-mono text-[10px] text-muted-foreground">R (Ω)<input aria-label="Resistencia de la carga en ohmios" type="number" id="banco-r" value="75" class="mt-0.5 w-full rounded border border-input bg-background px-1.5 py-1 font-mono text-xs text-foreground"></label>
+							<label class="w-1/2 font-mono text-[10px] text-muted-foreground">X (Ω)<input aria-label="Reactancia de la carga en ohmios" type="number" id="banco-x" value="25" class="mt-0.5 w-full rounded border border-input bg-background px-1.5 py-1 font-mono text-xs text-foreground"></label>
 						</div>
 						<p class="font-mono text-sm font-bold" id="banco-vswr">—</p>
 						<p class="text-[10px] text-muted-foreground">ROE (Z₀=50Ω)</p>
@@ -689,33 +722,6 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 
 		</div>
 	</div>
-		<div id="rau-explorar" class="mb-8 rounded-2xl border border-border/60 bg-card/40 p-4 sm:p-5">
-			<div class="relative mb-5 rau-mb-0-herr">
-				<svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="M21 21l-4.35-4.35"></path></svg>
-				<input aria-label="Buscar una herramienta" type="search" id="rau-tool-search" autocomplete="off" placeholder="Buscar una herramienta…"
-					class="w-full rounded-xl border border-input bg-background py-3 pl-11 pr-4 text-base focus:outline-none focus:ring-2 focus:ring-ring">
-				<div id="rau-search-results" class="hidden absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-lg"></div>
-			</div>
-
-			<p class="rau-solo-consola mb-2 font-mono text-xs font-semibold uppercase tracking-wider text-primary">Accesos rápidos</p>
-			<div class="rau-solo-consola flex flex-wrap gap-2.5">
-				<?php foreach ( [ 'receptor', 'aperturas', 'qsl', 'cobertura' ] as $qid ) :
-					$qt = current( array_filter( $tabs, fn( $x ) => $x['id'] === $qid ) );
-					if ( ! $qt ) continue;
-				?>
-				<button type="button" data-tab="<?php echo esc_attr( $qt['id'] ); ?>" data-cat="<?php echo esc_attr( $qt['cat'] ); ?>"
-					class="rau-quick-chip inline-flex items-center rounded-xl border-2 px-5 py-3 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background border-primary/40 bg-primary/10 text-primary hover:bg-primary/20">
-					<?php echo esc_html( $qt['label'] ); ?>
-				</button>
-				<?php endforeach; ?>
-			</div>
-
-			<!-- FAVORITOS (poblado por JS desde localStorage, sin cuenta) -->
-			<div id="rau-favoritos" class="rau-solo-consola mt-5 hidden border-t border-border/50 pt-4">
-				<p class="mb-2 font-mono text-xs font-semibold uppercase tracking-wider text-amber-400">★ Tus favoritas</p>
-				<div id="rau-favoritos-lista" class="flex flex-wrap gap-2"></div>
-			</div>
-		</div>
 
 		<?php
 		$cat_icons = [
@@ -2088,8 +2094,8 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		<div id="panel-smith" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'smith' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Adaptación de impedancia</p>
-				<h2 class="mb-2 font-display text-2xl font-bold">Smith Chart</h2>
-				<p class="mb-6 text-sm text-muted-foreground">Visualiza dónde cae tu impedancia dentro del Smith Chart clásico — entre más cerca del centro, mejor adaptada está tu carga.</p>
+				<h2 class="mb-2 font-display text-2xl font-bold">Carta de Smith</h2>
+				<p class="mb-6 text-sm text-muted-foreground">Visualiza dónde cae tu impedancia dentro de la carta de Smith — entre más cerca del centro, mejor adaptada está tu carga.</p>
 
 				<div class="grid gap-6 lg:grid-cols-2">
 					<div class="space-y-4">
@@ -2154,7 +2160,7 @@ END-OF-LOG:" class="w-full rounded-md border border-input bg-background p-3 font
 		<div id="panel-brandmeister" role="region" aria-label="<?php echo esc_attr( rau_tool_label( 'brandmeister' ) ); ?>" class="rau-panel" style="display:none">
 			<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
 				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Red DMR mundial</p>
-				<h2 class="mb-2 font-display text-2xl font-bold">BrandMeister Last Heard</h2>
+				<h2 class="mb-2 font-display text-2xl font-bold">DMR BrandMeister en vivo</h2>
 				<p class="mb-6 text-sm text-muted-foreground">Ve en vivo la actividad reciente de cualquier talkgroup o indicativo en la red DMR BrandMeister — la más grande del mundo.</p>
 
 				<div class="flex gap-2">

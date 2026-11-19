@@ -6,8 +6,8 @@ Description: Tema de WordPress construido a partir del diseño real de la aplica
 Version: 19.58.0
 Requires at least: 6.0
 Requires PHP: 7.4
-License: GNU General Public License v2 or later
-License URI: https://www.gnu.org/licenses/gpl-2.0.html
+License: GNU General Public License v3 or later
+License URI: https://www.gnu.org/licenses/gpl-3.0.html
 Text Domain: rau-theme
 */
 
@@ -701,7 +701,7 @@ html.rau-splash-active body {
 #rau-tools.rau-vista-herramienta .rau-solo-consola { display: none !important; }
 #rau-tools.rau-vista-herramienta .rau-mb-0-herr { margin-bottom: 0; }
 /* El encabezado fijo tapaba el comienzo de lo que se desplazaba a la vista */
-.rau-panel, #rau-cat-dashboard, #rau-consola, #consola-columnas, #rau-explorar, #rx-app, #consola-estacion { scroll-margin-top: 5rem; }
+.rau-panel, #rau-cat-dashboard, #rau-consola, #consola-columnas, #rau-explorar, #rx-app, #consola-estacion, .consola-modos { scroll-margin-top: 5rem; }
 /* En la consola el receptor va compacto: su estado por horas está en la herramienta completa */
 .rx-en-consola .rx-estado-bloque, .rx-en-consola .rx-ayuda-teclado { display: none; }
 .rx-ajustes-btn { display: none; }
@@ -901,7 +901,7 @@ html.rau-splash-active body {
 .rx-estado-led { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #3a4354; }
 #rx-app:has(#rx-ind-rx.is-on) .rx-estado-led { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
 #rx-app #rx-avisar { color: #ffd58a; border-color: rgba(255,181,71,.55); }
-#rx-app #rx-avisar.hidden { display: none; }
+#rx-app .hidden { display: none !important; }
 
 .rx-pan { margin-top: .9rem; overflow: hidden; border-radius: .75rem; border: 2px solid #090c12; background: #04060a;
 	box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 1px 0 rgba(255,255,255,.06); }
@@ -1034,3 +1034,8 @@ html.rau-splash-active body {
 .rx-grab { margin: .6rem 0; padding: .6rem .8rem; border: 1px solid rgba(255,181,71,.3); border-radius: .6rem; display: grid; gap: .45rem; }
 .rx-grab audio { width: 100%; }
 .rx-comp { font-family: ui-monospace, monospace; font-size: .75rem; color: var(--rx-ambar); margin-left: .5rem; }
+
+/* 19.59.0 — Vista de una herramienta: sin el texto de la consola ni el recuadro vacío del centro de mando
+   (se vuelve con «Centro de mando» o «Todas las categorías», que están justo encima de la herramienta). */
+#rau-tools.rau-vista-herramienta #rau-consola { display: none; }
+body:has(#rau-tools.rau-vista-herramienta) #rau-intro { display: none; }

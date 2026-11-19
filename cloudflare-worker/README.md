@@ -76,3 +76,16 @@ En `/receptor/` aparece entonces el selector «Receptor» y el botón «Comparar
 dial en el otro receptor, sin sonido, y muestra los dos S-meter lado a lado. La comparación ocupa
 un canal del otro receptor mientras está activa.
 
+
+## 4. Tareas programadas del sitio (desde la 19.59.0)
+
+WordPress no tiene un reloj propio: sus tareas programadas (avisos por tiempo del centro de mando,
+propagación, envío a PSK Reporter, limpieza de grabaciones) solo corren cuando alguien visita el sitio.
+El Worker ahora llama a `https://hk4rau.com/wp-cron.php` cada 5 minutos con la función `scheduled`.
+
+Al volver a desplegar (`npx wrangler deploy`), Cloudflare lee `[triggers]` de `wrangler.toml` y programa
+la llamada. Se comprueba en el panel del Worker → **Settings → Triggers → Cron Triggers**. El plan gratuito
+de Workers incluye estos disparadores.
+
+Si el hosting permite un cron propio (en Hostinger: hPanel → Avanzado → Cron Jobs), sirve igual y no hace
+falta el del Worker: `*/5 * * * *  wget -q -O /dev/null "https://hk4rau.com/wp-cron.php?doing_wp_cron"`.

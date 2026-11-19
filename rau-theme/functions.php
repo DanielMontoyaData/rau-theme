@@ -18,6 +18,7 @@ require get_template_directory() . '/inc/pskreporter-envio.php';
 require get_template_directory() . '/inc/grabaciones.php';
 require get_template_directory() . '/inc/modem-pagina.php';
 require get_template_directory() . '/inc/imagen-social.php';
+require get_template_directory() . '/inc/dos-pasos.php';
 
 /**
  * Configuración básica del tema
@@ -263,6 +264,14 @@ function rau_get_repeaters_data() {
 	return $points;
 }
 add_action( 'save_post_repetidor', function() { delete_transient( 'rau_repeaters_data' ); delete_transient( 'rau_repetidor_principal' ); } );
+// También al borrarla o mandarla a la papelera, y al cambiar sus coordenadas: antes la repetidora borrada
+// seguía en el mapa y en el centro de mando hasta una hora.
+function rau_repetidores_olvidar( $id ) { if ( 'repetidor' === get_post_type( $id ) ) { delete_transient( 'rau_repeaters_data' ); delete_transient( 'rau_repetidor_principal' ); } }
+add_action( 'before_delete_post', 'rau_repetidores_olvidar' );
+add_action( 'trashed_post', 'rau_repetidores_olvidar' );
+add_action( 'untrashed_post', 'rau_repetidores_olvidar' );
+add_action( 'updated_post_meta', function( $mid, $id, $clave ) { if ( in_array( $clave, array( 'lat', 'lng', 'frequency', 'status' ), true ) ) rau_repetidores_olvidar( $id ); }, 10, 3 );
+add_action( 'added_post_meta', function( $mid, $id, $clave ) { if ( in_array( $clave, array( 'lat', 'lng', 'frequency', 'status' ), true ) ) rau_repetidores_olvidar( $id ); }, 10, 3 );
 
 /**
  * RAU DATA — Fase 6: eventos y alertas con coordenadas, para la capa correspondiente en RAU Map.
@@ -770,7 +779,7 @@ function rau_get_herramientas_tabs() {
 		['id'=>'prop',       'label'=>'Condiciones HF',         'cat'=>'Explorar', 'incluye'=>['bandalert','sfihist','ciclosolar','apagon']],
 		['id'=>'bandalert',  'label'=>'Alertas de Banda',          'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'sfihist',    'label'=>'Historial SFI/K',           'cat'=>'Explorar', 'oculta'=>true],
-		['id'=>'grayline',   'label'=>'Grayline',                  'cat'=>'Explorar'],
+		['id'=>'grayline',   'label'=>'Línea gris (grayline)',     'cat'=>'Explorar'],
 		['id'=>'luna',       'label'=>'Fase Lunar (EME)',          'cat'=>'Explorar'],
 		['id'=>'calc',       'label'=>'Calculadoras',              'cat'=>'Calcular'],
 		['id'=>'rfconv',     'label'=>'Conversor RF',              'cat'=>'Calcular'],
@@ -779,7 +788,7 @@ function rau_get_herramientas_tabs() {
 		['id'=>'bateria',    'label'=>'Autonomía de Batería',      'cat'=>'Calcular'],
 		['id'=>'angulo',     'label'=>'Ángulo de Radiación',       'cat'=>'Calcular'],
 		['id'=>'maidenhead', 'label'=>'Dónde y a qué distancia',                'cat'=>'Localizar', 'incluye'=>['azimuth','indicativo']],
-		['id'=>'azimuth',    'label'=>'Azimuth / km',              'cat'=>'Localizar', 'oculta'=>true],
+		['id'=>'azimuth',    'label'=>'Azimut / km',               'cat'=>'Localizar', 'oculta'=>true],
 		['id'=>'terreno',    'label'=>'Perfil de Terreno',        'cat'=>'Localizar'],
 		['id'=>'cobertura',  'label'=>'Cobertura de Repetidor',    'cat'=>'Localizar'],
 		['id'=>'satfreq',    'label'=>'Frecuencias de Satélites',  'cat'=>'Explorar', 'oculta'=>true],
@@ -791,8 +800,8 @@ function rau_get_herramientas_tabs() {
 		['id'=>'bandas',     'label'=>'Bandas Colombia',           'cat'=>'Aprender', 'oculta'=>true],
 		['id'=>'warc',       'label'=>'Bandas WARC',               'cat'=>'Aprender', 'oculta'=>true],
 		['id'=>'ics213',     'label'=>'Mensaje formal (ICS-213)',  'cat'=>'Emergencias'],
-		['id'=>'frecemerg',  'label'=>'Frecuencias de Emergencia', 'cat'=>'Emergencias'],
-		['id'=>'emergencia', 'label'=>'Emergencia',                'cat'=>'Emergencias'],
+		['id'=>'frecemerg',  'label'=>'Frecuencias de Emergencia', 'cat'=>'Emergencias', 'incluye'=>['emergencia']],
+		['id'=>'emergencia', 'label'=>'Emergencia',                'cat'=>'Emergencias', 'oculta'=>true],
 		['id'=>'ctcss',      'label'=>'CTCSS / DCS',               'cat'=>'Aprender'],
 		['id'=>'rst',        'label'=>'Reportes RST',              'cat'=>'Aprender', 'oculta'=>true],
 		['id'=>'codigosq',   'label'=>'Código Q, RST y fonético',  'cat'=>'Aprender', 'incluye'=>['rst','fonetico']],
@@ -816,12 +825,12 @@ function rau_get_herramientas_tabs() {
 		['id'=>'pskreporter','label'=>'PSK Reporter — ¿quién me oye?', 'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'rbn',        'label'=>'Reverse Beacon Network',    'cat'=>'Explorar', 'oculta'=>true],
 		['id'=>'aprs',       'label'=>'Mapa APRS Colombia',        'cat'=>'Localizar'],
-		['id'=>'smith',      'label'=>'Smith Chart',               'cat'=>'Calcular'],
+		['id'=>'smith',      'label'=>'Carta de Smith',            'cat'=>'Calcular'],
 		['id'=>'tarjeta',    'label'=>'Tarjeta de Campo (imprimir)', 'cat'=>'Aprender'],
 		['id'=>'receptor',   'label'=>'Receptor KiwiSDR',          'cat'=>'Escuchar'],
 		['id'=>'aperturas',  'label'=>'Aperturas desde Colombia',  'cat'=>'Escuchar'],
 		['id'=>'radiofaros', 'label'=>'Radiofaros NCDXF/IARU',     'cat'=>'Escuchar'],
-		['id'=>'brandmeister','label'=>'BrandMeister Last Heard',  'cat'=>'Escuchar'],
+		['id'=>'brandmeister','label'=>'DMR BrandMeister en vivo',  'cat'=>'Escuchar'],
 		['id'=>'planbandas',  'label'=>'Plan de bandas Colombia',  'cat'=>'Aprender', 'incluye'=>['bandas','warc']],
 		['id'=>'examen',     'label'=>'Examen RABCA',              'cat'=>'Aprender'],
 		['id'=>'licencia',   'label'=>'Recordatorio de Licencia',  'cat'=>'Aprender'],
@@ -1449,7 +1458,10 @@ function rau_remove_wp_version_strings( $src ) {
 // Mensaje de error genérico al iniciar sesión — por defecto WordPress dice
 // "usuario no existe" o "contraseña incorrecta" por separado, lo que le permite
 // a alguien adivinar qué usuarios sí existen probando uno por uno.
-add_filter( 'login_errors', function() {
+add_filter( 'login_errors', function( $e ) {
+	// Los avisos de la verificación en dos pasos sí se muestran: solo salen con la contraseña correcta,
+	// y sin ellos la persona no sabría que le falta el código del celular.
+	if ( false !== strpos( (string) $e, 'código de verificación' ) || false !== strpos( (string) $e, 'Código de verificación' ) || false !== strpos( (string) $e, 'Demasiados códigos' ) ) return $e;
 	return __( 'Usuario o contraseña incorrectos.', 'rau-theme' );
 } );
 
@@ -1461,6 +1473,11 @@ add_filter( 'xmlrpc_methods', function( $methods ) {
 	unset( $methods['pingback.ping'], $methods['pingback.extensions.getPingbacks'] );
 	return $methods;
 } );
+/* 19.59.0: XML-RPC con usuario y contraseña, apagado. Ningún complemento instalado lo usa (Jetpack no está;
+ * la app de WordPress y los editores externos usan la API REST con contraseñas de aplicación) y
+ * system.multicall permite probar cientos de contraseñas en una sola petición, sin pasar por la
+ * verificación en dos pasos. */
+add_filter( 'xmlrpc_enabled', '__return_false' );
 remove_action( 'wp_head', 'rsd_link' );
 add_filter( 'wp_headers', function( $headers ) {
 	unset( $headers['X-Pingback'] );

@@ -60,4 +60,34 @@ test('buscador de Herramientas: atajo «/», sin tildes, palabras clave y flecha
 	await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter');
 	await p.waitForURL(/\/herramientas\/maidenhead\/$/);
 });
+test('Herramientas: buscador arriba, qué hace cada una y vista de herramienta limpia', async () => {
+	nav = nav || await chromium.launch({ args: ['--no-proxy-server'] });
+	const p = await (await nav.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage(); p.on('pageerror', e => errores.push(e.message));
+	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+	await p.goto(BASE + '/herramientas/'); await p.waitForSelector('#rau-tool-search');
+	// El buscador está en la primera pantalla del celular, y el número del texto es el del catálogo
+	assert.ok(await p.evaluate(() => document.getElementById('rau-tool-search').getBoundingClientRect().top < innerHeight));
+	const n = (await p.textContent('#rau-intro')).match(/(\d+) herramientas/)[1];
+	assert.match(await p.textContent('.consola-modo-btn[data-modo="catalogo"]'), new RegExp('\\(' + n + '\\)'));
+	assert.equal(await p.getAttribute('#rau-tool-search', 'placeholder'), 'Buscar una herramienta…', 'sin atajo de teclado en pantalla táctil');
+	// Cada resultado dice qué hace; una palabra de la descripción también encuentra la herramienta
+	await p.fill('#rau-tool-search', 'impedancia');
+	assert.match(await p.textContent('.rau-search-item'), /Carta de Smith.*impedancia/s);
+	await p.keyboard.press('Enter');
+	await p.waitForFunction(() => location.pathname.endsWith('/smith/'));
+	assert.equal(await p.textContent('#rau-h1'), 'Carta de Smith');
+	assert.match(await p.textContent('#rau-tool-desc'), /impedancia/);
+	assert.equal(await p.isVisible('#rau-consola'), false, 'sin el recuadro vacío del centro de mando');
+	assert.equal(await p.isVisible('#rau-intro'), false);
+	await p.click('#rau-volver-consola');
+	assert.equal(await p.textContent('#rau-h1'), 'Herramientas de Radio');
+	assert.equal(await p.isVisible('#rau-consola'), true);
+	// «Ver las N herramientas» abre el catálogo; las frecuencias de emergencia ya no salen dos veces
+	await p.click('#rau-ir-catalogo'); await p.waitForSelector('#rau-cat-grid', { state: 'visible' });
+	assert.equal(await p.locator('.rau-tool-pill', { hasText: /^\s*Emergencia\s*$/ }).count(), 0);
+	assert.ok(await p.getAttribute('.rau-tool-pill[data-tab="roe"]', 'title'));
+	// El botón de compartir grabación no aparece antes de grabar
+	assert.equal(await p.isVisible('#rx-grab-subir'), false);
+	await p.close();
+});
 test('sin errores de JavaScript', () => { assert.deepEqual(errores, []); });
