@@ -10,10 +10,11 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const F = require('../../assets/radio/ftx.js');
 const J8 = require('../../assets/radio/js8.js');
+const DG = require('../../assets/radio/digi.js');
 const BASE = process.env.RAU_EM_BASE || 'http://localhost:8099';
 let nav, p; const errores = [];
 
-let semilla = 3; const azar = () => { semilla = (semilla * 1103515245 + 12345) % 2147483648; return semilla / 2147483648; };
+let semilla = 3; const azar = () => { semilla = (semilla + 0x6D2B79F5) | 0; let t = Math.imul(semilla ^ (semilla >>> 15), 1 | semilla); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; // mulberry32
 const gauss = () => { let u = 0; while (!u) u = azar(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * azar()); };
 /* Una ranura FT4 (7,5 s) con dos mensajes que empiezan a los 0,5 s, más ruido */
 function ranuraFT4() {
@@ -34,6 +35,11 @@ function ranuraJS8() {
 	const s = J8.sintetizar(J8.codificar(dir, 3), 1300, 12000); for (let i = 0; i < s.length; i++) x[i] += 0.3 * s[i];
 	return x;
 }
+/* RTTY, PSK31 y SSTV (Robot 36) que se repiten, con algo de ruido */
+function conRuido(x, n, a = 0.02) { const y = new Float32Array(n); for (let i = 0; i < n; i++) y[i] = (i < x.length ? 0.3 * x[i] : 0) + a * gauss(); return y; }
+const rttyA = () => conRuido(DG.sintetizar.rtty('RYRYRY CQ CQ DE HK4RAU HK4RAU K ', 12000, 1615), 12000 * 9);
+const pskA = () => conRuido(DG.sintetizar.psk31('  CQ CQ DE HK4RAU HK4RAU PSE K  ', 12000, 1200), 12000 * 9);
+const sstvA = () => { const x = DG.sintetizar.sstv(8, (px, py) => [px < 160 ? 220 : 40, 120, py], 12000); return conRuido(x, x.length + 12000 * 20); };
 /* CW a 20 PPM, tono de 700 Hz, que se repite */
 function cw() {
 	const M = { C: '-.-.', Q: '--.-', D: '-..', E: '.', H: '....', K: '-.-', '4': '....-', R: '.-.', A: '.-', U: '..-' }, u = 0.06, tr = []; let t = 0.5;
@@ -51,11 +57,11 @@ before(async () => {
 	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
 	await p.addInitScript({ content: `(function(){
 		function f32(s){ var b=atob(s), u=new Uint8Array(b.length); for(var i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return new Float32Array(u.buffer); }
-		var FT=f32('${b64(ranuraFT4())}'), CW=f32('${b64(cw())}'), J8=f32('${b64(ranuraJS8())}'), modo='usb', js8=false;
+		var FT=f32('${b64(ranuraFT4())}'), CW=f32('${b64(cw())}'), J8=f32('${b64(ranuraJS8())}'), RT=f32('${b64(rttyA())}'), PK=f32('${b64(pskA())}'), SV=f32('${b64(sstvA())}'), modo='usb', js8=false, dig='';
 		function msg(ws, t){ var e=new TextEncoder().encode('MSG '+t), u=new Uint8Array(e.length); u.set(e); ws.onmessage && ws.onmessage({data:u.buffer}); }
 		window.WebSocket=function(url){
-			var ws=this, timer=null, ult=Date.now(), seq=0; ws.url=url; ws.readyState=0;
-			ws.send=function(t){ (window.__enviados=window.__enviados||[]).push(t); var m=/mod=(\\w+)/.exec(t); if(m) modo=m[1]; var fq=/freq=([\\d.]+)/.exec(t); if(fq) js8=Math.abs(+fq[1]-7078)<1 || Math.abs(+fq[1]-14078)<1; };
+			var ws=this, timer=null, ult=Date.now(), seq=0; ws.url=url; ws.readyState=0; (window.__urls=window.__urls||[]).push(url);
+			ws.send=function(t){ (window.__enviados=window.__enviados||[]).push(t); var m=/mod=(\\w+)/.exec(t); if(m) modo=m[1]; var fq=/freq=([\\d.]+)/.exec(t); if(fq){ var F=+fq[1], cerca=function(a){ return a.some(function(v){ return Math.abs(F-v)<1; }); }; js8=cerca([7078,14078]); dig=cerca([7040,14085])?'rtty':cerca([7070,14070])?'psk':cerca([7171,14230])?'sstv':''; } };
 			ws.close=function(){ clearInterval(timer); ws.readyState=3; };
 			setTimeout(function(){
 				ws.readyState=1; ws.onopen && ws.onopen();
@@ -64,9 +70,9 @@ before(async () => {
 				timer=setInterval(function(){
 					var ahora=Date.now(), n=Math.round((ahora-ult)*12); if(n<=0) return;
 					var buf=new ArrayBuffer(10+2*n), dv=new DataView(buf), u=new Uint8Array(buf);
-					u[0]=83; u[1]=78; u[2]=68; u[3]=0; dv.setUint32(4, seq++, true); dv.setUint16(8, 2000, false);
+					u[0]=83; u[1]=78; u[2]=68; u[3]=0; dv.setUint32(4, seq++, true); dv.setUint16(8, url.indexOf('/r/prueba/')>=0 ? 600 : 800, false);
 					for(var i=0;i<n;i++){ var t=(ult+i/12)/1000, v;
-						if(modo==='cw') v=CW[Math.floor(t*12000)%CW.length]; else if(js8) v=J8[Math.floor((t%15)*12000)]; else v=FT[Math.floor((t%7.5)*12000)];
+						if(modo==='cw') v=CW[Math.floor(t*12000)%CW.length]; else if(js8) v=J8[Math.floor((t%15)*12000)]; else if(dig==='rtty') v=RT[Math.floor(t*12000)%RT.length]; else if(dig==='psk') v=PK[Math.floor(t*12000)%PK.length]; else if(dig==='sstv') v=SV[Math.floor(t*12000)%SV.length]; else v=FT[Math.floor((t%7.5)*12000)];
 						dv.setInt16(10+2*i, Math.max(-32767, Math.min(32767, Math.round(v*32767))), false); }
 					ult=ahora; ws.onmessage && ws.onmessage({data:buf});
 				}, 40);
@@ -88,6 +94,9 @@ test('FT4: decodifica en el navegador, alinea con la hora UTC y resalta CQ y col
 	assert.ok(await p.$('#rx-ft-filas .rx-ft-co'), 'resalta indicativos colombianos');
 	assert.ok(await p.$('#rx-ft-filas tr.rx-ft-cqf'), 'resalta los CQ');
 	assert.match(await p.textContent('#rx-ft-info'), /2 mensajes en [\d.]+ s · dial/);
+	// Quien transmitió queda anotado sobre la cascada, en su frecuencia
+	const dec = await p.evaluate(() => RauRx.decodificados());
+	assert.ok(dec.some(x => x.dx === 'HK4RAU' && Math.abs(x.khz - (7047.5 + 1.2)) < 0.01 || x.dx === 'HK4RAU' && Math.abs(x.khz - (14080 + 1.2)) < 0.01), JSON.stringify(dec));
 	// Con la corrección de hora, en las ranuras siguientes el DT queda cerca de 0
 	await p.waitForFunction(() => { const f = [...document.querySelectorAll('#rx-ft-filas tr.rx-ft-ult td:nth-child(3)')].map(td => Math.abs(+td.textContent)); return f.length && f.every(v => v <= 0.2); }, null, { timeout: 40000 });
 	if (process.env.CAPTURA) { await p.$eval('#rx-ft', x => x.scrollIntoView({ block: 'center' })); await p.screenshot({ path: process.env.CAPTURA + '/receptor-ft4.png' }); }
@@ -110,11 +119,30 @@ test('JS8: decodifica un mensaje al grupo @EMCOMM con el texto que muestra JS8Ca
 	assert.match(await p.textContent('#rx-ft-info'), /1 mensaje en [\d.]+ s · dial 7\.0780|1 mensaje en [\d.]+ s · dial 14\.0780/);
 });
 
+test('RTTY y PSK31: texto en el panel digital', async () => {
+	await p.click('.rx-dec[data-d=rtty]');
+	await p.waitForFunction(() => /HK4RAU HK4RAU K/.test(document.querySelector('#rx-dig-texto').textContent), null, { timeout: 40000 });
+	assert.match(await p.textContent('#rx-dig-info'), /RTTY 45,45 Bd · marca 1[56]\d\d Hz/);
+	await p.click('.rx-dec[data-d=psk31]');
+	await p.waitForFunction(() => /DE HK4RAU HK4RAU PSE K/.test(document.querySelector('#rx-dig-texto').textContent), null, { timeout: 40000 });
+	assert.match(await p.textContent('#rx-dig-info'), /PSK31 · 1\d{3}\.\d Hz/);
+});
+test('SSTV: el VIS arranca la imagen y queda en la galería para descargar', async () => {
+	await p.click('.rx-dec[data-d=sstv]');
+	assert.match(await p.textContent('#rx-modo-txt'), /LSB|USB/);
+	await p.waitForFunction(() => /imagen completa/.test(document.querySelector('#rx-sstv-info').textContent), null, { timeout: 120000 });
+	assert.match(await p.textContent('#rx-sstv-info'), /Robot 36/);
+	assert.ok(await p.$('#rx-sstv-galeria img'));
+	// La mitad izquierda sale rojiza y la derecha no
+	const [izq, der] = await p.evaluate(() => { const c = document.querySelector('#rx-sstv-cv').getContext('2d'); return [c.getImageData(60, 120, 1, 1).data[0], c.getImageData(260, 120, 1, 1).data[0]]; });
+	assert.ok(izq > der + 60, izq + ' / ' + der);
+});
+
 test('CW: el decodificador nuevo lee la señal del receptor', async () => {
 	await p.evaluate(() => { window.__enviados = []; });
 	await p.click('.rx-dec[data-d=cw]');
 	assert.match(await p.textContent('#rx-modo-txt'), /CW/);
-	assert.match(await p.evaluate(() => window.__enviados.join('\n')), /SET compression=1/, 'al salir de FT se restaura la compresión');
+	assert.match(await p.evaluate(() => window.__enviados.join('\n')), /SET compression=1/, 'al salir de los modos digitales se restaura la compresión');
 	assert.equal(await p.isHidden('#rx-ft'), true);
 	try { await p.waitForFunction(() => /CQ CQ DE HK4RAU/.test(document.querySelector('#rx-cw-texto').textContent), null, { timeout: 40000 }); } catch (e) { console.log('DEP', await p.textContent('#rx-cw-texto'), '|', await p.textContent('#rx-cw-info'), '|', await p.evaluate(() => window.__enviados.slice(-6).join(' ; '))); throw e; }
 	assert.match(await p.textContent('#rx-cw-info'), /2\d PPM · tono 7\d\d Hz/);
@@ -129,6 +157,21 @@ test('CW skimmer: lista la estación y tocarla la sintoniza', async () => {
 	assert.ok(Math.abs(+fCanal - (+f0 + 0.2)) < 0.02, 'tono de 700 Hz con portadora en 500: +0,2 kHz (' + fCanal + ' frente a ' + f0 + ')');
 	await p.click('.rx-cw-canal');
 	assert.equal(+(await p.inputValue('#rx-input')), +fCanal);
+});
+
+test('otro receptor: comparar el S-meter y cambiar de receptor', { skip: false }, async () => {
+	if (!(await p.$('#rx-comparar'))) { console.log('   (sin rau_receptores configurado: se omite)'); return; }
+	await p.selectOption('#rx-comparar', 'prueba');
+	await p.waitForFunction(() => /Receptor de prueba: S\d.*diferencia \+20 dB/.test(document.querySelector('#rx-comp').textContent), null, { timeout: 15000 });
+	assert.ok(await p.evaluate(() => window.__urls.some(u => /\/r\/prueba\/ws\/kiwi\/\d+\/SND$/.test(u))), 'la comparación va por /r/prueba/');
+	await p.selectOption('#rx-comparar', '');
+	await p.selectOption('#rx-receptor', 'prueba');
+	await p.waitForFunction(() => /Receptor de prueba/.test(document.querySelector('#rx-placa-marca').textContent));
+	await p.waitForFunction(() => /Conectado/.test(document.querySelector('#rx-libres').textContent), null, { timeout: 10000 });
+	// El S-meter es el del otro receptor (600 en la trama = −67 dBm)
+	await p.waitForFunction(() => /-67 dBm/.test(document.querySelector('#rx-s').textContent), null, { timeout: 10000 });
+	await p.selectOption('#rx-receptor', '');
+	await p.waitForFunction(() => document.querySelector('#rx-placa-marca').textContent === 'HK4RAU');
 });
 
 test('hora del servidor disponible para comparar el reloj', async () => {

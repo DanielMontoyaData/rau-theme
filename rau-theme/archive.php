@@ -21,7 +21,7 @@ $heading = isset( $titles[ $type ] ) ? $titles[ $type ] : wp_strip_all_tags( get
 		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 			<?php if ( have_posts() ) : while ( have_posts() ) : the_post(); ?>
 				<div class="aspect-[4/3] overflow-hidden rounded-xl border border-border/70">
-					<?php the_post_thumbnail( 'medium', array( 'class' => 'h-full w-full object-cover' ) ); ?>
+					<?php the_post_thumbnail( 'medium', array( 'class' => 'h-full w-full object-cover', 'loading' => 'lazy', 'decoding' => 'async' ) ); ?>
 				</div>
 			<?php endwhile; else : ?>
 				<p class="text-sm text-muted-foreground">Aún no hay fotos publicadas.</p>

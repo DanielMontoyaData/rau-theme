@@ -94,12 +94,15 @@ E.alArrancar.push(function(){
 function recomendacionBanda(){
 	var h=new Date().getUTCHours()-5; if(h<0) h+=24;
 	var dia=h>=7 && h<18, o=E.alertas && E.alertas.oido;
-	var r='<p><strong>Dentro de Colombia (NVIS):</strong> '+(dia?'40 m (centro de actividad 7.060). De día la onda de cielo vuelve cerca.':'80 m (centro de actividad 3.985). De noche 40 m salta lejos y deja de oírse a 100–500 km.')+' <small>Regla general de propagación, no una medición.</small></p>';
+	var pm=E.alertas && E.alertas.prop;
+	if(pm && pm.nvis && pm.iono){
+		var r='<p><strong>Dentro de Colombia (NVIS):</strong> '+(pm.nvis.banda?'<strong>'+esc(pm.nvis.banda)+'</strong>. ':'')+esc(pm.nvis.texto)+' <small>Medido por la ionosonda de '+esc(pm.iono.nombre)+' hace '+pm.iono.hace+' min'+(pm.kp!==null&&pm.kp>=5?' · tormenta geomagnética (Kp '+pm.kp+')':'')+'.</small></p>';
+	} else var r='<p><strong>Dentro de Colombia (NVIS):</strong> '+(dia?'40 m (centro de actividad 7.060). De día la onda de cielo vuelve cerca.':'80 m (centro de actividad 3.985). De noche 40 m salta lejos y deja de oírse a 100–500 km.')+' <small>Regla general de propagación, no una medición.</small></p>';
 	if(o && o.bandas){
 		r+='<p><strong>Medido</strong> por el receptor HK4RAU en '+esc(o.lugar||'Colombia')+' ('+E.haceTxt(o.actualizado*1000)+', últimos 30 min): '+['40m','20m','15m','10m'].map(function(k){ var x=o.bandas[k]; return k.replace('m',' m')+': '+(x&&x.n?'<strong>oye '+x.n+' estaciones</strong>':'sin estaciones'); }).join(' · ')+'.</p>';
 	}
 	var p=E.alertas && E.alertas.prop;
-	if(p && p.bandas){
+	if(p && p.bandas && Object.keys(p.bandas).length){
 		var bs=Object.keys(p.bandas).sort(function(a,b){ return p.bandas[b].n-p.bandas[a].n; }).slice(0,4);
 		r+='<p><strong>Abiertas desde Colombia</strong> (PSK Reporter, última hora, '+E.haceTxt(p.actualizado*1000)+'): '+bs.map(function(b){ var x=p.bandas[b]; return '<strong>'+esc(b)+'</strong> '+x.n+' enlaces hasta '+x.max.toLocaleString('es-CO')+' km'+(x.reg.length?' hacia '+esc(x.reg.join(', ')):'')+(x.nac?' ('+x.nac+' dentro del país)':''); }).join(' · ')+'. <small>Son enlaces digitales reportados automáticamente: en fonía hace falta más señal.</small></p>';
 	}

@@ -62,3 +62,17 @@ actualizar el KiwiSDR desde **Admin → Update**.
 
 Recomendado además: en **Admin → Control**, el campo **Inactivity time limit (minutes)** (por ejemplo 30), para
 que nadie deje un canal ocupado con la pestaña abierta.
+
+## 3. Otros receptores (opcional)
+
+El relevo puede pasar también a otros KiwiSDR, **solo con permiso de su dueño**:
+
+1. En `kiwi-relay.js`, agrega cada uno a `RECEPTORES` con un id corto: `pereira: 'http://…:8073',`
+   y vuelve a desplegar el Worker.
+2. En WordPress, **Ajustes → Generales → Receptores SDR**, escribe una línea por receptor con el
+   mismo id: `pereira | KiwiSDR de Pereira | Pereira, Risaralda | 4.81 | -75.69`.
+
+En `/receptor/` aparece entonces el selector «Receptor» y el botón «Comparar», que abre el mismo
+dial en el otro receptor, sin sonido, y muestra los dos S-meter lado a lado. La comparación ocupa
+un canal del otro receptor mientras está activa.
+

@@ -47,7 +47,8 @@ $em_cfg = array(
 <?php
 // Esta página no pasa por wp_head: las etiquetas para compartir el enlace (WhatsApp, Telegram, Facebook, X) van aquí
 $em_desc = 'Coordinación de comunicaciones de emergencia para radioaficionados y organizaciones de respuesta en Colombia: incidentes, mensajes con trazabilidad, red de estaciones y recursos. Funciona sin internet.';
-$em_img  = get_template_directory_uri() . '/assets/images/rau-badge.png';
+$em_og   = function_exists( 'rau_og_imagen_url' ) ? rau_og_imagen_url( 'Centro de Mando de Emergencias', 'Emergencias' ) : null;
+$em_img  = $em_og ?: get_template_directory_uri() . '/assets/images/rau-badge.png';
 ?>
 <link rel="canonical" href="<?php echo esc_url( home_url( '/emergencias/' ) ); ?>">
 <meta property="og:type" content="website">
@@ -57,9 +58,9 @@ $em_img  = get_template_directory_uri() . '/assets/images/rau-badge.png';
 <meta property="og:description" content="<?php echo esc_attr( $em_desc ); ?>">
 <meta property="og:url" content="<?php echo esc_url( home_url( '/emergencias/' ) ); ?>">
 <meta property="og:image" content="<?php echo esc_url( $em_img ); ?>">
-<meta property="og:image:width" content="640">
-<meta property="og:image:height" content="591">
-<meta property="og:image:alt" content="Insignia de Radioaficionados Unidos">
+<meta property="og:image:width" content="<?php echo $em_og ? 1200 : 640; ?>">
+<meta property="og:image:height" content="<?php echo $em_og ? 630 : 591; ?>">
+<meta property="og:image:alt" content="Centro de Mando de Emergencias · Radioaficionados Unidos">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Centro de Mando de Emergencias · HK4RAU">
 <meta name="twitter:description" content="<?php echo esc_attr( $em_desc ); ?>">

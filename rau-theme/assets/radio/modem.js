@@ -34,10 +34,12 @@ function empacarTrama(seq, L, datos){
 function desempacarTrama(a){
 	var pl=new Uint8Array(10), bit=0; for(var j=0;j<10;j++) pl[j]=a[j]^BLANQUEO[j];
 	function lee(n){ var v=0; for(var i=0;i<n;i++){ v=(v<<1)|((pl[bit>>3]>>(7-(bit&7)))&1); bit++; } return v; }
-	var seq=lee(9), L=lee(4); if(L>9) return null;
+	var seq=lee(9), L=lee(4); if(L>9 && L<14) return null;
 	var d=new Uint8Array(8); for(var i=0;i<8;i++) d[i]=lee(8);
+	if(L===14) return {seq:seq, tipo:'cabecera', bytes:(d[0]<<8)|d[1], R:d[2], B:d[3], crc:(d[4]<<8)|d[5], datos:d};
+	if(L===15) return {seq:seq, tipo:'paridad', datos:d};
 	var n=L<8?L:8, ultima=L!==8;
-	return {seq:seq, datos:d.subarray(0, n), ultima:ultima};
+	return {seq:seq, tipo:'datos', datos:d.subarray(0, n), ultima:ultima};
 }
 /* Bytes → tramas (cargas de 77 bits). Se agrega el CRC-16 del mensaje al final. */
 function tramas(bytes){
@@ -50,6 +52,50 @@ function tramas(bytes){
 	}
 	return out;
 }
+/* ── Protección entre tramas: Reed-Solomon por borrado sobre GF(256) con matriz de Cauchy ──
+   Las tramas de datos van en bloques de B=16; cada bloque lleva R tramas de paridad (2, 4 u 8). Con
+   cualesquiera 16 de las 16+R que lleguen se reconstruye el bloque, sin pedir reenvío. Una trama de
+   cabecera, al principio y al final, dice el largo del mensaje y la protección usada. */
+var GF_EXP=new Uint8Array(512), GF_LOG=new Uint8Array(256);
+(function(){ var x=1; for(var i=0;i<255;i++){ GF_EXP[i]=x; GF_LOG[x]=i; x<<=1; if(x&256) x^=0x11D; } for(var j=255;j<512;j++) GF_EXP[j]=GF_EXP[j-255]; })();
+function gmul(a, b){ return a&&b ? GF_EXP[GF_LOG[a]+GF_LOG[b]] : 0; }
+function ginv(a){ return GF_EXP[255-GF_LOG[a]]; }
+function cauchy(j, i){ return ginv((16+j)^i); }       // x_j=16+j, y_i=i: nunca iguales
+var BLOQUE=16, PROTECCION={ninguna:0, baja:2, media:4, alta:8};
+/* Secuencia completa a transmitir: [cabecera] bloque₀ paridad₀ bloque₁ paridad₁ … [cabecera] */
+function plan(bytes, R){
+	var datos=tramas(bytes); if(!R) return datos;
+	var n=bytes.length+2, b=new Uint8Array(Math.ceil(n/8)*8); b.set(bytes); var c=crc16(bytes, bytes.length); b[n-2]=c>>8; b[n-1]=c&0xFF;
+	var cab=empacarTrama(0, 14, [n>>8, n&255, R, BLOQUE, c>>8, c&255, 0, 0]), out=[cab], k=datos.length, p=0;
+	for(var bl=0;bl*BLOQUE<k;bl++){
+		var ini=bl*BLOQUE, fin=Math.min(k, ini+BLOQUE);
+		for(var i=ini;i<fin;i++) out.push(datos[i]);
+		for(var j=0;j<R;j++){
+			var par=[0,0,0,0,0,0,0,0];
+			for(var i2=ini;i2<fin;i2++) for(var q=0;q<8;q++) par[q]^=gmul(cauchy(j, i2-ini), b[i2*8+q]);
+			out.push(empacarTrama(p++, 15, par));
+		}
+	}
+	out.push(cab);
+	return out;
+}
+/* Resuelve los datos que faltan de un bloque: filas = ecuaciones de paridad recibidas */
+function recuperar(bloque, faltan, paridades){
+	var m=faltan.length, A=[], Y=[], j, i, q;
+	for(var e=0;e<m;e++){
+		var pj=paridades[e], fila=[], y=pj.datos.slice(0, 8);
+		for(i=0;i<bloque.k;i++){ var cf=cauchy(pj.j, i); if(faltan.indexOf(i)>=0) fila.push(cf); else for(q=0;q<8;q++) y[q]^=gmul(cf, bloque.d[i][q]); }
+		A.push(fila); Y.push(y);
+	}
+	// Gauss-Jordan en GF(256)
+	for(var col=0;col<m;col++){
+		var piv=-1; for(var r=col;r<m;r++) if(A[r][col]){ piv=r; break; } if(piv<0) return null;
+		var t=A[col]; A[col]=A[piv]; A[piv]=t; t=Y[col]; Y[col]=Y[piv]; Y[piv]=t;
+		var iv=ginv(A[col][col]); for(j=0;j<m;j++) A[col][j]=gmul(A[col][j], iv); for(q=0;q<8;q++) Y[col][q]=gmul(Y[col][q], iv);
+		for(r=0;r<m;r++) if(r!==col && A[r][col]){ var f=A[r][col]; for(j=0;j<m;j++) A[r][j]^=gmul(f, A[col][j]); for(q=0;q<8;q++) Y[r][q]^=gmul(f, Y[col][q]); }
+	}
+	return Y;
+}
 function tonosTrama(pl){
 	var cw=F.codificar174(F.agregarCrc(pl)), bit=0, t=[];
 	function lee(){ var v=(cw[bit>>3]>>(7-(bit&7)))&1; bit++; return v; }
@@ -60,10 +106,14 @@ function tonosTrama(pl){
 	return t;
 }
 function duracion(nTramas, modo){ var m=MODOS[modo]||MODOS.robusto; return 0.5+nTramas*79/m.baud+0.15; }
-/* Audio listo para reproducir. opts: {modo, solo:[secuencias a reenviar], desfase:Hz (para pruebas), volumen} */
+function cuantasTramas(bytes, proteccion){ return plan(bytes, PROTECCION[proteccion]||0).length; }
+/* Audio listo para reproducir. opts: {modo, proteccion:'ninguna'|'baja'|'media'|'alta', solo:[tramas de datos a
+   reenviar], desfase:Hz (para pruebas), volumen, perder:[índices del plan que no se transmiten (pruebas)]} */
 function sintetizar(bytes, tasa, opts){
-	opts=opts||{}; var m=MODOS[opts.modo]||MODOS.robusto, ts=tramas(bytes);
-	if(opts.solo && opts.solo.length) ts=ts.filter(function(_, i){ return opts.solo.indexOf(i)>=0; });
+	opts=opts||{}; var m=MODOS[opts.modo]||MODOS.robusto, R=PROTECCION[opts.proteccion]||0, ts;
+	if(opts.solo && opts.solo.length){ var d=tramas(bytes); ts=d.filter(function(_, i){ return opts.solo.indexOf(i)>=0; }); if(R) ts.unshift(plan(bytes, R)[0]); }
+	else ts=plan(bytes, R);
+	if(opts.perder) ts=ts.filter(function(_, i){ return opts.perder.indexOf(i)<0; });
 	var nsim=tasa/m.baud, df=opts.desfase||0, amp=opts.volumen||0.6, pre=Math.round(0.5*tasa), n=Math.ceil(pre+ts.length*79*nsim+0.15*tasa);
 	var y=new Float32Array(n), fase=0, i=0, rampa=Math.round(0.005*tasa);
 	// Tono inicial de medio segundo: abre el VOX de la radio y le da tiempo al control de volumen
@@ -171,25 +221,59 @@ Detector.prototype.decodificar=function(c){
 	return tr;
 };
 
-/* Receptor: junta las tramas de un mensaje, avisa qué falta y entrega los bytes cuando está completo y el CRC cuadra.
- * alEstado({recibidas, total, faltan, ultima:{seq, snr, modo, desfase}}) · alMensaje(Uint8Array) · alError(texto) */
+/* Receptor: junta las tramas de un mensaje, reconstruye con la paridad lo que se pueda, avisa qué falta y
+ * entrega los bytes cuando está completo y el CRC cuadra.
+ * alEstado({recibidas, total, faltan, recuperadas, ultima:{seq, snr, modo, desfase}}) · alMensaje(Uint8Array) · alError(texto) */
 function crearReceptor(tasa, alEstado, alMensaje, alError){
-	var rem=tasa===FS?null:new Remuestreo(tasa), partes={}, total=0, recibidas=0;
-	function reiniciar(){ partes={}; total=0; recibidas=0; }
-	function faltan(){ var f=[], hasta=total||(Math.max.apply(null, Object.keys(partes).map(Number).concat([-1]))+1); for(var i=0;i<hasta;i++) if(!partes[i]) f.push(i); return f; }
+	var rem=tasa===FS?null:new Remuestreo(tasa), partes, paridad, cab, total, recibidas, recuperadas, snrs;
+	function reiniciar(){ partes={}; paridad={}; cab=null; total=0; recibidas=0; recuperadas=0; snrs=[]; }
+	reiniciar();
+	function totalDatos(){ return cab ? Math.ceil(cab.bytes/8) : total; }
+	function faltan(){
+		var k=totalDatos(), hasta=k||(Math.max.apply(null, Object.keys(partes).map(Number).concat([-1]))+1), f=[];
+		for(var i=0;i<hasta;i++) if(!partes[i]) f.push(i);
+		if(!cab || !cab.R) return f;
+		// Con paridad, solo falta lo que no alcanza a reconstruirse en su bloque
+		return f.filter(function(i){ var bl=Math.floor(i/BLOQUE), n=f.filter(function(x){ return Math.floor(x/BLOQUE)===bl; }).length, p=0;
+			for(var j=0;j<cab.R;j++) if(paridad[bl*cab.R+j]) p++; return n>p; });
+	}
+	function intentarRecuperar(){
+		if(!cab || !cab.R) return;
+		var k=totalDatos(), n=cab.bytes, B=cab.B||BLOQUE;
+		for(var bl=0;bl*B<k;bl++){
+			var ini=bl*B, kb=Math.min(k, ini+B)-ini, falt=[], d=[], i;
+			for(i=0;i<kb;i++){ var x=partes[ini+i]; if(!x) falt.push(i); var r=new Uint8Array(8); if(x) r.set(x); d.push(r); }
+			if(!falt.length) continue;
+			var ps=[]; for(var j=0;j<cab.R && ps.length<falt.length;j++){ var pq=paridad[bl*cab.R+j]; if(pq) ps.push({j:j, datos:pq}); }
+			if(ps.length<falt.length) continue;
+			var Y=recuperar({k:kb, d:d}, falt, ps); if(!Y) continue;
+			falt.forEach(function(fi, e){ var g=ini+fi, largo=Math.min(8, n-g*8); partes[g]=new Uint8Array(Y[e]).slice(0, largo); recuperadas++; });
+		}
+	}
 	function alTrama(t){
-		if(partes[t.seq]) return;
-		partes[t.seq]=new Uint8Array(t.datos); recibidas++;
-		if(t.ultima) total=t.seq+1;
-		var fal=faltan();
-		if(alEstado) alEstado({recibidas:recibidas, total:total, faltan:fal, ultima:{seq:t.seq, snr:t.snr, modo:t.modo, desfase:t.desfase}});
-		if(total && !fal.length){
-			var n=0, i; for(i=0;i<total;i++) n+=partes[i].length;
-			var b=new Uint8Array(n), o=0; for(i=0;i<total;i++){ b.set(partes[i], o); o+=partes[i].length; }
+		snrs.push(t.snr); if(snrs.length>20) snrs.shift();
+		if(t.tipo==='cabecera'){ if(cab && (cab.bytes!==t.bytes || cab.crc!==t.crc)) reiniciar(); cab={bytes:t.bytes, R:t.R, B:t.B, crc:t.crc}; }
+		else if(t.tipo==='paridad'){ if(paridad[t.seq]) return; paridad[t.seq]=t.datos; recibidas++; }
+		else { if(partes[t.seq]) return; partes[t.seq]=new Uint8Array(t.datos); recibidas++; if(t.ultima) total=t.seq+1; }
+		intentarRecuperar();
+		var fal=faltan(), k=totalDatos(), completo=k && Object.keys(partes).filter(function(x){ return +x<k; }).length===k;
+		if(alEstado) alEstado({recibidas:recibidas, total:k, faltan:fal, recuperadas:recuperadas, proteccion:cab?cab.R:null, sugerencia:sugerir(t.modo), ultima:{seq:t.seq, tipo:t.tipo||'datos', snr:t.snr, modo:t.modo, desfase:t.desfase}});
+		if(completo){
+			var n=0, i; for(i=0;i<k;i++) n+=partes[i].length;
+			var b=new Uint8Array(n), o=0; for(i=0;i<k;i++){ b.set(partes[i], o); o+=partes[i].length; }
 			reiniciar();
 			if(n<2 || crc16(b, n-2)!==((b[n-2]<<8)|b[n-1])){ if(alError) alError('El mensaje llegó completo pero no cuadra la suma de verificación (¿se mezclaron dos envíos?). Pide que lo repitan.'); return; }
 			alMensaje(b.slice(0, n-2));
 		}
+	}
+	/* Sugerencia para quien transmite, con la SNR mediana de lo último recibido */
+	function sugerir(modo){
+		if(snrs.length<3) return null;
+		var m=snrs.slice().sort(function(a,b){ return a-b; })[snrs.length>>1];
+		if(modo==='robusto' && m>=0) return {modo:'rapido', snr:m, texto:'La señal llega bien (SNR '+m+' dB): se puede usar la velocidad rápida.'};
+		if(modo==='rapido' && m<-3) return {modo:'robusto', snr:m, texto:'La señal llega justa (SNR '+m+' dB): conviene la velocidad robusta.'};
+		if(m<-7) return {modo:'robusto', proteccion:'alta', snr:m, texto:'Señal débil (SNR '+m+' dB): velocidad robusta y protección alta.'};
+		return {modo:modo, snr:m, texto:'SNR '+m+' dB: la velocidad actual está bien.'};
 	}
 	var dets=[new Detector(MODOS.robusto, alTrama), new Detector(MODOS.rapido, alTrama)];
 	return {
@@ -198,5 +282,5 @@ function crearReceptor(tasa, alEstado, alMensaje, alError){
 	};
 }
 
-return { MODOS:MODOS, tramas:tramas, sintetizar:sintetizar, duracion:duracion, crearReceptor:crearReceptor, crc16:crc16, MAX_BYTES:MAX_TRAMAS*8-2 };
+return { MODOS:MODOS, PROTECCION:PROTECCION, tramas:tramas, plan:plan, cuantasTramas:cuantasTramas, sintetizar:sintetizar, duracion:duracion, crearReceptor:crearReceptor, crc16:crc16, MAX_BYTES:MAX_TRAMAS*8-2 };
 });

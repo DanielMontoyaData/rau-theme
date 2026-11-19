@@ -18,3 +18,4 @@ Thumbs.db
 
 # Dependencias (si en el futuro se agrega build con npm)
 node_modules/
+*.zip

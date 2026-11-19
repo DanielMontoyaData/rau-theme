@@ -7,6 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 $herramientas_url = home_url( '/herramientas/' );
 $cache_version    = 'rau-cache-' . RAU_THEME_VERSION;
 $em_url           = home_url( '/emergencias/' );
+$modem_url        = home_url( '/modem/' );
 $em_base          = get_template_directory_uri() . '/assets/';
 $em_assets        = array( $em_base . 'emergencias/em.css?ver=' . RAU_THEME_VERSION, $em_base . 'emergencias/colombia.geojson?ver=' . RAU_THEME_VERSION, $em_base . 'emergencias/esquema.json?ver=' . RAU_THEME_VERSION,
 	$em_base . 'vendor/leaflet/leaflet.js?ver=1.9.4', $em_base . 'vendor/leaflet/leaflet.css?ver=1.9.4', $em_base . 'vendor/leaflet/images/layers.png', $em_base . 'vendor/leaflet/images/layers-2x.png', $em_base . 'vendor/qrcode/qrcode.js?ver=1.4.4' );
@@ -19,6 +20,8 @@ const APP_SHELL_URL = '<?php echo esc_js( $herramientas_url ); ?>';
 // Centro de Mando de Emergencias: tiene que abrir sin internet, que es justo cuando más se necesita
 const EM_URL = '<?php echo esc_js( $em_url ); ?>';
 const EM_ASSETS = <?php echo wp_json_encode( $em_assets ); ?>;
+// Módem por sonido: página liviana para usar sin datos (comparte ftx.js y modem.js con el centro de mando)
+const MODEM_URL = '<?php echo esc_js( $modem_url ); ?>';
 // Directorio de frecuencias: la página ya no lo trae adentro; red primero y la última copia si no hay internet
 const EM_DIRECTORIO = '<?php echo esc_js( rest_url( 'rau-em/v1/directorio' ) ); ?>';
 /* Mosaicos de OpenStreetMap: solo los que la persona ya vio (nada se descarga por adelantado, como pide
@@ -37,7 +40,7 @@ self.addEventListener('install', function(event){
 	event.waitUntil(
 		caches.open(CACHE_NAME).then(function(cache){
 			// Cada uno por separado: si uno falla, los demás igual quedan guardados
-			return Promise.all([APP_SHELL_URL, EM_URL].concat(EM_ASSETS).map(function(u){ return cache.add(u).catch(function(){}); }));
+			return Promise.all([APP_SHELL_URL, EM_URL, MODEM_URL].concat(EM_ASSETS).map(function(u){ return cache.add(u).catch(function(){}); }));
 		})
 	);
 	self.skipWaiting();
@@ -77,8 +80,8 @@ self.addEventListener('fetch', function(event){
 			.catch(function(){ return caches.match(EM_DIRECTORIO).then(function(m){ return m || new Response('{}', {status:503, headers:{'Content-Type':'application/json'}}); }); }));
 		return;
 	}
-	var esEm = event.request.url.split('?')[0] === EM_URL;
-	if(!esEm && event.request.url.indexOf(APP_SHELL_URL) === -1) return; // solo Herramientas y el centro de mando
+	var sinQ = event.request.url.split('?')[0], esEm = sinQ === EM_URL, esModem = sinQ === MODEM_URL || sinQ === MODEM_URL.replace(/\/$/, '');
+	if(!esEm && !esModem && event.request.url.indexOf(APP_SHELL_URL) === -1) return; // solo Herramientas, el centro de mando y el módem
 
 	event.respondWith(
 		fetch(event.request).then(function(respuesta){
@@ -88,6 +91,7 @@ self.addEventListener('fetch', function(event){
 		}).catch(function(){
 			return caches.match(event.request).then(function(cacheada){
 				if(!cacheada && esEm) return caches.match(EM_URL);
+				if(!cacheada && esModem) return caches.match(MODEM_URL);
 				return cacheada || new Response('Sin conexión y sin copia guardada todavía. Visita Herramientas una vez con internet primero.', { status: 503 });
 			});
 		})

@@ -10,6 +10,13 @@
  */
 const ORIGEN = 'http://hk4rau.proxy.kiwisdr.com:8073';
 
+// Otros receptores, solo con permiso de su dueño: se usan como /r/<id>/… (por ejemplo
+// /r/ejemplo/ws/kiwi/…/SND). El sitio los lista en Ajustes → Generales → Receptores SDR con el mismo id.
+// Vacío = solo el HK4RAU.
+const RECEPTORES = {
+	// ejemplo: 'http://otro-receptor.proxy.kiwisdr.com:8073',
+};
+
 // Quién puede abrir el receptor por WebSocket a través de este relevo: el sitio de RAU y la propia
 // interfaz del KiwiSDR servida por el Worker. Un cliente que no sea navegador puede falsear Origin;
 // esto solo evita que otras páginas gasten la cuota gratuita del Worker.
@@ -31,6 +38,13 @@ export default {
 		if (ip) { headers.set('X-Real-IP', ip); headers.set('X-Forwarded-For', ip); }
 		headers.delete('Origin');
 
+		// /r/<id>/resto → el receptor <id>; cualquier otra ruta, el HK4RAU
+		const m = url.pathname.match(/^\/r\/([a-z0-9-]{1,32})(\/.*)$/);
+		if (m) {
+			const otro = RECEPTORES[m[1]];
+			if (!otro) return new Response('Receptor no configurado', { status: 404 });
+			return pasar(new URL(m[2] + url.search, otro), request, headers, 0);
+		}
 		return pasar(new URL(url.pathname + url.search, ORIGEN), request, headers, 0);
 	},
 };

@@ -325,6 +325,7 @@ Requieren un WordPress con el tema y `RAU_EM_PRUEBAS` definido en ese `wp-config
 | De punta a punta (Playwright; las consultas a Open-Meteo se responden con datos fijos) | `RAU_EM_BASE=http://localhost:8099 node --test --test-concurrency=1 tests/emergencias/e2e.test.mjs` |
 | Avisos al celular (los envíos al servicio push se interceptan) | `php tests/emergencias/avisos.php /ruta/a/wordpress/wp-load.php` |
 | Módem de audio (ruido, desfase, eco, tramas perdidas) | `node --test tests/radio/modem.test.mjs` |
+| Página /modem/ (chat entre dos navegadores con micrófono simulado, sin conexión) | `RAU_EM_BASE=http://localhost:8099 node --test tests/radio/modem-pagina.e2e.mjs` |
 | JS8 (con `JS8CALL_WAV=<media/tests de JS8Call>` compara con sus grabaciones) | `node --test tests/radio/js8.test.mjs` |
 | JS8 al centro de mando | `php tests/radio/js8-oido.php /ruta/a/wordpress/wp-load.php` |
 | Propagación desde Colombia (PSK Reporter simulado) | `php tests/radio/propagacion.php /ruta/a/wordpress/wp-load.php` |
@@ -346,7 +347,8 @@ La carpeta `tests/` no se incluye en el zip que se sube al sitio.
 - **Avisos al celular**: dependen del servicio push del navegador (Google, Mozilla, Apple) y de internet;
   en iPhone solo funcionan con el sitio instalado en la pantalla de inicio (iOS 16.4 o posterior).
 - **Módem de audio**: hasta 4 KB por envío (unas 90 a 120 tramas). Con más registros hay que filtrar
-  (por ejemplo, la última hora). No corrige errores entre tramas: la que llega dañada se pide de nuevo.
+  (por ejemplo, la última hora). La protección reconstruye hasta 2, 4 u 8 tramas perdidas por cada 16;
+  si se pierden más, se piden de nuevo las que digan.
 - **JS8**: solo el submodo Normal. Lo que llega al centro de mando lo decodificó el navegador de quien
   reportó; el sitio comprueba que tenga sesión y limpia el texto, pero no puede comprobar que se haya
   oído en el aire.
@@ -497,4 +499,16 @@ Además, en esta versión:
   frecuencia, SNR y quién lo reportó, y la advertencia de que es lo oído, sin verificar.
 - JS8Call es software libre con licencia GPL v3; el port la conserva (ver
   `assets/radio/LICENSE-JS8Call-GPLv3.txt`).
+
+## 13. Módem con protección y página /modem/ (19.58.0)
+
+- **Protección** (en «Pasar registros sin internet → Sonido»): ninguna, baja, media (por defecto) o alta.
+  Cada 16 tramas de datos van seguidas de 2, 4 u 8 de paridad (Reed-Solomon por borrado, matriz de
+  Cauchy sobre GF(256)). Con cualesquiera 16 de las 16+R que lleguen, el bloque se reconstruye. Una
+  trama de cabecera al principio y otra al final dicen el largo del mensaje y la protección.
+- **Quien recibe** ve cuántas tramas reconstruyó, cuáles faltan de verdad y una sugerencia para quien
+  transmite (velocidad y protección) según la SNR.
+- **/modem/** es una página aparte, liviana, que el service worker guarda en la primera visita: chat por
+  sonido (`RAUCHAT1\n<indicativo>\n<texto>`) y recepción de paquetes `RAUEM1`, que quedan pendientes para
+  «Recibir paquete» del centro de mando.
 

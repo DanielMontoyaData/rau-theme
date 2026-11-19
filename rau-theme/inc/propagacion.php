@@ -91,7 +91,8 @@ function rau_prop_datos() {
 }
 add_action( 'rest_api_init', function() {
 	register_rest_route( 'rau/v1', '/propagacion', array( 'methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function() {
-		$r = rest_ensure_response( rau_prop_datos() );
+		$d = rau_prop_datos(); $d['pronostico'] = function_exists( 'rau_pronostico' ) ? rau_pronostico() : null;
+		$r = rest_ensure_response( $d );
 		$r->header( 'Cache-Control', 'public, max-age=120' );
 		return $r;
 	} ) );
@@ -105,6 +106,7 @@ function rau_mapa_propagacion() {
 		<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">En vivo · última hora</p>
 		<h2 id="prop-co-t" class="font-display text-lg font-bold">Propagación desde Colombia</h2>
 		<p class="mt-1 text-sm text-muted-foreground">Quién de Colombia está siendo oído afuera y a quién se oye desde aquí, por banda, según los reportes automáticos de PSK Reporter (FT8, FT4, CW y otros modos digitales). Se actualiza cada 10 minutos.</p>
+		<div id="prop-co-pron" class="mt-4 rounded-xl border border-border/70 p-4 text-sm" aria-live="polite"></div>
 		<div id="prop-co-bandas" class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Banda"></div>
 		<div id="prop-co-res" class="mt-3 text-sm" aria-live="polite">Cargando…</div>
 		<div id="prop-co-mapa" class="mt-3 overflow-hidden rounded-xl border border-border/70" style="height:22rem;position:relative;z-index:0;isolation:isolate" role="region" aria-label="Mapa de enlaces"></div>
@@ -119,7 +121,22 @@ function rau_mapa_propagacion() {
 		function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 		function hace(t){ var m=Math.round((Date.now()/1000-t)/60); return m<1?'ahora':'hace '+m+' min'; }
 		function cargarLeaflet(){ if(window.L) return Promise.resolve(); return new Promise(function(ok, mal){ var l=document.createElement('link'); l.rel='stylesheet'; l.href=LF.css; document.head.appendChild(l); var s=document.createElement('script'); s.src=LF.js; s.onload=ok; s.onerror=mal; document.head.appendChild(s); }); }
+		function pron(){
+			var p=datos.pronostico, e=$('prop-co-pron'); if(!p){ e.classList.add('hidden'); return; }
+			var h='<p class="mb-1 font-mono text-xs uppercase tracking-[0.2em] text-primary">Pronóstico ahora</p>';
+			if(p.nvis) h+='<p><b>Cerca (NVIS, 0–400 km):</b> '+(p.nvis.banda?'<b>'+esc(p.nvis.banda)+'</b>. ':'')+esc(p.nvis.texto)+'</p>';
+			else h+='<p><b>Cerca (NVIS):</b> sin ionosonda con datos recientes; regla general: 40 m de día, 80 m de noche.</p>';
+			if(p.dx && p.dx.length){
+				var oidas=Object.keys(datos.bandas||{});
+				h+='<p class="mt-1"><b>Lejos (unos 3000 km):</b> según la MUF de la ionosonda, abiertas '+p.dx.map(function(b){ return '<b>'+esc(b)+'</b>'+(oidas.indexOf(b)>=0?' ✓':''); }).join(', ')+'. <small>✓ = además se están oyendo enlaces desde Colombia.</small></p>';
+			}
+			var sol=[]; if(p.sfi!==null) sol.push('flujo solar '+p.sfi); if(p.kp!==null) sol.push('Kp '+String(p.kp).replace('.', ','));
+			if(sol.length) h+='<p class="mt-1 text-muted-foreground">'+sol.join(' · ')+(p.iono?' · ionosonda '+esc(p.iono.nombre)+', a '+p.iono.km.toLocaleString('es-CO')+' km, medición de hace '+p.iono.hace+' min':'')+'</p>';
+			(p.notas||[]).forEach(function(n){ h+='<p class="mt-1 text-amber-400">'+esc(n)+'</p>'; });
+			e.innerHTML=h;
+		}
 		function pintar(){
+			pron();
 			var bs=ORDEN.filter(function(b){ return datos.bandas[b]; });
 			if(!banda || !datos.bandas[banda]) banda=bs.slice().sort(function(a,b){ return datos.bandas[b].n-datos.bandas[a].n; })[0]||'';
 			$('prop-co-bandas').innerHTML=bs.map(function(b){ var x=datos.bandas[b]; return '<button type="button" data-b="'+b+'" aria-pressed="'+(b===banda)+'" class="rounded-md border px-3 py-1.5 font-mono text-xs '+(b===banda?'border-primary bg-primary/15 text-primary':'border-border text-muted-foreground hover:text-foreground')+'"><span style="color:'+COLOR[b]+'">●</span> '+b+' · '+x.n+'</button>'; }).join('') || '';

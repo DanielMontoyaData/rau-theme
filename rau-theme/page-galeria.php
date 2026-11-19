@@ -23,10 +23,9 @@ $items = new WP_Query( array(
 			$fecha = get_post_meta( get_the_ID(), 'fecha', true );
 		?>
 		<div class="group overflow-hidden rounded-2xl border border-border/70 bg-card">
-			<?php if ( $img ) : ?>
+			<?php if ( $img || has_post_thumbnail() ) : ?>
 			<div class="aspect-[4/3] overflow-hidden">
-				<img src="<?php echo esc_url( $img ); ?>" alt="<?php echo esc_attr( get_the_title() ); ?>"
-					loading="lazy" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105">
+				<?php echo rau_imagen_galeria( get_the_ID(), $img, get_the_title() ); // phpcs:ignore -- HTML de WordPress o escapado ?>
 			</div>
 			<?php else : ?>
 			<div class="flex aspect-[4/3] items-center justify-center bg-muted/30">

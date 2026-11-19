@@ -6,13 +6,18 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.57.0' );
+define( 'RAU_THEME_VERSION', '19.58.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
 require get_template_directory() . '/inc/emergencias.php';
 require get_template_directory() . '/inc/propagacion.php';
+require get_template_directory() . '/inc/pronostico.php';
 require get_template_directory() . '/inc/js8-oido.php';
+require get_template_directory() . '/inc/pskreporter-envio.php';
+require get_template_directory() . '/inc/grabaciones.php';
+require get_template_directory() . '/inc/modem-pagina.php';
+require get_template_directory() . '/inc/imagen-social.php';
 
 /**
  * Configuración básica del tema
@@ -1192,6 +1197,9 @@ function rau_seo_meta_tags() {
 		$title = wp_get_document_title();
 		$desc  = get_bloginfo( 'description' );
 	}
+	// Páginas que cambian su vista previa según el enlace (p. ej. una grabación compartida del receptor)
+	$title = apply_filters( 'rau_seo_titulo', $title );
+	$desc  = apply_filters( 'rau_seo_descripcion', $desc );
 	$desc = wp_strip_all_tags( $desc );
 	$logo_id = has_custom_logo() ? get_theme_mod( 'custom_logo' ) : 0;
 	if ( $logo_id ) {
@@ -1205,6 +1213,17 @@ function rau_seo_meta_tags() {
 		$logo   = get_template_directory_uri() . '/assets/images/rau-badge.png';
 		$logo_w = 640;
 		$logo_h = 591;
+	}
+	// Imagen de la vista previa: la destacada de la entrada si tiene; si no, una con el título de la página
+	$img_alt = $title;
+	if ( is_singular() && has_post_thumbnail() && ( $th = wp_get_attachment_image_src( get_post_thumbnail_id(), 'large' ) ) ) {
+		list( $logo, $logo_w, $logo_h ) = $th;
+	} elseif ( function_exists( 'rau_og_imagen_url' ) ) {
+		$seccion = '';
+		if ( get_query_var( 'rau_tool' ) ) $seccion = 'Herramientas';
+		elseif ( is_singular() && 'page' !== get_post_type() && ( $pto = get_post_type_object( get_post_type() ) ) ) $seccion = $pto->labels->singular_name;
+		$og = rau_og_imagen_url( is_front_page() ? 'Radioaficionados Unidos' : $title, $seccion );
+		if ( $og ) { $logo = $og; $logo_w = 1200; $logo_h = 630; }
 	}
 	?>
 	<meta name="description" content="<?php echo esc_attr( $desc ); ?>">
@@ -1221,6 +1240,7 @@ function rau_seo_meta_tags() {
 	<meta property="og:image" content="<?php echo esc_url( $logo ); ?>">
 	<meta property="og:image:width" content="<?php echo esc_attr( $logo_w ); ?>">
 	<meta property="og:image:height" content="<?php echo esc_attr( $logo_h ); ?>">
+	<meta property="og:image:alt" content="<?php echo esc_attr( $img_alt ); ?>">
 	<meta name="twitter:card" content="summary_large_image">
 	<meta name="twitter:title" content="<?php echo esc_attr( $title ); ?>">
 	<meta name="twitter:description" content="<?php echo esc_attr( $desc ); ?>">
@@ -1265,15 +1285,35 @@ function rau_structured_data() {
 	) );
 
 	$org = array(
-		'@context' => 'https://schema.org',
-		'@type'    => 'Organization',
-		'name'     => get_bloginfo( 'name' ) . ' — Radioaficionados Unidos',
-		'url'      => home_url( '/' ),
-		'sameAs'   => array_values( $same_as ),
+		'@context'      => 'https://schema.org',
+		'@type'         => 'Organization',
+		'@id'           => home_url( '/#organizacion' ),
+		'name'          => get_bloginfo( 'name' ) . ' — Radioaficionados Unidos',
+		'alternateName' => array( 'HK4RAU', 'Radioaficionados Unidos' ),
+		'description'   => 'Asociación de radioaficionados de Colombia: repetidoras, red de emergencias, receptor SDR público, eventos y herramientas de radio.',
+		'url'           => home_url( '/' ),
+		'areaServed'    => array( '@type' => 'Country', 'name' => 'Colombia' ),
+		'sameAs'        => array_values( $same_as ),
 	);
 	if ( $logo ) $org['logo'] = $logo;
 
 	echo '<script type="application/ld+json">' . wp_json_encode( $org ) . '</script>' . "\n";
+
+	// Portada: el sitio con su buscador (Google puede mostrar la caja de búsqueda)
+	if ( is_front_page() ) {
+		echo '<script type="application/ld+json">' . wp_json_encode( array( '@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => get_bloginfo( 'name' ), 'url' => home_url( '/' ), 'inLanguage' => 'es-CO',
+			'publisher' => array( '@id' => home_url( '/#organizacion' ) ),
+			'potentialAction' => array( '@type' => 'SearchAction', 'target' => array( '@type' => 'EntryPoint', 'urlTemplate' => home_url( '/?s={search_term_string}' ) ), 'query-input' => 'required name=search_term_string' ) ) ) . '</script>' . "\n";
+	}
+	// Entradas: artículo firmado por la asociación (no por la cuenta que lo publicó)
+	if ( is_singular( 'post' ) ) {
+		$pid = get_the_ID();
+		echo '<script type="application/ld+json">' . wp_json_encode( array( '@context' => 'https://schema.org', '@type' => 'BlogPosting', 'headline' => wp_strip_all_tags( get_the_title( $pid ) ),
+			'datePublished' => get_the_date( 'c', $pid ), 'dateModified' => get_the_modified_date( 'c', $pid ), 'mainEntityOfPage' => get_permalink( $pid ), 'inLanguage' => 'es-CO',
+			'image' => has_post_thumbnail( $pid ) ? get_the_post_thumbnail_url( $pid, 'large' ) : ( function_exists( 'rau_og_imagen_url' ) ? rau_og_imagen_url() : $logo ),
+			'author' => array( '@id' => home_url( '/#organizacion' ), '@type' => 'Organization', 'name' => get_bloginfo( 'name' ) . ' — Radioaficionados Unidos' ),
+			'publisher' => array( '@id' => home_url( '/#organizacion' ), '@type' => 'Organization', 'name' => get_bloginfo( 'name' ), 'logo' => array( '@type' => 'ImageObject', 'url' => $logo ) ) ) ) . '</script>' . "\n";
+	}
 
 	if ( is_singular( 'evento' ) ) {
 		$id    = get_the_ID();
@@ -1289,15 +1329,17 @@ function rau_structured_data() {
 				'description' => wp_strip_all_tags( get_the_content( null, false, $id ) ),
 				'url'         => get_permalink( $id ),
 				'location'    => array(
-					'@type' => 'Place',
-					'name'  => $loc ? $loc : get_bloginfo( 'name' ),
+					'@type'   => 'Place',
+					'name'    => $loc ? $loc : get_bloginfo( 'name' ),
+					'address' => array( '@type' => 'PostalAddress', 'addressLocality' => $loc ? $loc : 'Colombia', 'addressCountry' => 'CO' ),
 				),
-				'organizer'   => array(
-					'@type' => 'Organization',
-					'name'  => get_bloginfo( 'name' ),
-					'url'   => home_url( '/' ),
-				),
+				'organizer'   => array( '@id' => home_url( '/#organizacion' ), '@type' => 'Organization', 'name' => get_bloginfo( 'name' ), 'url' => home_url( '/' ) ),
+				'image'       => has_post_thumbnail( $id ) ? get_the_post_thumbnail_url( $id, 'large' ) : ( function_exists( 'rau_og_imagen_url' ) ? rau_og_imagen_url() : $logo ),
+				'isAccessibleForFree' => true,
 			);
+			$lat = get_post_meta( $id, 'lat', true ); $lng = get_post_meta( $id, 'lng', true );
+			if ( $lat && $lng ) { $event['location']['geo'] = array( '@type' => 'GeoCoordinates', 'latitude' => (float) $lat, 'longitude' => (float) $lng ); $event['eventAttendanceMode'] = 'https://schema.org/OfflineEventAttendanceMode'; }
+			if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $start ) ) $event['endDate'] = $start;
 			echo '<script type="application/ld+json">' . wp_json_encode( $event ) . '</script>' . "\n";
 		}
 	}
@@ -1424,12 +1466,61 @@ add_filter( 'wp_headers', function( $headers ) {
 	unset( $headers['X-Pingback'] );
 	// Cabeceras de seguridad que el alojamiento no envía. HSTS sin includeSubDomains ni preload:
 	// lo conservador, que no compromete a subdominios que quizá no tengan HTTPS.
-	// Sin Permissions-Policy a propósito: varias herramientas piden la ubicación (GPS).
 	$headers['Strict-Transport-Security'] = 'max-age=31536000';
 	$headers['X-Content-Type-Options']    = 'nosniff';
 	$headers['X-Frame-Options']           = 'SAMEORIGIN';
 	$headers['Referrer-Policy']           = 'strict-origin-when-cross-origin';
+	// Ubicación (herramientas), cámara (QR del centro de mando) y micrófono (módem) solo para el propio
+	// sitio, nunca para contenido incrustado de terceros; el resto, para nadie.
+	$headers['Permissions-Policy'] = 'geolocation=(self), camera=(self), microphone=(self), payment=(), usb=(), serial=(), bluetooth=(), hid=(), browsing-topics=()';
+	// CSP: se aplica lo que no puede romper nada (nadie incrusta el sitio, sin <base> ni plugins)…
+	$headers['Content-Security-Policy'] = "frame-ancestors 'self'; base-uri 'self'; object-src 'none'";
+	// …y la política completa en modo «solo informar»: los navegadores avisan lo que bloquearía y el
+	// sitio lo cuenta (Ajustes → Generales → Receptor HK4RAU), para endurecerla sin romper páginas.
+	$headers['Content-Security-Policy-Report-Only'] = rau_csp_politica();
 	return $headers;
+} );
+/* Imágenes: los tamaños que genera WordPress (miniaturas, medianas, grandes) salen en WebP cuando el
+   servidor lo soporta: pesan del 25 al 35 % menos que JPEG con la misma calidad. El original se conserva. */
+add_filter( 'image_editor_output_format', function( $formatos ) {
+	if ( ! wp_image_editor_supports( array( 'mime_type' => 'image/webp' ) ) ) return $formatos;
+	$formatos['image/jpeg'] = 'image/webp';
+	$formatos['image/png']  = 'image/webp';
+	return $formatos;
+} );
+add_filter( 'wp_editor_set_quality', function( $q, $mime ) { return 'image/webp' === $mime ? 80 : $q; }, 10, 2 );
+/* Imagen de la galería: si es de la biblioteca, con srcset (el navegador elige el tamaño) y en WebP */
+function rau_imagen_galeria( $post_id, $url, $alt ) {
+	$id = get_post_thumbnail_id( $post_id );
+	if ( ! $id && $url ) { $id = (int) get_post_meta( $post_id, '_rau_img_id', true ); if ( ! $id ) { $id = attachment_url_to_postid( $url ); if ( $id ) update_post_meta( $post_id, '_rau_img_id', $id ); } }
+	if ( $id ) return wp_get_attachment_image( $id, 'medium_large', false, array( 'alt' => $alt, 'loading' => 'lazy', 'decoding' => 'async', 'sizes' => '(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw', 'class' => 'h-full w-full object-cover transition-transform duration-300 group-hover:scale-105' ) );
+	return $url ? '<img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105">' : '';
+}
+function rau_csp_politica() {
+	return "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://www.youtube.com; "
+		. "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; "
+		. "img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; worker-src 'self' blob:; "
+		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com; report-uri " . rest_url( 'rau/v1/csp' );
+}
+/* Avisos de CSP: se agrupan por directiva y dominio bloqueado; como mucho 60 por IP y hora */
+add_action( 'rest_api_init', function() {
+	register_rest_route( 'rau/v1', '/csp', array( 'methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function( WP_REST_Request $req ) {
+		$ip = md5( $_SERVER['REMOTE_ADDR'] ?? '' ); $k = 'rau_csp_ip_' . substr( $ip, 0, 12 ); $n = (int) get_transient( $k );
+		if ( $n >= 60 ) return new WP_REST_Response( null, 204 );
+		set_transient( $k, $n + 1, HOUR_IN_SECONDS );
+		$j = json_decode( $req->get_body(), true ); $r = $j['csp-report'] ?? null;
+		if ( ! is_array( $r ) ) return new WP_REST_Response( null, 204 );
+		$dir = sanitize_key( strtok( (string) ( $r['effective-directive'] ?? $r['violated-directive'] ?? '' ), ' ' ) );
+		$bloq = (string) ( $r['blocked-uri'] ?? '' ); $host = wp_parse_url( $bloq, PHP_URL_HOST ); $bloq = $host ? $host : sanitize_key( $bloq );
+		if ( ! $dir || ! $bloq ) return new WP_REST_Response( null, 204 );
+		$av = get_option( 'rau_csp_avisos', array() ); if ( ! is_array( $av ) ) $av = array();
+		$clave = $dir . ' ' . $bloq;
+		if ( ! isset( $av[ $clave ] ) && count( $av ) >= 100 ) return new WP_REST_Response( null, 204 );
+		$pag = wp_parse_url( (string) ( $r['document-uri'] ?? '' ), PHP_URL_PATH );
+		$av[ $clave ] = array( 'n' => ( $av[ $clave ]['n'] ?? 0 ) + 1, 'ult' => time(), 'pagina' => $pag ? substr( $pag, 0, 120 ) : '' );
+		update_option( 'rau_csp_avisos', $av, false );
+		return new WP_REST_Response( null, 204 );
+	} ) );
 } );
 /* Autorización para aparecer en el Directorio de Miembros (campo "visible"). La plantilla
  * prometía "solo aparecen los miembros que autorizaron" pero listaba a todos; el campo existía
@@ -3452,7 +3543,43 @@ add_action( 'init', function() {
 			return $v ? untrailingslashit( $v ) : '';
 		},
 	) );
+	// Otros receptores (solo con permiso de su dueño): una línea «id | nombre | lugar | lat | lng».
+	// El relevo los atiende en /r/<id>/ (cloudflare-worker/README.md, sección 3).
+	register_setting( 'general', 'rau_receptores', array(
+		'type' => 'array', 'default' => array(), 'show_in_rest' => false,
+		'sanitize_callback' => 'rau_receptores_sanear',
+	) );
+	register_setting( 'general', 'rau_psk_kiwi_ft8', array( 'type' => 'string', 'default' => '7074,14074,21074,28074',
+		'sanitize_callback' => function( $v ) { return implode( ',', array_filter( array_map( function( $x ) { return (string) round( (float) $x, 1 ); }, explode( ',', (string) $v ) ), function( $x ) { return $x > 1000 && $x < 60000; } ) ); } ) );
+
 } );
+/* Campos en Ajustes → Generales (solo existe en el administrador) */
+add_action( 'admin_init', function() {
+	add_settings_section( 'rau_receptor', 'Receptor HK4RAU', function() {
+		$e = get_option( 'rau_psk_estado', array() );
+		echo '<p>Relevo del KiwiSDR, otros receptores y reporte a PSK Reporter.' . ( ! empty( $e['resultado'] ) ? ' Último envío a PSK Reporter: <strong>' . esc_html( $e['resultado'] ) . '</strong>, ' . esc_html( human_time_diff( (int) $e['cuando'] ) ) . ' atrás.' : '' ) . '</p>';
+		$av = get_option( 'rau_csp_avisos', array() );
+		if ( $av ) { uasort( $av, function( $a, $b ) { return $b['n'] - $a['n']; } ); echo '<p><strong>Política de seguridad (CSP), solo informando:</strong> lo que los navegadores bloquearían si se aplicara: '; $i = 0; foreach ( $av as $k => $v ) { if ( $i++ >= 8 ) break; echo '<code>' . esc_html( $k ) . '</code> (' . (int) $v['n'] . ( $v['pagina'] ? ', ' . esc_html( $v['pagina'] ) : '' ) . ') '; } echo '</p>'; }
+	}, 'general' );
+	add_settings_field( 'rau_kiwi_relay', 'Relevo (Cloudflare Worker)', function() { echo '<input type="url" aria-label="Relevo del KiwiSDR" class="regular-text code" name="rau_kiwi_relay" value="' . esc_attr( get_option( 'rau_kiwi_relay', '' ) ) . '" placeholder="https://rau-kiwi.….workers.dev">'; }, 'general', 'rau_receptor' );
+	add_settings_field( 'rau_receptores', 'Receptores SDR', function() {
+		$l = array_map( function( $r ) { return implode( ' | ', array( $r['id'], $r['nombre'], $r['lugar'], $r['lat'], $r['lng'] ) ); }, (array) get_option( 'rau_receptores', array() ) );
+		echo '<textarea aria-label="Receptores SDR" name="rau_receptores" rows="4" class="large-text code" placeholder="pereira | KiwiSDR de Pereira | Pereira, Risaralda | 4.81 | -75.69">' . esc_textarea( implode( "\n", $l ) ) . '</textarea><p class="description">Además del HK4RAU. Solo receptores cuyo dueño lo autorizó, y agregados también al relevo con el mismo id.</p>';
+	}, 'general', 'rau_receptor' );
+	add_settings_field( 'rau_psk_kiwi_ft8', 'FT8 que el Kiwi ya reporta (kHz)', function() { echo '<input type="text" aria-label="FT8 que el Kiwi ya reporta" class="regular-text code" name="rau_psk_kiwi_ft8" value="' . esc_attr( get_option( 'rau_psk_kiwi_ft8', '7074,14074,21074,28074' ) ) . '"><p class="description">Lo decodificado en el navegador en estas frecuencias no se reporta, para no duplicar al decodificador automático del KiwiSDR.</p>'; }, 'general', 'rau_receptor' );
+} );
+function rau_receptores_sanear( $v ) {
+	$lineas = is_array( $v ) ? $v : preg_split( '/\r?\n/', (string) $v );
+	$out = array();
+	foreach ( $lineas as $l ) {
+		$p = is_array( $l ) ? array( $l['id'] ?? '', $l['nombre'] ?? '', $l['lugar'] ?? '', $l['lat'] ?? '', $l['lng'] ?? '' ) : array_map( 'trim', explode( '|', $l ) );
+		if ( count( $p ) < 5 ) continue;
+		$id = sanitize_key( $p[0] ); $lat = (float) $p[3]; $lng = (float) $p[4];
+		if ( ! preg_match( '/^[a-z0-9-]{1,32}$/', $id ) || abs( $lat ) > 90 || abs( $lng ) > 180 ) continue;
+		$out[ $id ] = array( 'id' => $id, 'nombre' => sanitize_text_field( $p[1] ), 'lugar' => sanitize_text_field( $p[2] ), 'lat' => $lat, 'lng' => $lng );
+	}
+	return array_values( array_slice( $out, 0, 10 ) );
+}
 
 /**
  * Lee /status del KiwiSDR (formato "clave=valor" por línea, rx/rx_server_ajax.cpp). Devuelve null

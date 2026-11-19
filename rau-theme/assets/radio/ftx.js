@@ -100,7 +100,7 @@ function puntajeFT8(W, c){
 	var s=0, n=0, base=idxCand(W, c), mag=W.mag, st=W.paso;
 	for(var m=0;m<3;m++) for(var k=0;k<7;k++){
 		var bl=36*m+k, ba=c.t+bl; if(ba<0) continue; if(ba>=W.bloques) break;
-		var p=base+bl*st, sm=(W.p.costas||COSTAS8)[k], v=mag[p+sm];
+		var p=base+bl*st, cz=W.p.costas, sm=cz?(typeof cz[0]==='number'?cz[k]:cz[m][k]):COSTAS8[k], v=mag[p+sm];
 		if(sm>0){ s+=v-mag[p+sm-1]; n++; }
 		if(sm<7){ s+=v-mag[p+sm+1]; n++; }
 		if(k>0 && ba>0){ s+=v-mag[p+sm-st]; n++; }
@@ -233,8 +233,9 @@ function Etapa2(x, proto){
 	this.nsps=Math.round(12000*p.simbolo); this.fac=this.nsps/32;
 	// p.nn===79: FT8 y JS8 (misma forma de onda; JS8 cambia las matrices Costas y no usa código Gray)
 	var ocho=p.nn===79;
-	this.N1=ocho?192000:92160; this.N2=this.N1/this.fac; this.fs2=12000/this.fac; this.df=12000/this.N1; this.baud=1/p.simbolo;
-	this.bits=ocho?3:2; this.gray=ocho?(p.gray||GRAY8):GRAY4; this.datos=ocho?DATOS8:DATOS4; this.sync=ocho?(p.costas?[[0,p.costas],[36,p.costas],[72,p.costas]]:SYNC8):SYNC4;
+	// p.n1: tamaño de la FFT larga para otras duraciones de ranura (submodos de JS8)
+	this.N1=p.n1||(ocho?192000:92160); this.N2=this.N1/this.fac; this.fs2=12000/this.fac; this.df=12000/this.N1; this.baud=1/p.simbolo;
+	this.bits=ocho?3:2; this.gray=ocho?(p.gray||GRAY8):GRAY4; this.datos=ocho?DATOS8:DATOS4; this.sync=ocho?(p.costas?(typeof p.costas[0]==='number'?[[0,p.costas],[36,p.costas],[72,p.costas]]:[[0,p.costas[0]],[36,p.costas[1]],[72,p.costas[2]]]):SYNC8):SYNC4;
 	this.plan1=planFFT(this.N1); this.plan2=planFFT(this.N2);
 	this.cargar(x);
 	var t=this.taper=new Float64Array(101); for(var i=0;i<=100;i++) t[i]=0.5*(1+Math.cos(i*Math.PI/100));

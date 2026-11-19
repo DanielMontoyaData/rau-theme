@@ -30,7 +30,7 @@ function latido(ind, grid) {
 	const g = Math.floor((Math.trunc(lng) + 180) / 2) * 180 + Math.trunc(lat + 90);
 	return [...bitsDe(0, 3), ...bitsDe(v, 50), ...bitsDe(g >> 5, 11), ...bitsDe(g & 31, 5), ...bitsDe(0, 3)];
 }
-let semilla = 3; const azar = () => (semilla = (semilla * 1103515245 + 12345) % 2147483648) / 2147483648;
+let semilla = 3; const azar = () => { semilla = (semilla + 0x6D2B79F5) | 0; let t = Math.imul(semilla ^ (semilla >>> 15), 1 | semilla); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; // mulberry32
 const gauss = () => { let u = 0; while (!u) u = azar(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * azar()); };
 function conRuido(x, snr) { const s = Math.sqrt(0.5 / 10 ** (snr / 10) * 6000 / 2500), y = new Float32Array(x.length); for (let i = 0; i < x.length; i++) y[i] = x[i] + s * gauss(); return y; }
 
@@ -68,6 +68,15 @@ test('con ruido a −18 dB y otra señal al lado', () => {
 	assert.ok(d.includes('HK4ABC: HK6XYZ RR '), JSON.stringify(d));
 	assert.ok(d.includes('HK3QQ: @HB HEARTBEAT FJ24 '), JSON.stringify(d));
 });
+for (const sub of ['rapido', 'turbo', 'ultra', 'lento']) {
+	test(`submodo ${sub}: ida y vuelta con ruido a −12 dB`, () => {
+		const P = J.SUBMODOS[sub], b = dirigido('HK4ABC', 'HK6XYZ', 23, 0);
+		const y = J.sintetizar(J.codificar(b, 3, sub), 1000, 12000, null, sub);
+		const d = J.decodificar(conRuido(y, -12), 12000, { submodo: sub });
+		assert.equal(d.length, 1, JSON.stringify(d)); assert.equal(d[0].texto, 'HK4ABC: HK6XYZ QSL ');
+		assert.ok(Math.abs(d[0].dt) <= 0.1 && d[0].submodo === sub && Math.abs(d[0].freq - 1000) <= P.simbolo ** -1 / 4 + 1);
+	});
+}
 test('ruido solo: nada', () => {
 	semilla = 77; const x = new Float32Array(180000); for (let i = 0; i < x.length; i++) x[i] = gauss() * 0.3;
 	assert.equal(J.decodificar(x, 12000).length, 0);
@@ -80,13 +89,20 @@ test('ensamblador: junta los marcos de un mensaje largo por frecuencia', () => {
 	assert.equal(m.texto, 'HK4ABC: HK6XYZ  PUENTE CAIDO VIA LA FLORIDA'); assert.equal(m.partes, 2);
 });
 const DIR = process.env.JS8CALL_WAV;
-test('grabaciones de JS8Call (modo Normal): al menos 90 % de lo que JS8Call decodifica', { skip: !DIR && 'sin JS8CALL_WAV' }, () => {
+test('grabaciones de JS8Call (Normal y Lento): al menos 90 % de lo que JS8Call decodifica', { skip: !DIR && 'sin JS8CALL_WAV' }, () => {
 	let esperado = 0, obtenido = 0; J.usarDiccionario(DICC);
 	for (const f of fs.readdirSync(DIR).filter(f => /^A_\d_\d+\.wav$/.test(f))) {
 		const b = fs.readFileSync(path.join(DIR, f)), n = (b.length - 44) / 2, x = new Float32Array(n);
 		for (let i = 0; i < n; i++) x[i] = b.readInt16LE(44 + 2 * i) / 32768;
 		const d = J.decodificar(x, 12000); esperado += +f.split('_')[2].split('.')[0]; obtenido += Math.min(d.length, +f.split('_')[2].split('.')[0]);
 		if (f === 'A_1_4.wav') assert.ok(d.some(r => r.texto === 'KN4ZXG: @HB HEARTBEAT FM16 '));
+	}
+	// Submodo Lento (E_): costas modificadas y texto comprimido de datos rápidos
+	for (const f of fs.readdirSync(DIR).filter(f => /^E_\d_\d+\.wav$/.test(f))) {
+		const b = fs.readFileSync(path.join(DIR, f)), n = (b.length - 44) / 2, x = new Float32Array(n);
+		for (let i = 0; i < n; i++) x[i] = b.readInt16LE(44 + 2 * i) / 32768;
+		const d = J.decodificar(x, 12000, { submodo: 'lento' }); esperado += 1; obtenido += Math.min(d.length, 1);
+		assert.equal(d[0] && d[0].texto, 'KN4CRD: TEST');
 	}
 	console.log(`   ${obtenido} de ${esperado}`);
 	assert.ok(obtenido / esperado >= 0.9);

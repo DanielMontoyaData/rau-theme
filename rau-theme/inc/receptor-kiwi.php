@@ -42,7 +42,7 @@ function rau_receptor_kiwi( $args = array() ) {
 	<?php if ( $relay ) : ?>
 	<div id="rx-app" tabindex="0" class="rx-radio outline-none" aria-label="Receptor KiwiSDR: usa las flechas para sintonizar">
 		<div class="rx-placa">
-			<span class="rx-placa-marca">HK4RAU</span>
+			<span class="rx-placa-marca" id="rx-placa-marca">HK4RAU</span>
 			<span class="rx-placa-modelo">KiwiSDR 2 · receptor de comunicaciones · 10 kHz – 30 MHz</span>
 		</div>
 		<div class="rx-frente">
@@ -88,6 +88,14 @@ function rau_receptor_kiwi( $args = array() ) {
 			<span class="rx-estado-led" aria-hidden="true"></span>
 			<p id="rx-msg" role="status" aria-live="polite">Pulsa «Escuchar» para conectarte. Usarás uno de los canales del receptor mientras escuchas.</p>
 			<button type="button" id="rx-avisar" class="rx-tecla hidden">🔔 Avísame cuando haya canal</button>
+			<button type="button" id="rx-grab-subir" class="rx-tecla hidden">🔗 Compartir esta grabación</button>
+			<?php $grab = function_exists( 'rau_grab_compartida' ) ? rau_grab_compartida() : null; if ( $grab ) : ?>
+			<div id="rx-grab" class="rx-grab">
+				<p class="rx-serigrafia">Grabación compartida · <?php echo esc_html( number_format( $grab['freq'], 2, ',', '.' ) . ' kHz ' . strtoupper( $grab['modo'] ) ); ?> · <?php echo esc_html( gmdate( 'Y-m-d H:i', (int) ( $grab['inicio'] / 1000 ) ) ); ?> UTC · <?php echo esc_html( $grab['por'] ); ?></p>
+				<audio controls preload="none" src="<?php echo esc_url( $grab['url'] ); ?>"></audio>
+				<button type="button" class="rx-tecla" id="rx-grab-ir" data-f="<?php echo esc_attr( $grab['freq'] ); ?>" data-m="<?php echo esc_attr( $grab['modo'] ); ?>">Escuchar esa frecuencia en vivo</button>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<div class="rx-pan">
@@ -124,9 +132,28 @@ function rau_receptor_kiwi( $args = array() ) {
 			<p class="rx-cw-nota">Funciona mejor con una sola señal clara: tócala en la cascada para centrarla en el filtro y usa el filtro «Angosto». Las letras tenues son dudosas.</p>
 		</div>
 
+		<div id="rx-dig" class="rx-cw hidden">
+			<div class="rx-cw-cab">
+				<span class="rx-serigrafia" id="rx-dig-titulo">Decodificador</span><span id="rx-dig-info">Esperando una señal…</span>
+				<button type="button" id="rx-dig-borrar" class="rx-tecla rx-tecla-mini">Borrar</button>
+			</div>
+			<p id="rx-dig-texto" class="rx-cw-texto rx-dig-texto" aria-live="polite"></p>
+			<p class="rx-cw-nota" id="rx-dig-nota"></p>
+		</div>
+
+		<div id="rx-sstv" class="rx-cw hidden">
+			<div class="rx-cw-cab">
+				<span class="rx-serigrafia">Decodificador SSTV</span><span id="rx-sstv-info">Esperando el tono VIS de comienzo de imagen…</span>
+				<button type="button" id="rx-sstv-guardar" class="rx-tecla rx-tecla-mini" disabled>Guardar imagen</button>
+			</div>
+			<canvas id="rx-sstv-cv" class="rx-sstv-cv" width="320" height="256" aria-label="Imagen SSTV recibida"></canvas>
+			<div id="rx-sstv-galeria" class="rx-sstv-galeria" aria-label="Imágenes anteriores"></div>
+			<p class="rx-cw-nota">Arranca solo con el tono VIS al empezar cada imagen: Martin 1 y 2, Scottie 1 y 2, Robot 36. Frecuencias habituales: 14.230 USB, 7.171 LSB, 21.340 USB, 28.680 USB.</p>
+		</div>
+
 		<div id="rx-ft" class="rx-cw rx-ft hidden">
 			<div class="rx-cw-cab">
-				<span class="rx-serigrafia" id="rx-ft-titulo">Decodificador FT8</span><span id="rx-ft-info">Esperando la próxima ranura…</span>
+				<span class="rx-serigrafia" id="rx-ft-titulo">Decodificador FT8</span><select id="rx-js8-sub" class="rx-ft-sel hidden" aria-label="Submodo de JS8"><option value="normal">Normal · 15 s</option><option value="rapido">Rápido · 10 s</option><option value="turbo">Turbo · 6 s</option><option value="lento">Lento · 30 s</option></select><span id="rx-ft-info">Esperando la próxima ranura…</span>
 				<label class="rx-ft-filtro"><input type="checkbox" id="rx-ft-cq"> solo CQ</label>
 				<button type="button" id="rx-ft-mapa-b" class="rx-tecla rx-tecla-mini" aria-pressed="false">Mapa</button>
 				<button type="button" id="rx-ft-borrar" class="rx-tecla rx-tecla-mini">Borrar</button>
@@ -149,10 +176,20 @@ function rau_receptor_kiwi( $args = array() ) {
 				<span class="rx-serigrafia">Modo</span>
 				<div id="rx-modos" class="rx-teclas"></div>
 			</div>
+			<?php $otros = (array) get_option( 'rau_receptores', array() ); if ( $otros ) : ?>
+			<div class="rx-grupo" role="group" aria-label="Receptor">
+				<span class="rx-serigrafia">Receptor</span>
+				<div class="rx-teclas">
+					<select id="rx-receptor" class="rx-ft-sel" aria-label="Receptor"><option value="">HK4RAU · <?php echo esc_html( rau_sdr_lugar() ); ?></option><?php foreach ( $otros as $o ) echo '<option value="' . esc_attr( $o['id'] ) . '">' . esc_html( $o['nombre'] . ' · ' . $o['lugar'] ) . '</option>'; ?></select>
+					<select id="rx-comparar" class="rx-ft-sel" aria-label="Comparar con otro receptor"><option value="">Comparar con…</option><option value="-">HK4RAU</option><?php foreach ( $otros as $o ) echo '<option value="' . esc_attr( $o['id'] ) . '">' . esc_html( $o['nombre'] ) . '</option>'; ?></select>
+					<span id="rx-comp" class="rx-comp" aria-live="polite"></span>
+				</div>
+			</div>
+			<?php endif; ?>
 			<div class="rx-grupo" role="group" aria-label="Decodificador">
 				<span class="rx-serigrafia">Decodificador</span>
 				<div id="rx-decs" class="rx-teclas">
-					<button type="button" data-d="" class="rx-dec rx-tecla" aria-pressed="true">Ninguno</button><button type="button" data-d="cw" class="rx-dec rx-tecla" aria-pressed="false">CW</button><button type="button" data-d="FT8" class="rx-dec rx-tecla" aria-pressed="false">FT8</button><button type="button" data-d="FT4" class="rx-dec rx-tecla" aria-pressed="false">FT4</button><button type="button" data-d="JS8" class="rx-dec rx-tecla" aria-pressed="false" title="JS8Call, submodo Normal">JS8</button>
+					<button type="button" data-d="" class="rx-dec rx-tecla" aria-pressed="true">Ninguno</button><button type="button" data-d="cw" class="rx-dec rx-tecla" aria-pressed="false">CW</button><button type="button" data-d="FT8" class="rx-dec rx-tecla" aria-pressed="false">FT8</button><button type="button" data-d="FT4" class="rx-dec rx-tecla" aria-pressed="false">FT4</button><button type="button" data-d="JS8" class="rx-dec rx-tecla" aria-pressed="false" title="JS8Call">JS8</button><button type="button" data-d="rtty" class="rx-dec rx-tecla" aria-pressed="false" title="RTTY 45,45 baudios, 170 Hz">RTTY</button><button type="button" data-d="psk31" class="rx-dec rx-tecla" aria-pressed="false">PSK31</button><button type="button" data-d="sstv" class="rx-dec rx-tecla" aria-pressed="false" title="Imágenes de televisión de barrido lento">SSTV</button>
 				</div>
 			</div>
 			<div class="rx-grupo" role="group" aria-label="Filtro">
@@ -284,16 +321,19 @@ function rau_receptor_kiwi( $args = array() ) {
 	</div>
 
 	<?php if ( $relay ) : ?>
-	<script src="<?php echo esc_url( get_template_directory_uri() . '/assets/radio/cw.js?ver=' . RAU_THEME_VERSION ); ?>"></script>
+	<?php // Los decodificadores se usan recién cuando llega audio: se cargan sin bloquear la página ?>
+	<script defer src="<?php echo esc_url( get_template_directory_uri() . '/assets/radio/cw.js?ver=' . RAU_THEME_VERSION ); ?>"></script>
+	<script defer src="<?php echo esc_url( get_template_directory_uri() . '/assets/radio/digi.js?ver=' . RAU_THEME_VERSION ); ?>"></script>
 	<script>
 	(function(){
 		var FT_WORKER=<?php echo wp_json_encode( get_template_directory_uri() . '/assets/radio/ftx-worker.js?ver=' . RAU_THEME_VERSION ); ?>;
 		var LEAFLET=<?php echo wp_json_encode( array( 'js' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.js?ver=1.9.4', 'css' => get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.css?ver=1.9.4' ) ); ?>;
 		var SDR_POS=<?php $l = get_option( 'rau_sdr_lugar' ); echo wp_json_encode( is_array( $l ) && isset( $l['lat'] ) ? array( 'lat' => (float) $l['lat'], 'lng' => (float) $l['lng'], 'n' => rau_sdr_lugar() ) : null ); ?>;
 		var RELAY=<?php echo wp_json_encode( preg_replace( '#^http(s?)://#', 'ws$1://', $relay ) ); ?>;
+		var RECEPTORES=<?php echo wp_json_encode( array_values( (array) get_option( 'rau_receptores', array() ) ) ); ?>, SDR_HK4RAU=null;
 		var AJAX_RX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 		// Con sesión iniciada, lo que se decodifica en JS8 se comparte con el centro de mando (ver inc/js8-oido.php)
-		var JS8_API=<?php echo wp_json_encode( is_user_logged_in() ? array( 'url' => rest_url( 'rau/v1/js8' ), 'nonce' => wp_create_nonce( 'wp_rest' ) ) : null ); ?>;
+		var JS8_API=<?php echo wp_json_encode( is_user_logged_in() ? array( 'url' => rest_url( 'rau/v1/js8' ), 'spots' => rest_url( 'rau/v1/spots' ), 'grab' => rest_url( 'rau/v1/grabaciones' ), 'nonce' => wp_create_nonce( 'wp_rest' ) ) : null ); ?>;
 		var PAGINA=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>;
 		var PLAN=<?php echo wp_json_encode( rau_receptor_plan() ); ?>;
 		/* Bandas de radioaficionado con sus segmentos de uso (plan IARU Región 2) y otras escuchas.
@@ -480,15 +520,18 @@ function rau_receptor_kiwi( $args = array() ) {
 		   Herramientas con RauRx.ponerSpots(); tocar una la sintoniza. */
 		function dibujarSpots(){
 			var cv=$('rx-spots'), d=ajustar(cv), c=cv.getContext('2d'), w=cv.width, h=cv.height;
-			c.clearRect(0,0,w,h); st.golpes=[]; if(!st.wfSpan || !st.spots.length) return;
+			// Lo decodificado en el navegador (FT8, FT4, JS8) se ve 3 minutos encima de su señal
+			var ahora=Date.now(); st.decSpots=(st.decSpots||[]).filter(function(s){ return ahora-s.t<180000; });
+			var todos=st.spots.concat(st.decSpots);
+			c.clearRect(0,0,w,h); st.golpes=[]; if(!st.wfSpan || !todos.length) return;
 			c.font='bold '+(10*d)+'px ui-monospace,monospace'; c.textBaseline='middle';
-			var fin=-1, vis=st.spots.filter(function(s){ var x=xDe(s.khz,w); return x>=0 && x<=w; }).sort(function(a,b){ return a.khz-b.khz; });
+			var fin=-1, vis=todos.filter(function(s){ var x=xDe(s.khz,w); return x>=0 && x<=w; }).sort(function(a,b){ return a.khz-b.khz; });
 			vis.forEach(function(s){
-				var x=xDe(s.khz,w), col=s.fuente==='pota'?'#34d399':s.fuente==='oido'?'#38bdf8':'#fbbf24';
+				var x=xDe(s.khz,w), col=s.fuente==='pota'?'#34d399':s.fuente==='oido'?'#38bdf8':s.fuente==='dec'?'#f472b6':'#fbbf24';
 				c.fillStyle=col; c.beginPath(); c.moveTo(x-3*d,0); c.lineTo(x+3*d,0); c.lineTo(x,5*d); c.closePath(); c.fill();
 				var tx=s.dx||'', ancho=c.measureText(tx).width;
 				if(x+2*d>fin){ c.fillText(tx, x+2*d, h*0.62); fin=x+2*d+ancho+6*d; }
-				st.golpes.push({x:x/d, s:s});
+				if(s.fuente!=='dec') st.golpes.push({x:x/d, s:s}); // tocar uno decodificado movería el dial y cortaría la decodificación
 			});
 		}
 		/* Sin conexión (o sin cascada) la pantalla igual muestra la banda: plan, escala y spots
@@ -550,14 +593,53 @@ function rau_receptor_kiwi( $args = array() ) {
 			if(st.decod==='cw' && st.modo!=='cw') st.decod='';
 			$('rx-cw').classList.toggle('hidden', st.decod!=='cw');
 			$('rx-ft').classList.toggle('hidden', !st.ft);
+			$('rx-dig').classList.toggle('hidden', st.decod!=='rtty' && st.decod!=='psk31');
+			$('rx-sstv').classList.toggle('hidden', st.decod!=='sstv');
+			$('rx-js8-sub').classList.toggle('hidden', !st.ft || st.ft.modo!=='JS8');
 			document.querySelectorAll('.rx-dec').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.d===(st.ft?st.ft.modo:st.decod)); });
 			document.querySelectorAll('.rx-modo').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.m===st.modo); });
 		}
-		function enviarModo(){ var f=MODOS[st.modo].f[st.filtro]; send(st.snd, 'SET mod='+st.modo+' low_cut='+f[0]+' high_cut='+f[1]+' freq='+st.freq.toFixed(3)); }
+		function enviarModo(){ var f=MODOS[st.modo].f[st.filtro], t='SET mod='+st.modo+' low_cut='+f[0]+' high_cut='+f[1]+' freq='+st.freq.toFixed(3); send(st.snd, t); if(st.comp) send(st.comp.ws, t); }
+		/* Otro receptor: se cambia la conexión (el audio y la cascada pasan a ser los de ese receptor) */
+		function elegirReceptor(id){
+			var r=RECEPTORES.filter(function(x){ return x.id===id; })[0];
+			if(SDR_HK4RAU===null) SDR_HK4RAU=SDR_POS;
+			SDR_POS=r ? {lat:r.lat, lng:r.lng, n:r.lugar} : SDR_HK4RAU;
+			compararCon('');
+			var estaba=st.on; if(estaba) apagar(true);
+			st.rx=id||''; $('rx-placa-marca').textContent=r ? r.nombre : 'HK4RAU';
+			if(estaba) encender(); else msg('Pulsa «Escuchar» para conectarte a '+(r?r.nombre:'HK4RAU')+'.');
+		}
+		/* Comparar: el mismo dial en otro receptor, sin sonido, solo su S-meter junto al de este */
+		function compararCon(id){
+			if(st.comp){ try{ st.comp.ws.onclose=null; st.comp.ws.close(); }catch(e){} st.comp=null; }
+			var e=$('rx-comp'); if(e) e.textContent='';
+			if(!id || !st.on) { if(id && e) e.textContent='Primero pulsa «Escuchar».'; return; }
+			var rid=id==='-'?'':id, nombre=rid?(RECEPTORES.filter(function(x){ return x.id===rid; })[0]||{}).nombre:'HK4RAU';
+			if(rid===st.rx){ e.textContent='Es el mismo receptor.'; return; }
+			var ws=new WebSocket(base(rid)+'/ws/kiwi/'+Date.now()+'/SND'); ws.binaryType='arraybuffer';
+			st.comp={ws:ws, n:nombre, dbm:null};
+			ws.onopen=function(){ ws.send('SET auth t=kiwi p='); ws.send('SERVER DE CLIENT hk4rau.com SND'); };
+			ws.onmessage=function(ev){
+				if(typeof ev.data==='string' || !st.comp || st.comp.ws!==ws) return;
+				var u8=new Uint8Array(ev.data), tag=String.fromCharCode(u8[0],u8[1],u8[2]);
+				if(tag==='MSG'){ var o=pares(new TextDecoder().decode(u8.subarray(4)));
+					if('too_busy' in o){ e.textContent=nombre+': sin canales libres.'; compararCon(''); return; }
+					if(o.audio_rate) ws.send('SET AR OK in='+o.audio_rate+' out=12000');
+					if(o.sample_rate){ ws.send('SET squelch=0 max=0'); ws.send('SET agc=1 hang=0 thresh=-100 slope=6 decay=1000 manGain=50'); ws.send('SET compression=1'); ws.send('SET ident_user=hk4rau.com'); enviarModo(); }
+					return; }
+				if(tag!=='SND') return;
+				var dbm=0.1*new DataView(ev.data).getUint16(8, false)-127; st.comp.dbm=st.comp.dbm===null?dbm:st.comp.dbm*0.9+dbm*0.1;
+				var a=st.dbm, b=st.comp.dbm, sm=function(d){ return d<=-73 ? 'S'+Math.max(0,Math.round((d+127)/6)) : 'S9+'+Math.round(d+73); };
+				e.textContent=nombre+': '+sm(b)+' ('+Math.round(b)+' dBm)'+(a!=null?' · aquí: '+sm(a)+' · diferencia '+(a-b>=0?'+':'')+Math.round(a-b)+' dB':'');
+			};
+			ws.onclose=function(){ if(st.comp && st.comp.ws===ws){ st.comp=null; e.textContent=nombre+': conexión cerrada.'; } };
+		}
 		function sintonizar(f, modo, recentrar){
 			// Otra estación: el decodificador de CW vuelve a aprender tono y velocidad
 			if(st.cw && Math.abs(f-st.freq)>0.3) st.cw.reiniciar();
 			if(st.skim && Math.abs(f-st.freq)>0.05) st.skim.reiniciar();
+			if(st.dig && st.decod!=='sstv' && Math.abs(f-st.freq)>0.3) st.dig.reiniciar();
 			st.freq=Math.min(30000, Math.max(10, Math.round(f*100)/100));
 			if(modo && MODOS[modo]) st.modo=modo;
 			enviarModo();
@@ -635,15 +717,20 @@ function rau_receptor_kiwi( $args = array() ) {
 			else { agc(); send(st.snd, 'SET compression=1'); }
 		}
 		function elegirDecodificador(d){
-			var habia=!!st.ft;
+			// Los modos digitales piden ganancia fija y audio sin compresión; al salir de todos se restaura
+			var DATOS=['FT8','FT4','JS8','rtty','psk31','sstv'], habia=!!st.datos, ahora=DATOS.indexOf(d)>=0;
 			st.ft=null; clearInterval(ftT);
-			if(habia && d!=='FT8' && d!=='FT4' && d!=='JS8') audioDatos(false);
-			st.decod = d==='cw' ? 'cw' : '';
+			if(habia && !ahora) audioDatos(false);
+			if(!habia && ahora) audioDatos(true);
+			st.datos=ahora;
+			st.decod = ['cw','rtty','psk31','sstv'].indexOf(d)>=0 ? d : '';
+			st.dig=null;
 			if(d==='cw'){ if(st.modo!=='cw') sintonizar(st.freq, 'cw', false); }
+			else if(d==='rtty' || d==='psk31' || d==='sstv') elegirDigital(d);
 			else if(d==='FT8' || d==='FT4' || d==='JS8'){
 				var corr=0.6; try { corr=+localStorage.getItem('rau_rx_ftcorr')||0.6; } catch(e){}
-				st.ft={modo:d, ranura:d==='FT4'?7.5:15, buf:null, n:0, marcas:[], hechas:{}, corr:corr, rapido:false};
-				audioDatos(true);
+				var sub=$('rx-js8-sub').value;
+				st.ft={modo:d, sub:sub, ranura:d==='FT4'?7.5:d==='JS8'?JS8_RANURA[sub]:15, buf:null, n:0, marcas:[], hechas:{}, corr:corr, rapido:false};
 				medirReloj().then(function(m){
 					var ft=st.ft, av=$('rx-ft-reloj'); if(!ft || !m) return;
 					// La demora de la red queda en la corrección; el reloj corrido se suma de entrada
@@ -660,6 +747,41 @@ function rau_receptor_kiwi( $args = array() ) {
 				ftT=setInterval(ftRevisar, 250);
 			}
 			pintarFreq();
+		}
+		/* ── RTTY, PSK31 y SSTV (assets/radio/digi.js) ─────────────────────── */
+		// Ranuras de los submodos de JS8 (todos usan la misma frecuencia de llamada)
+		var JS8_RANURA={normal:15, rapido:10, turbo:6, lento:30};
+		var DIGI_F={rtty:{'80 m':3590,'40 m':7040,'20 m':14085,'15 m':21085,'10 m':28085}, psk31:{'80 m':3580,'40 m':7070,'30 m':10142,'20 m':14070,'17 m':18100,'15 m':21070,'10 m':28120},
+			sstv:{'80 m':3845,'40 m':7171,'20 m':14230,'15 m':21340,'10 m':28680}};
+		var DIGI_RANGO={rtty:[[3580,3600],[7030,7050],[14075,14100],[21075,21100],[28075,28100]], psk31:[[3575,3590],[7065,7075],[10138,10146],[14068,14075],[18098,18104],[21068,21075],[28118,28124]],
+			sstv:[[3840,3850],[7165,7176],[14225,14235],[21335,21345],[28675,28685]]};
+		var sstvImgs=[];
+		function elegirDigital(d){
+			var enRango=DIGI_RANGO[d].some(function(r){ return st.freq>=r[0] && st.freq<=r[1]; });
+			var f=st.freq; if(!enRango){ var b=bandaDe(st.freq)||BANDAS.filter(function(x){ return x.n===(DIA?'20 m':'40 m'); })[0]; f=DIGI_F[d][b.n]||DIGI_F[d][DIA?'20 m':'40 m']; }
+			// SSTV en 40 y 80 m va en LSB; RTTY y PSK31, en USB (el RTTY detecta solo la polaridad)
+			st.filtro=2; sintonizar(f, d==='sstv' && f<10000 ? 'lsb' : 'usb');
+			if(!window.RauDigi) return;
+			if(d==='sstv'){
+				st.dig=RauDigi.sstv(st.rate, sstvLinea, function(t){ $('rx-sstv-info').textContent=t; });
+			} else {
+				$('rx-dig-titulo').textContent='Decodificador '+(d==='rtty'?'RTTY':'PSK31');
+				$('rx-dig-nota').textContent=d==='rtty' ? 'RTTY de radioaficionado: 45,45 baudios y 170 Hz de desplazamiento. Se engancha solo al par de tonos y detecta la polaridad. Con filtro ancho, toca la señal en la cascada para centrarla.' : 'PSK31: se engancha a la señal más fuerte del filtro y la sigue. Con varias señales, toca la que quieras en la cascada y usa el filtro «Angosto».';
+				$('rx-dig-texto').textContent='';
+				st.dig=RauDigi[d](st.rate, function(t){ var e=$('rx-dig-texto'); e.textContent=t.slice(-1500); }, function(t){ $('rx-dig-info').textContent=t; });
+			}
+		}
+		function sstvLinea(o){
+			var cv=$('rx-sstv-cv');
+			if(cv.width!==o.ancho || cv.height!==o.alto){ cv.width=o.ancho; cv.height=o.alto; }
+			if(o.linea%4 && o.linea<o.alto) return;
+			cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(o.img), o.ancho, o.alto), 0, 0);
+			if(o.linea>=o.alto){
+				var url=cv.toDataURL('image/png'), nombre='HK4RAU-SSTV-'+o.modo.replace(/ /g,'')+'-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'')+'.png';
+				sstvImgs.unshift({url:url, nombre:nombre}); if(sstvImgs.length>6) sstvImgs.pop();
+				$('rx-sstv-guardar').disabled=false;
+				$('rx-sstv-galeria').innerHTML=sstvImgs.map(function(x, i){ return '<a href="'+x.url+'" download="'+x.nombre+'" title="Descargar"><img src="'+x.url+'" alt="Imagen SSTV '+(i+1)+'" width="80" height="64"></a>'; }).join('');
+			}
 		}
 		function ftGuardar(m){
 			var ft=st.ft, tasa=st.rate;
@@ -681,7 +803,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			// Hace falta la ranura entera dentro de lo guardado
 			if(k0<ft.n-L || k0+n>ft.n || k0<0){ $('rx-ft-info').textContent='Juntando audio de una ranura completa…'; return; }
 			var x=new Float32Array(n); for(var i=0;i<n;i++) x[i]=ft.buf[(k0+i)%L];
-			ftWorker.postMessage({id:++ftId, modo:ft.modo, muestras:x, tasa:Math.abs(ft.tasa-12000)<2?12000:ft.tasa, profundo:!ft.rapido});
+			ftWorker.postMessage({id:++ftId, modo:ft.modo, submodo:ft.sub, muestras:x, tasa:Math.abs(ft.tasa-12000)<2?12000:ft.tasa, profundo:!ft.rapido});
 			ft.pend={id:ftId, S:S, dial:st.freq, modo:ft.modo};
 			$('rx-ft-info').textContent='Decodificando la ranura de las '+horaUtc(S)+'…';
 		}
@@ -697,6 +819,9 @@ function rau_receptor_kiwi( $args = array() ) {
 			// JS8: los mensajes de varios marcos, ya armados, van como una fila más
 			(d.mensajes||[]).forEach(function(m){ if(m.partes>1) ftFilas.unshift({utc:horaUtc(p.S), snr:'', dt:null, f:m.freq, t:'✉ '+m.texto, nuevo:true}); });
 			if(p.modo==='JS8') js8Compartir(p, res, d.mensajes||[]);
+			pskReportar(p, res);
+			res.forEach(function(r){ var x=remitente(r); if(x) st.decSpots=(st.decSpots||[]).filter(function(s){ return s.dx!==x.de; }).concat([{khz:p.dial+r.freq/1000, dx:x.de, fuente:'dec', t:Date.now()}]); });
+			dibujarSpots();
 			if(ftFilas.length>300) ftFilas.length=300;
 			// Corrección de tiempo: lleva la mediana del DT hacia 0
 			if(res.length>=2){ var dts=res.map(function(r){ return r.dt; }).sort(function(a,b){ return a-b; }), med=dts[dts.length>>1];
@@ -707,8 +832,21 @@ function rau_receptor_kiwi( $args = array() ) {
 		}
 		/* JS8 al centro de mando: con sesión iniciada se envía lo decodificado (sin latidos) para que la sala
 		   lo vea como «oído en el receptor HK4RAU». Sin sesión, nada sale del navegador. */
+		/* PSK Reporter: con sesión iniciada, quien transmitió lo que se decodificó (indicativo, locator, SNR) se
+		   reporta como oído por HK4RAU. El servidor descarta lo que el Kiwi ya reporta y junta los envíos. */
+		function remitente(r){
+			if(r.de) return {de:r.de, g:r.cuadricula||''};
+			var c=r.campos; if(!c || !c[1] || /^</.test(c[1])) return null;
+			return {de:c[1], g:/^[A-R]{2}[0-9]{2}$/.test(c[2]||'')?c[2]:''};
+		}
+		function pskReportar(p, res){
+			if(!JS8_API || st.rx) return; // solo lo oído en el HK4RAU se reporta como del HK4RAU
+			var items=[]; res.forEach(function(r){ var x=remitente(r); if(x) items.push({de:x.de, cuadricula:x.g, f:r.freq, snr:r.snr}); });
+			if(!items.length) return;
+			fetch(JS8_API.spots, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json', 'X-WP-Nonce':JS8_API.nonce}, body:JSON.stringify({modo:p.modo, ranura:p.S, dial:Math.round(p.dial*1000), items:items})}).catch(function(){});
+		}
 		function js8Compartir(p, res, mensajes){
-			if(!JS8_API) return;
+			if(!JS8_API || st.rx) return; // solo lo oído en el HK4RAU se reporta como del HK4RAU
 			var items=res.filter(function(r){ return r.tipo!=='latido' && r.texto; }).map(function(r){ return {texto:r.texto.trim(), de:r.de||'', para:r.para||'', grupo:r.grupo||'', tipo:r.tipo, f:r.freq, snr:r.snr}; })
 				.concat(mensajes.filter(function(m){ return m.partes>1; }).map(function(m){ return {texto:m.texto, tipo:'mensaje', f:m.freq, snr:null}; }));
 			if(!items.length) return;
@@ -781,6 +919,7 @@ function rau_receptor_kiwi( $args = array() ) {
 				else { if(!st.cw) st.cw=RauCW.crear(st.rate, cwTexto, cwInfo); st.cw.procesar(m); }
 			}
 			if(st.ft) ftGuardar(m);
+			if(st.dig) st.dig.procesar(m);
 			m=remuestrear(m); if(!m.length) return;
 			var buf=ctx.createBuffer(1, m.length, ctx.sampleRate); buf.getChannelData(0).set(m);
 			var src=ctx.createBufferSource(); src.buffer=buf; src.connect(st.gain);
@@ -819,7 +958,9 @@ function rau_receptor_kiwi( $args = array() ) {
 			var tasa=Math.round(st.rate), dv=new DataView(new ArrayBuffer(44)), s=function(o,t){ for(var i=0;i<t.length;i++) dv.setUint8(o+i,t.charCodeAt(i)); };
 			s(0,'RIFF'); dv.setUint32(4,36+g.n*2,true); s(8,'WAVE'); s(12,'fmt '); dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
 			dv.setUint32(24,tasa,true); dv.setUint32(28,tasa*2,true); dv.setUint16(32,2,true); dv.setUint16(34,16,true); s(36,'data'); dv.setUint32(40,g.n*2,true);
-			var url=URL.createObjectURL(new Blob([dv.buffer].concat(g.partes), {type:'audio/wav'})), a=document.createElement('a');
+			var blob=new Blob([dv.buffer].concat(g.partes), {type:'audio/wav'}), url=URL.createObjectURL(blob), a=document.createElement('a');
+			// Con sesión iniciada y hasta 3 minutos, se puede subir para compartirla con un enlace
+			st.ultGrab={blob:blob, freq:g.freq, modo:g.modo, inicio:g.inicio}; $('rx-grab-subir').classList.toggle('hidden', !JS8_API || g.n/tasa>180);
 			a.href=url; a.download='HK4RAU-'+g.freq.toFixed(2)+'kHz-'+g.modo+'-'+new Date(g.inicio).toISOString().slice(0,16).replace(/[:T]/g,'')+'.wav';
 			document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
 		}
@@ -835,8 +976,9 @@ function rau_receptor_kiwi( $args = array() ) {
 			if('inactivity_timeout' in o || 'tlimit_exp' in o){ msg('El receptor cerró la sesión por tiempo. Pulsa «Escuchar» para volver.'); apagar(true); return true; }
 			return false;
 		}
+		function base(id){ return RELAY+(id?'/r/'+id:''); }
 		function abrir(stream, onmsg, onbin){
-			var ws=new WebSocket(RELAY+'/ws/kiwi/'+st.ts+'/'+stream);
+			var ws=new WebSocket(base(st.rx)+'/ws/kiwi/'+st.ts+'/'+stream);
 			ws.binaryType='arraybuffer';
 			ws.onopen=function(){ ws.send('SET auth t=kiwi p='); ws.send('SERVER DE CLIENT hk4rau.com '+stream); };
 			ws.onmessage=function(ev){
@@ -865,7 +1007,7 @@ function rau_receptor_kiwi( $args = array() ) {
 					send(st.snd, 'SET squelch=0 max=0'); send(st.snd, 'SET genattn=0'); send(st.snd, 'SET gen=0 mix=-1');
 					agc(); send(st.snd, 'SET compression=1'); send(st.snd, 'SET ident_user=hk4rau.com');
 					sintonizar(st.freq, st.modo);
-					if(st.ft) audioDatos(true);
+					if(st.datos) audioDatos(true);
 					msg('Escuchando. Toca una señal en la cascada para sintonizarla o arrástrala para recorrer la banda.');
 					$('rx-libres').textContent='Conectado: usas uno de los canales del receptor';
 					if(st.primera){ st.primera=false; buscarEmisora(0); }
@@ -938,7 +1080,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			if(st.grab) pararGrabacion();
 			st.on=false; clearInterval(st.ka); clearInterval(st.miniT); mini();
 			[st.snd, st.wf].forEach(function(ws){ if(ws){ ws.onclose=null; try{ ws.close(); }catch(e){} } });
-			st.snd=st.wf=null; st.ultXbin=-1;
+			st.snd=st.wf=null; st.ultXbin=-1; compararCon('');
 			$('rx-power').textContent='▶ Escuchar'; $('rx-power').setAttribute('aria-pressed','false'); $('rx-ind-rx').classList.remove('is-on'); $('rx-s').textContent='—'; $('rx-smeter').style.width='0'; st.pico=0; $('rx-pico').style.left='0';
 			if(!silencioso) msg('Desconectado. El canal quedó libre para otra persona.');
 			document.dispatchEvent(new CustomEvent('rau:rx-encendido', {detail:{on:false}}));
@@ -1011,7 +1153,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			var r=d.el.getBoundingClientRect(); cambiarDigito(d.v, e.clientY<r.top+r.height/2 ? 1 : -1);
 		});
 		$('rx-freq').addEventListener('wheel', function(e){ var d=e.target.closest('.rx-dig'); if(!d) return; e.preventDefault(); cambiarDigito(+d.dataset.v, e.deltaY<0?1:-1); }, {passive:false});
-		document.querySelectorAll('.rx-modo').forEach(function(b){ b.addEventListener('click', function(){ if(b.dataset.m==='cw') st.decod='cw'; else if(st.ft) st.ft=null; sintonizar(st.freq, b.dataset.m, false); }); });
+		document.querySelectorAll('.rx-modo').forEach(function(b){ b.addEventListener('click', function(){ if(b.dataset.m==='cw') elegirDecodificador('cw'); else if(st.ft || st.dig) elegirDecodificador(''); sintonizar(st.freq, b.dataset.m, false); }); });
 		document.querySelectorAll('.rx-paso').forEach(function(b){ b.addEventListener('click', function(){ sintonizar(redondear(st.freq)+st.paso*(+b.dataset.pasos), null, false); }); });
 		// Acepta kHz (7074) o MHz (7.074 o 7,074): por debajo de 31 se entiende MHz
 		$('rx-input').addEventListener('change', function(){ var f=parseFloat(String(this.value).replace(',', '.')); if(!(f>0)) return; if(f<31) f*=1000; sintonizar(f, modoPara(f,'')); });
@@ -1045,6 +1187,17 @@ function rau_receptor_kiwi( $args = array() ) {
 			this.textContent='■ Parar grabación'; this.setAttribute('aria-pressed','true'); this.classList.add('text-rose-400'); $('rx-ind-rec').classList.add('is-on');
 			msg('Grabando '+st.freq.toFixed(2)+' kHz. Pulsa «Parar grabación» para descargar el WAV.');
 		});
+		$('rx-grab-subir').addEventListener('click', function(){
+			var g=st.ultGrab, b=this; if(!g) return;
+			var fd=new FormData(); fd.append('audio', g.blob, 'grabacion.wav'); fd.append('freq', g.freq); fd.append('modo', g.modo); fd.append('inicio', g.inicio);
+			b.disabled=true; msg('Subiendo la grabación…');
+			fetch(JS8_API.grab, {method:'POST', credentials:'same-origin', headers:{'X-WP-Nonce':JS8_API.nonce}, body:fd}).then(function(r){ return r.json(); }).then(function(j){
+				b.disabled=false; if(!j.enlace){ msg('No se pudo compartir: '+(j.error||'error')); return; }
+				b.classList.add('hidden'); msg('Listo. Enlace de la grabación: '+j.enlace);
+				if(navigator.share) navigator.share({title:j.titulo, url:j.enlace}).catch(function(){}); else if(navigator.clipboard) navigator.clipboard.writeText(j.enlace).catch(function(){});
+			}).catch(function(){ b.disabled=false; msg('No se pudo subir la grabación.'); });
+		});
+		if($('rx-grab-ir')) $('rx-grab-ir').addEventListener('click', function(){ var f=+this.dataset.f, m=this.dataset.m; if(!st.on){ st.freq=f; if(MODOS[m]) st.modo=m; $('rx-power').click(); } else sintonizar(f, MODOS[m]?m:st.modo); });
 		$('rx-share').addEventListener('click', function(){
 			var url=PAGINA+'?f='+st.freq.toFixed(2)+'&m='+st.modo, texto='Escucha '+st.freq.toFixed(2)+' kHz '+MODOS[st.modo].n+' en el KiwiSDR de RAU';
 			if(navigator.share){ navigator.share({title:'KiwiSDR HK4RAU', text:texto, url:url}).catch(function(){}); return; }
@@ -1062,6 +1215,11 @@ function rau_receptor_kiwi( $args = array() ) {
 		});
 		$('rx-cw-canales').addEventListener('click', function(e){ var b=e.target.closest('.rx-cw-canal'); if(b) sintonizar(+b.dataset.f, 'cw', false); });
 		$('rx-decs').addEventListener('click', function(e){ var b=e.target.closest('.rx-dec'); if(b) elegirDecodificador(b.dataset.d); });
+		$('rx-js8-sub').addEventListener('change', function(){ if(st.ft && st.ft.modo==='JS8') elegirDecodificador('JS8'); });
+		if($('rx-receptor')) $('rx-receptor').addEventListener('change', function(){ elegirReceptor(this.value); });
+		if($('rx-comparar')) $('rx-comparar').addEventListener('change', function(){ compararCon(this.value); });
+		$('rx-dig-borrar').addEventListener('click', function(){ if(st.dig) st.dig.reiniciar(); $('rx-dig-texto').textContent=''; });
+		$('rx-sstv-guardar').addEventListener('click', function(){ var x=sstvImgs[0]; if(!x) return; var a=document.createElement('a'); a.href=x.url; a.download=x.nombre; document.body.appendChild(a); a.click(); a.remove(); });
 		$('rx-ft-borrar').addEventListener('click', function(){ ftFilas=[]; pintarFt(); });
 		$('rx-ft-cq').addEventListener('change', pintarFt);
 		$('rx-ft-mapa-b').addEventListener('click', function(){ var on=$('rx-ft-mapa').classList.toggle('hidden')===false; this.setAttribute('aria-pressed', on); if(on) pintarMapa(); });
@@ -1127,7 +1285,8 @@ function rau_receptor_kiwi( $args = array() ) {
 		/* API para otras herramientas: abrir el receptor en una frecuencia */
 		window.RauRx={ sintonizar:function(f,m){ sintonizar(f, m||modoPara(f,'')); }, encender:encender, modoPara:modoPara, encendido:function(){ return st.on; },
 			estado:function(){ return {khz:st.freq, modo:st.modo, on:st.on}; },
-			ponerSpots:function(l){ st.spots=(l||[]).filter(function(s){ return s.khz>0 && s.khz<30000; }); dibujarSpots(); } };
+			ponerSpots:function(l){ st.spots=(l||[]).filter(function(s){ return s.khz>0 && s.khz<30000; }); dibujarSpots(); },
+			decodificados:function(){ return (st.decSpots||[]).slice(); } };
 		window.rauEscuchar=function(fk, pista){
 			fk=+fk; if(!(fk>0)) return;
 			var m=modoPara(fk, pista);

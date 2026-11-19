@@ -58,5 +58,6 @@ function rau_em_alertas_publicas() {
 		$d = rau_prop_datos();
 		if ( $d['bandas'] ) { $prop = array( 'actualizado' => $d['actualizado'], 'bandas' => array() ); foreach ( $d['bandas'] as $b => $x ) $prop['bandas'][ $b ] = array( 'n' => $x['n'], 'max' => $x['max'], 'reg' => array_slice( array_keys( $x['reg'] ), 0, 3 ), 'nac' => $x['reg']['Colombia'] ?? 0 ); }
 	}
+	if ( function_exists( 'rau_pronostico' ) ) { if ( ! $prop ) $prop = array( 'actualizado' => 0, 'bandas' => array() ); $pr = rau_pronostico(); $prop['nvis'] = $pr['nvis']; $prop['iono'] = $pr['iono'] ? array( 'nombre' => $pr['iono']['nombre'], 'fof2' => $pr['iono']['fof2'], 'hace' => $pr['iono']['hace'] ) : null; $prop['kp'] = $pr['kp']; }
 	return array( 'alertas' => $a, 'prop' => $prop, 'js8' => function_exists( 'rau_js8_para_sala' ) ? rau_js8_para_sala() : array(), 'oido' => $o ? array( 'bandas' => $bandas, 'vigiladas' => $o['vigiladas'], 'actualizado' => $o['actualizado'], 'lugar' => $o['rx']['lugar'] ) : null );
 }

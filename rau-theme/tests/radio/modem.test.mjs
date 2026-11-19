@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const M = require('../../assets/radio/modem.js');
 
-let semilla = 7; const azar = () => (semilla = (semilla * 1103515245 + 12345) % 2147483648) / 2147483648;
+let semilla = 7; const azar = () => { semilla = (semilla + 0x6D2B79F5) | 0; let t = Math.imul(semilla ^ (semilla >>> 15), 1 | semilla); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; // mulberry32
 const gauss = () => { let u = 0; while (!u) u = azar(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * azar()); };
 // Ruido blanco con la SNR pedida en 2500 Hz (la señal tiene amplitud 0,6: potencia 0,18)
 function ruido(x, tasa, snr) {
@@ -64,6 +64,33 @@ test('tramas perdidas: dice cuáles faltan y se completa con el reenvío de solo
 	assert.equal(msg, null); assert.deepEqual(ult.faltan, perdidas); assert.equal(ult.total, n);
 	r.alimentar(M.sintetizar(b, 48000, { modo: 'rapido', solo: perdidas })); r.alimentar(new Float32Array(48000));
 	assert.ok(msg && igual(msg, b));
+});
+test('protección media: se pierden 4 tramas de un bloque y el mensaje sale igual, sin reenvío', () => {
+	const b = texto(300), plan = M.plan(b, 4); // cabecera, 16 de datos, 4 de paridad, …
+	assert.equal(plan.length, M.cuantasTramas(b, 'media'));
+	const est = recibir(M.sintetizar(b, 48000, { modo: 'rapido', proteccion: 'media', perder: [2, 5, 9, 13, 30] }), 48000);
+	assert.equal(est.mensajes.length, 1); assert.ok(igual(est.mensajes[0], b));
+	assert.ok(est.estados.at(-1).recuperadas >= 5 || est.estados.some(e => e.recuperadas >= 4));
+});
+test('protección media: si se pierden más de las que cubre, dice cuáles pedir y se completa con esas', () => {
+	const b = texto(200), perder = [2, 3, 4, 5, 6, 7];   // 6 de datos del primer bloque; la paridad cubre 4
+	const r = M.crearReceptor(48000, e => (ult = e), m => (msg = m)); let ult = null, msg = null;
+	r.alimentar(M.sintetizar(b, 48000, { modo: 'rapido', proteccion: 'media', perder })); r.alimentar(new Float32Array(48000));
+	assert.equal(msg, null); assert.equal(ult.faltan.length, 6, JSON.stringify(ult.faltan));
+	r.alimentar(M.sintetizar(b, 48000, { modo: 'rapido', proteccion: 'media', solo: ult.faltan.slice(0, 2) })); r.alimentar(new Float32Array(48000));
+	assert.ok(msg && igual(msg, b), 'con 2 reenviadas la paridad completa el resto');
+});
+test('protección alta: la última trama de datos y la cabecera inicial perdidas', () => {
+	const b = texto(100), plan = M.plan(b, 8), ultDatos = 1 + Math.ceil((b.length + 2) / 8) - 1;
+	const est = recibir(M.sintetizar(b, 48000, { modo: 'rapido', proteccion: 'alta', perder: [0, ultDatos] }), 48000);
+	assert.equal(est.mensajes.length, 1); assert.ok(igual(est.mensajes[0], b));
+	assert.ok(plan.length > ultDatos + 8);
+});
+test('sugiere la velocidad según la SNR de lo recibido', () => {
+	const est = recibir(M.sintetizar(texto(80), 48000, { modo: 'robusto' }), 48000);
+	assert.equal(est.estados.at(-1).sugerencia.modo, 'rapido');
+	const d = recibir(ruido(M.sintetizar(texto(80), 48000, { modo: 'rapido' }), 48000, -5), 48000);
+	assert.equal(d.estados.at(-1).sugerencia.modo, 'robusto');
 });
 test('solo ruido o voz no producen tramas', () => {
 	semilla = 99; const n = 48000 * 30, x = new Float32Array(n);

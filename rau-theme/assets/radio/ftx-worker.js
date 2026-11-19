@@ -29,7 +29,7 @@ self.onmessage = function (e) {
 		if (d.modo === 'JS8') {
 			cargarJS8().then(function () {
 				try {
-					var res = RauJS8.decodificar(d.muestras, d.tasa, { profundo: d.profundo !== false }), mensajes = [];
+					var res = RauJS8.decodificar(d.muestras, d.tasa, { profundo: d.profundo !== false, submodo: d.submodo || 'normal' }), mensajes = [];
 					res.forEach(function (r) { var m = ensamblador.agregar(r, d.id); if (m) mensajes.push(m); });
 					self.postMessage({ id: d.id, res: res, mensajes: mensajes, ms: Date.now() - t0 });
 				} catch (err) { fallo(err); }

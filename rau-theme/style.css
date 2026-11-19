@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.57.0
+Version: 19.58.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -1023,3 +1023,14 @@ html.rau-splash-active body {
 	#rx-app .rx-mesa .rx-tecla:not(.rx-tecla-doble) { padding: .35rem .55rem .35rem .95rem; }
 	#rx-app .rx-mesa .rx-tecla::before { left: .38rem; }
 }
+
+/* Receptor: RTTY, PSK31, SSTV y submodo de JS8 (19.58) */
+.rx-dig-texto { white-space: pre-wrap; max-height: 9.5rem; overflow-y: auto; }
+.rx-sstv-cv { display: block; width: 100%; max-width: 480px; height: auto; margin: .5rem 0; image-rendering: pixelated; background: #05070b; border-radius: .4rem; border: 1px solid rgba(255,181,71,.25); }
+.rx-sstv-galeria { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rx-sstv-galeria img { display: block; width: 80px; height: 64px; object-fit: cover; border-radius: .25rem; border: 1px solid rgba(255,181,71,.25); }
+.rx-ft-sel { margin-left: .5rem; padding: .1rem .3rem; font: inherit; font-size: .75rem; color: var(--rx-ambar); background: transparent; border: 1px solid rgba(255,181,71,.35); border-radius: .3rem; }
+.rx-ft-sel.hidden { display: none; }
+.rx-grab { margin: .6rem 0; padding: .6rem .8rem; border: 1px solid rgba(255,181,71,.3); border-radius: .6rem; display: grid; gap: .45rem; }
+.rx-grab audio { width: 100%; }
+.rx-comp { font-family: ui-monospace, monospace; font-size: .75rem; color: var(--rx-ambar); margin-left: .5rem; }

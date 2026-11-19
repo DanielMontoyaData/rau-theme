@@ -1,5 +1,5 @@
 /*!
- * Decodificador JS8 (JS8Call, submodo Normal) para el receptor del sitio.
+ * Decodificador JS8 (JS8Call: submodos Normal, Rápido, Turbo, Lento y Ultra) para el receptor del sitio.
  *
  * Portado del código de JS8Call (https://github.com/js8call/js8call), © Jordan Sherer KN4CRD y colaboradores,
  * con licencia GNU GPL v3: este archivo se distribuye también bajo GPL v3 (compatible con la GPL v2 o posterior
@@ -18,8 +18,20 @@ var NM=[0,29,59,88,117,146,-1,1,30,60,89,118,146,-1,2,31,61,90,119,147,-1,3,32,6
 var PARIDAD='23bba830e23b6b6f50982e1f8e55da218c5df3309052ca7b3217cd92bd59a5ae2056f78313537d0f4382964e6be396b5e2e819e373340c293548a138858328af4210cb6c6afcdc28bb3f7c6e863f2a86f5c5bd225c961150849dd2d63673481860f62c56cdaec6e7ae14b43feeee04ef5cfa3766ba778f45a4c525ae4bd4f627320a397441fd9520b2e4abeb2f989c7fb36c24085a34d8c1dbc440fc3e44bb7d2bb2756e44d38ab0a1d2e52a8ec3bc763d0f929ef3949bd84d473445d3814f504064f80549aef14dbf263825d0bd04b05edb714f8f64e8ac7af1a76e8d0274de71e7c1a8055eb051f81573dd4049b082de14d8f937f31822e57c562370b6537f417e61d1a7085336ecbd7c73b9cd34c3720c8a3d188ea477f6fa41317a4e1ac4672b549cd6dba79bcca377253773ea678367c3f60dbd816fba1543f721dc72ca4186dd44c3121565cf5c29c29dba9c545e267762fe1616d78018d0b4745ca0f2fe37802941d66dde02b99ca9fa8e50bcb032c85e330483f640f1a48a8ebc0443ea3776af54ccfbae916afde6a8fc906976c35669e79ce0f08a91fb2e1f78290619a8cc9da55fe046d0cb3a770cd36d662a69ae24b74dcbd840907b01280f03c0323946d037db825175d851f3af001bf1490607c54032660ede0af7723161ec223080be86eca9afa0f6b01d92305edc7a8dec79a51e8ac53880229059dfa2bb20ef7ef73ad46abb212d9739dfc02580f2f6ad4824b87c80ebfce466d747bfc5fd65ef70fbd9bc612f63acc025b6ab476f7c05209a0abb530b9e7e34b045b7ab6242b77474d9f11a6c280d2a0523d9c4bc5946f1627701a2d692fd9449e68d9071b7e7a6a2eed6965ebf4f56e073271f6ab4bf80c0fc3ec4fb7d2bb275664457da6d13cb96a7689b2790a9fa2eefa6f8796a355772164cc861bdd803c547f2accc6de59755420925f90ed2a0c0033a52ab6299802fd2b274db8abd3c6f396ea35697d4169cb33e7435718d9081cfc6f18c35b1e1f17114481a2a0df8a23583f82d6c081c29a10d468ccdbcecb62c4142bf42b01e71076acca6573f3dc8b16c9d19f746c87af9a5d5206abca532a8012dee2198eba82b19a1dab1ca4ea2e3d173bad4379cb33ec97be83ce413f9acc85b0f7742bca86b8012609a37d8e0af9258b9e8c5f9b235ad3fb0faeb5f1b0c30dc6114e08483043fd3f38a8acd921fdf59e882683763f695e45ecd0135aca9d6e6ae2e547dd7a05f6597aac51614cd0f642fc0c5fe3a65ca3a0a1dfd7eee29c2e827e0c8b5dffc335095dcdcaf2a3dd01a59d86310743ec7528abdb889efbe39a510a1183f231f212055371cf3e2a2';
 
 var N=174, K=87, M=87;
-var COSTAS=[4,2,5,6,1,3,0];                      // modo Normal (JS8A): la misma matriz en los tres bloques
-var JS8={nombre:'JS8', simbolo:0.160, ranura:15, nn:79, nd:58, tonos:8, bt:2.0, costas:COSTAS, gray:[0,1,2,3,4,5,6,7]};
+// Matrices Costas: «original» (Normal, la misma en los tres bloques) y «modificada» (los demás submodos)
+var COSTAS=[4,2,5,6,1,3,0], COSTAS_MOD=[[0,6,2,3,5,4,1],[1,5,0,2,3,6,4],[2,5,0,6,4,1,3]];
+var ID=[0,1,2,3,4,5,6,7];
+/* Submodos (commons.h y JS8.cpp): muestras por símbolo a 12 kHz, ranura, inicio de la transmisión y FFT larga */
+function submodo(nombre, nsps, ranura, inicio, costas, n1){ return {nombre:'JS8', sub:nombre, simbolo:nsps/12000, ranura:ranura, inicio:inicio, nn:79, nd:58, tonos:8, bt:2.0, costas:costas, gray:ID, n1:n1}; }
+var SUBMODOS={
+	normal: submodo('normal', 1920, 15, 0.5, COSTAS, 192000),
+	rapido: submodo('rapido', 1200, 10, 0.2, COSTAS_MOD, 120000),
+	turbo:  submodo('turbo',   600,  6, 0.1, COSTAS_MOD, 72000),
+	lento:  submodo('lento',  3840, 30, 0.5, COSTAS_MOD, 360000),
+	ultra:  submodo('ultra',   384,  4, 0.1, COSTAS_MOD, 48000)
+};
+var JS8=SUBMODOS.normal;
+function costasDe(P, bloque){ return typeof P.costas[0]==='number' ? P.costas : P.costas[bloque]; }
 
 /* ── Código ── */
 function paridad(i, j){ var h=parseInt(PARIDAD[i*22+(j>>2)], 16); return (h>>(3-(j&3)))&1; }
@@ -30,7 +42,8 @@ function crc12(b){
 	return r^42;
 }
 /* 72 bits de mensaje + 3 de tipo → 79 tonos */
-function codificar(bits72, tipo){
+function codificar(bits72, tipo, sub){
+	var P=SUBMODOS[sub]||JS8;
 	var b=new Uint8Array(11), i;
 	for(i=0;i<72;i++) if(bits72[i]) b[i>>3]|=0x80>>(i&7);
 	b[9]|=(tipo&7)<<5;
@@ -39,7 +52,7 @@ function codificar(bits72, tipo){
 	var par=[]; for(i=0;i<87;i++){ var s=0; for(var j=0;j<87;j++) if(msg[j] && paridad(i,j)) s^=1; par.push(s); }
 	var t=[];
 	for(var k=0;k<79;k++){
-		if(k<7 || (k>=36 && k<43) || k>=72){ t.push(COSTAS[k<7?k:k<43?k-36:k-72]); continue; }
+		if(k<7 || (k>=36 && k<43) || k>=72){ t.push(costasDe(P, k<7?0:k<43?1:2)[k<7?k:k<43?k-36:k-72]); continue; }
 		var src=k<36?par:msg, o=(k<36?k-7:k-43)*3; t.push((src[o]<<2)|(src[o+1]<<1)|src[o+2]);
 	}
 	return t;
@@ -204,14 +217,15 @@ function interpretar(bits, tipo){
 /* ── Decodificación de una ranura de 15 s (muestras desde el inicio de la ranura) ── */
 function decodificar(muestras, tasa, opts){
 	opts=opts||{};
+	var P=SUBMODOS[opts.submodo]||JS8;
 	var x=Float32Array.from(F.remuestrear(muestras, tasa||12000, 12000)), profundo=opts.profundo!==false, pasadas=profundo?(opts.pasadas||3):1, vistos={}, out=[];
 	// Varias pasadas: lo decodificado se resta del audio y aparecen las señales que tapaba (como JS8Call en profundidad 2 y 3)
 	for(var pasada=1;pasada<=pasadas;pasada++){
-		var W=new F.Monitor(JS8, 12000, opts); W.cargar(x);
+		var W=new F.Monitor(P, 12000, opts); W.cargar(x);
 		var cands=F.buscarCandidatos(W, opts.candidatos||120, opts.minimo===undefined?10:opts.minimo);
-		var E=profundo?new F.Etapa2(x, JS8):null, nuevos=[];
+		var E=profundo?new F.Etapa2(x, P):null, nuevos=[];
 		for(var i=0;i<cands.length;i++){
-			var c=cands[i], f=(W.minBin+c.f+c.fs/W.osrF)/JS8.simbolo, t0=(c.t+c.ts/W.osrT-1)*JS8.simbolo;
+			var c=cands[i], f=(W.minBin+c.f+c.fs/W.osrF)/P.simbolo, t0=(c.t+c.ts/W.osrT-1)*P.simbolo;
 			var r=intentar(primeraEtapa(W, c)), fino=null;
 			if(!r && E){
 				var a=E.afinar(f, t0), cs=E.simbolos(a);
@@ -220,13 +234,13 @@ function decodificar(muestras, tasa, opts){
 			if(!r) continue;
 			var clave=r.bits.join('')+r.tipo; if(vistos[clave]) continue; vistos[clave]=1;
 			if(E && !fino){ var a2=E.afinar(f, t0); fino={f1:a2.f1, t:a2.t, cs:E.simbolos(a2)}; }
-			var m=interpretar(r.bits, r.tipo), ts=codificar(r.bits, r.tipo);
+			var m=interpretar(r.bits, r.tipo), ts=codificar(r.bits, r.tipo, P.sub);
 			out.push({texto:m.texto, tipo:m.tipo, de:m.de, para:m.para, grupo:m.grupo, cuadricula:m.cuadricula||'', i3:r.tipo, primero:!!(r.tipo&1), ultimo:!!(r.tipo&2),
-				freq:Math.round(fino?fino.f1:f), dt:Math.round(((fino?fino.t:t0)-0.5)*10)/10, snr:fino?E.snr(fino.cs, ts):null, bits:r.bits.join(''), pasada:pasada});
+				freq:Math.round(fino?fino.f1:f), dt:Math.round(((fino?fino.t:t0)-P.inicio)*10)/10, submodo:P.sub, snr:fino?E.snr(fino.cs, ts):null, bits:r.bits.join(''), pasada:pasada});
 			if(fino) nuevos.push([ts, fino.f1, fino.t]);
 		}
 		if(!nuevos.length || pasada===pasadas) break;
-		nuevos.forEach(function(n){ F.restarFino(x, n[0], n[1], n[2], JS8); });
+		nuevos.forEach(function(n){ F.restarFino(x, n[0], n[1], n[2], P); });
 	}
 	return out.sort(function(a,b){ return a.freq-b.freq; });
 }
@@ -243,9 +257,9 @@ function primeraEtapa(W, c){
 	return normalizar(L);
 }
 /* Para pruebas: sintetiza una transmisión JS8 Normal (tonos en fase continua, sin conformado) */
-function sintetizar(tonos, f0, tasa, inicio){
-	var ns=Math.round(tasa*JS8.simbolo), n=Math.round(tasa*JS8.ranura), y=new Float32Array(n), fase=0, o=Math.round((inicio===undefined?0.5:inicio)*tasa);
-	for(var k=0;k<79;k++) for(var i=0;i<ns;i++){ var idx=o+k*ns+i; if(idx>=n) break; fase+=2*Math.PI*(f0+tonos[k]*6.25)/tasa; y[idx]=Math.sin(fase); }
+function sintetizar(tonos, f0, tasa, inicio, sub){
+	var P=SUBMODOS[sub]||JS8, ns=Math.round(tasa*P.simbolo), n=Math.round(tasa*P.ranura), y=new Float32Array(n), fase=0, o=Math.round((inicio===undefined||inicio===null?P.inicio:inicio)*tasa);
+	for(var k=0;k<79;k++) for(var i=0;i<ns;i++){ var idx=o+k*ns+i; if(idx>=n) break; fase+=2*Math.PI*(f0+tonos[k]/P.simbolo)/tasa; y[idx]=Math.sin(fase); }
 	return y;
 }
 /* Arma mensajes de varios marcos por frecuencia (el primero lleva la marca «primero», el último «último») */
@@ -258,6 +272,6 @@ Ensamblador.prototype.agregar=function(d, hora){
 	return null;
 };
 
-return { JS8:JS8, decodificar:decodificar, interpretar:interpretar, codificar:codificar, crc12:crc12, sintetizar:sintetizar, usarDiccionario:usarDiccionario, Ensamblador:Ensamblador,
+return { JS8:JS8, SUBMODOS:SUBMODOS, decodificar:decodificar, interpretar:interpretar, codificar:codificar, crc12:crc12, sintetizar:sintetizar, usarDiccionario:usarDiccionario, Ensamblador:Ensamblador,
 	_bp:bp, _verificar:verificar };
 });

@@ -192,18 +192,22 @@ E.montarModemTx = function(sal, texto){
 	cargarModem().then(function(M){
 		if(bytes.length>M.MAX_BYTES){ sal.innerHTML='<p class="em-error">Son '+bytes.length+' bytes y el módem pasa hasta '+M.MAX_BYTES+' por envío. Elige menos registros (por ejemplo, la última hora).</p>'; return; }
 		var n=M.tramas(bytes).length;
-		sal.innerHTML='<p><b>'+bytes.length+' bytes</b> en '+n+' tramas (numeradas de 0 a '+(n-1)+').</p>'
-			+'<label>Velocidad<select class="em-campo" id="md-modo"><option value="robusto">Robusta · '+minSeg(M.duracion(n,'robusto'))+' · altavoz y micrófono, o señal débil</option><option value="rapido">Rápida · '+minSeg(M.duracion(n,'rapido'))+' · cable o radio FM con buena señal</option></select></label>'
+		sal.innerHTML='<p><b>'+bytes.length+' bytes</b> en '+n+' tramas de datos (numeradas de 0 a '+(n-1)+').</p>'
+			+'<label>Velocidad<select class="em-campo" id="md-modo"><option value="robusto">Robusta · altavoz y micrófono, o señal débil</option><option value="rapido">Rápida · cable o radio FM con buena señal</option></select></label>'
+			+'<label>Protección<select class="em-campo" id="md-prot"><option value="ninguna">Ninguna</option><option value="baja">Baja · recupera 2 de cada 16 tramas perdidas</option><option value="media" selected>Media · recupera 4 de cada 16</option><option value="alta">Alta · recupera 8 de cada 16</option></select></label>'
+			+'<p class="em-nota" id="md-dur"></p>'
 			+'<label>Reenviar solo estas tramas (opcional)<input class="em-campo em-mono" id="md-solo" placeholder="3, 7, 12" inputmode="numeric"></label>'
 			+'<div class="em-acciones"><button type="button" class="em-btn primario" id="md-tx">▶ Transmitir</button><button type="button" class="em-btn" id="md-parar" disabled>■ Detener</button></div>'
 			+'<progress id="md-prog" max="1" value="0" style="width:100%"></progress><p id="md-est" class="em-nota" aria-live="polite"></p>'
 			+'<p class="em-nota">Conecta la salida de audio del celular a la entrada de micrófono de la radio (o pon el celular junto al micrófono), con el volumen a media escala, y transmite con PTT o VOX: medio segundo de tono abre el VOX. Quien recibe usa «Recibir → 🎤 Escuchar el módem». Si le faltan tramas, te dirá cuáles: escríbelas arriba y transmite solo esas.</p>';
+		function durar(){ var t=M.cuantasTramas(bytes, $('#md-prot',sal).value); $('#md-dur',sal).textContent='Transmitir todo: '+minSeg(M.duracion(t, $('#md-modo',sal).value))+' ('+t+' tramas con la protección).'; }
+		$('#md-modo',sal).addEventListener('change', durar); $('#md-prot',sal).addEventListener('change', durar); durar();
 		function parar(){ if(tx){ try{ tx.src.stop(); }catch(e){} tx.ctx.close(); tx=null; } $('#md-tx',sal).disabled=false; $('#md-parar',sal).disabled=true; }
 		$('#md-parar',sal).addEventListener('click', function(){ parar(); $('#md-est',sal).textContent='Detenido.'; });
 		$('#md-tx',sal).addEventListener('click', function(){
 			if(tx) return;
 			var solo=($('#md-solo',sal).value.match(/\d+/g)||[]).map(Number).filter(function(x){ return x<n; });
-			var ctx=new AudioContext(), y=M.sintetizar(bytes, ctx.sampleRate, {modo:$('#md-modo',sal).value, solo:solo}), buf=ctx.createBuffer(1, y.length, ctx.sampleRate);
+			var ctx=new AudioContext(), y=M.sintetizar(bytes, ctx.sampleRate, {modo:$('#md-modo',sal).value, proteccion:$('#md-prot',sal).value, solo:solo}), buf=ctx.createBuffer(1, y.length, ctx.sampleRate);
 			buf.getChannelData(0).set(y);
 			var src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination);
 			tx={ctx:ctx, src:src}; var t0=ctx.currentTime, dur=buf.duration;
@@ -226,7 +230,8 @@ E.montarModemRx = function(est, boton, alTexto){
 			var nivel=0, ult=null;
 			function pintar(e){
 				est.innerHTML='<p><b>Escuchando…</b> nivel '+'▮'.repeat(Math.min(10, Math.round(nivel*40)))+'▯'.repeat(Math.max(0, 10-Math.min(10, Math.round(nivel*40))))+'</p>'
-					+(e?'<p>Tramas: <b>'+e.recibidas+(e.total?' de '+e.total:'')+'</b>'+(e.faltan.length?' · faltan <b class="em-mono">'+e.faltan.join(', ')+'</b>':'')+'<br><small>Última: n.º '+e.ultima.seq+' · '+(e.ultima.modo==='rapido'?'rápida':'robusta')+' · SNR '+e.ultima.snr+' dB · desfase '+e.ultima.desfase+' Hz</small></p>'
+					+(e?'<p>Tramas: <b>'+e.recibidas+(e.total?' de '+e.total+' de datos':'')+'</b>'+(e.recuperadas?' · <b>'+e.recuperadas+'</b> reconstruidas con la paridad':'')+(e.faltan.length?' · faltan <b class="em-mono">'+e.faltan.join(', ')+'</b>':'')+'<br><small>Última: '+(e.ultima.tipo==='datos'?'n.º '+e.ultima.seq:e.ultima.tipo)+' · '+(e.ultima.modo==='rapido'?'rápida':'robusta')+' · SNR '+e.ultima.snr+' dB · desfase '+e.ultima.desfase+' Hz</small></p>'
+						+(e.sugerencia?'<p class="em-nota">Para quien transmite: '+esc(e.sugerencia.texto)+'</p>':'')
 						+(e.total && e.faltan.length?'<p class="em-aviso">Pide que reenvíen solo las tramas '+e.faltan.join(', ')+'.</p>':''):'<p class="em-nota">Esperando tramas. Acerca el celular al parlante de la radio o conecta su salida de audio. Volumen alto sin distorsión.</p>');
 			}
 			var r=M.crearReceptor(ctx.sampleRate, function(e){ ult=e; pintar(e); }, function(b){
@@ -261,6 +266,9 @@ function montarRecibir(cont){
 		});
 	}
 	$('#pq-rec',cont).addEventListener('submit', function(e){ e.preventDefault(); leer(this.t.value); });
+	// Un paquete recibido en la página /modem/ queda pendiente para importarlo aquí
+	var pend=null; try{ pend=localStorage.getItem('rau_em_paquete_pendiente'); }catch(x){}
+	if(pend){ $('#pq-rec',cont).t.value=pend; try{ localStorage.removeItem('rau_em_paquete_pendiente'); }catch(x){} $('#pq-est',cont).innerHTML='<p class="em-nota">Paquete recibido en la página del módem: revisa y pulsa «Leer paquete».</p>'; }
 	var oir=$('#pq-oir',cont); if(oir) oir.addEventListener('click', function(){ E.montarModemRx($('#pq-est',cont), oir, function(t){ $('#pq-rec',cont).t.value=t; return leer(t); }); });
 	var cam=$('#pq-cam',cont); if(cam) cam.addEventListener('click', function(){ escanear(function(t){ var ta=$('#pq-rec',cont).t; if(ta.value.indexOf(t)<0) ta.value+=(ta.value?'\n':'')+t; return leer(ta.value).then(function(r){ return !r.error; }); }); });
 }

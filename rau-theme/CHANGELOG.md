@@ -264,6 +264,59 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.58.0 — Más modos en el receptor, PSK Reporter, pronóstico, módem con protección, y sitio más pulido
+
+**Receptor** (las dos pestañas)
+- **Decodificadores nuevos** (`assets/radio/digi.js`):
+  - **RTTY** 45,45 Bd / 170 Hz: se engancha solo al par de tonos y detecta la polaridad.
+  - **PSK31**: con AFC, se engancha a la portadora más fuerte.
+  - **SSTV**: Martin 1 y 2, Scottie 1 y 2 y Robot 36. Arranca con el VIS, corrige la inclinación con los pulsos de sincronismo y guarda las imágenes en una galería para descargar.
+  - Medido: RTTY sin errores a 3 dB, PSK31 sin errores a 0 dB y 9 % de caracteres errados a −6 dB (en 3 kHz). SSTV con un error medio de 9 a 17 sobre 255 a 15 dB, con el reloj del emisor corrido 200 ppm.
+- **JS8: submodos Rápido, Turbo, Lento y Ultra**, con las matrices Costas modificadas de JS8Call. Las grabaciones del modo Lento de JS8Call salen bien (2 de 2, «KN4CRD: TEST», texto comprimido). En total, 32 de los 33 mensajes que espera JS8Call.
+- **PSK Reporter**: con sesión iniciada, quien transmitió lo que se decodifica en FT4, JS8 y FT8 fuera de las frecuencias del decodificador automático del Kiwi se reporta como oído por HK4RAU.
+  - Va por UDP/IPFIX según pskreporter.info/pskdev.html: como mucho un envío cada 5 minutos, cada indicativo una vez por hora y banda, plantillas en los tres primeros envíos.
+  - Lo que el Kiwi ya reporta (FT8 en 7074, 14074, 21074 y 28074 kHz, configurable) no se duplica.
+  - Nada se reporta mientras se escucha otro receptor.
+- **Indicativos sobre la cascada**: quien transmitió lo decodificado aparece 3 minutos encima de su señal.
+- **Pronóstico con mediciones**, junto al mapa de propagación y en el centro de mando:
+  - banda NVIS a partir del foF2 de la ionosonda más cercana con datos recientes (hoy Boa Vista, a 1.700 km, vía prop.kc2g.com);
+  - bandas para DX según su MUF(3000);
+  - flujo solar y Kp de NOAA, con aviso de tormenta.
+  - Sin ionosonda reciente, no inventa banda.
+- **Grabaciones compartibles**: con sesión iniciada, lo grabado (hasta 3 minutos) se sube y se comparte como `/receptor/?grab=<id>`, con reproductor, botón para escuchar esa frecuencia en vivo y vista previa propia. Hasta 10 por persona por día; se borran a los 30 días.
+- **Varios receptores**: el relevo de Cloudflare atiende otros KiwiSDR en `/r/<id>/` (solo con permiso de su dueño; ver `cloudflare-worker/README.md`). En el sitio se agregan en Ajustes → Generales → Receptores SDR. Con eso aparecen el selector de receptor y «Comparar», que muestra el S-meter del mismo dial en los dos.
+- Los modos digitales piden ganancia fija y audio sin compresión, y se restaura al salir. Los decodificadores se cargan sin bloquear la página.
+
+**Módem de audio**
+- **Protección entre tramas**: Reed-Solomon por borrado sobre GF(256) con matriz de Cauchy, en bloques de 16 tramas con 2, 4 u 8 de paridad (baja, media y alta). Con «media», si en un bloque se pierden hasta 4 tramas, el mensaje sale igual, sin pedir reenvío. Una trama de cabecera al principio y al final lleva el largo y la protección.
+- **Velocidad sugerida**: quien recibe ve, con la SNR mediana, si conviene la rápida, la robusta o subir la protección.
+- **Página `/modem/`**: liviana (77 KB), queda guardada para usarse sin datos.
+  - Chat por sonido entre celulares, con conversación guardada en el teléfono.
+  - Recibe paquetes del centro de mando y los deja listos para importarlos allá.
+- Corrección de la 19.57.0: con un generador de ruido correcto en las pruebas, la velocidad robusta decodifica el 92 % (no el 100 %) a −10 dB y el 100 % a −8 dB. El generador anterior era periódico y su «ruido» tenía tonos.
+
+**Sitio**
+- **Datos estructurados**:
+  - organización con identificador y nombres alternativos;
+  - sitio con buscador (SearchAction);
+  - eventos con lugar, coordenadas y fecha de fin;
+  - artículos firmados por la asociación, no por la cuenta que los publicó.
+- **Imagen propia para compartir cada página** (1200×630, con el título y el escudo, fuente Space Grotesk con licencia OFL). Se genera una sola vez por título; la destacada de una entrada tiene prioridad.
+- **Rendimiento**: presupuesto medido en un celular emulado de gama baja (`tests/sitio/presupuesto.mjs`); hoy todas las páginas principales lo cumplen.
+- **Imágenes**: los tamaños que genera WordPress salen en WebP (el original se conserva). La galería usa `srcset` y carga diferida.
+- **Encabezados**:
+  - Permissions-Policy: ubicación, cámara y micrófono solo para el propio sitio;
+  - CSP aplicada en lo seguro (`frame-ancestors`, `base-uri`, `object-src`);
+  - la política completa en modo «solo informar», con registro de avisos en Ajustes → Generales.
+  - Sin avisos en las páginas principales.
+- **Buscador de Herramientas**:
+  - sin tildes y por palabras clave (SWR, QTH, FT8…);
+  - encuentra también las herramientas incluidas en otras;
+  - se maneja con flechas y Enter, con el atajo «/» o Ctrl+K.
+- **Pruebas nuevas**: digi (8), JS8 (11), módem (13), PSK Reporter (20), pronóstico (9), grabaciones (10), imágenes (8), E2E del módem (4), E2E del sitio (5), presupuesto (5); el E2E del receptor pasa de 6 a 9.
+
+---
+
 ## 19.57.0 — Módem de audio, JS8, propagación de Colombia en vivo, avisos al celular y vista previa al compartir
 
 - **Vista previa al compartir un enlace** (WhatsApp, Telegram, Facebook, Discord, Slack)

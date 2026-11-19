@@ -2496,42 +2496,77 @@ function rauFaseLunar(frac){
 	var noResultsEl = document.getElementById('rau-tool-noresults');
 	var resultsEl = document.getElementById('rau-search-results');
 
+	/* Búsqueda: sin tildes ni mayúsculas, por palabras (todas deben aparecer) en el nombre, la categoría
+	   y palabras clave de cada herramienta. Las herramientas incluidas en otras abren la que las contiene. */
+	var CLAVES = {
+		roe:'swr vswr estacionaria antena acople', calc:'antena dipolo yagi vertical ohm potencia db cable perdida', rfconv:'dbm watts vatios microvoltios s-meter unidades',
+		maidenhead:'grid locator cuadricula qth coordenadas distancia rumbo azimut', azimuth:'rumbo distancia km', prop:'propagacion sfi kp solar bandas abiertas muf', utc:'hora zulu gmt',
+		grayline:'terminador amanecer atardecer', satpass:'iss satelite pasadas amsat', terreno:'perfil linea de vista enlace', cobertura:'repetidora alcance mapa', bateria:'autonomia amperios horas',
+		ics213:'mensaje formal radiograma', frecemerg:'emergencia socorro frecuencias', emergencia:'emergencia desastre', prefijos:'dxcc pais prefijo', colores:'resistencias codigo colores',
+		angulo:'radiacion elevacion altura antena', luna:'eme rebote lunar', receptor:'sdr kiwi escuchar ft8 ft4 js8 cw rtty psk31 sstv decodificar', indicativo:'dx pais zona'
+	};
+	function norm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+	var PADRE = {}; TOOLS.forEach(function(t){ (t.incluye||[]).forEach(function(h){ PADRE[h]=t.id; }); });
+	function buscar(q){
+		var pal = norm(q).split(/\s+/).filter(Boolean); if(!pal.length) return [];
+		return TOOLS.filter(function(t){ return t.id!=='dashboard'; }).map(function(t){
+			var nombre = norm(t.label), todo = nombre+' '+norm(t.cat)+' '+norm(CLAVES[t.id]||'')+' '+t.id, pts = 0;
+			for(var i=0;i<pal.length;i++){
+				var w = pal[i];
+				if(todo.indexOf(w)<0) return null;
+				pts += nombre.indexOf(w)===0 ? 30 : (' '+nombre).indexOf(' '+w)>=0 ? 20 : nombre.indexOf(w)>=0 ? 10 : 3;
+			}
+			if(t.oculta) pts -= 2;
+			return {t:t, pts:pts, abre:t.oculta && PADRE[t.id] ? PADRE[t.id] : t.id};
+		}).filter(Boolean).sort(function(a,b){ return b.pts-a.pts; });
+	}
+	var selIdx = -1;
+	function marcar(){ if(!resultsEl) return; var it=resultsEl.querySelectorAll('.rau-search-item'); it.forEach(function(b,i){ b.classList.toggle('bg-muted/40', i===selIdx); b.setAttribute('aria-selected', i===selIdx); }); }
 	if(searchEl){
+		searchEl.setAttribute('placeholder', 'Buscar una herramienta… (atajo: /)');
+		searchEl.setAttribute('aria-controls', 'rau-search-results'); searchEl.setAttribute('aria-autocomplete', 'list');
+		if(resultsEl) resultsEl.setAttribute('role', 'listbox');
 		searchEl.addEventListener('input', function(){
-			var q = this.value.trim().toLowerCase();
-
-			// Dropdown de herramientas específicas (no solo categorías)
+			var q = this.value.trim(); selIdx = -1;
 			if(resultsEl){
-				if(!q){
-					resultsEl.classList.add('hidden');
-					resultsEl.innerHTML='';
-				} else {
-					var coincidencias = TOOLS.filter(function(t){
-						return t.label.toLowerCase().indexOf(q) > -1;
-					}).slice(0, 8);
-					if(coincidencias.length){
-						resultsEl.innerHTML = coincidencias.map(function(t){
-							return '<button type="button" data-tab="'+t.id+'" class="rau-search-item flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted/40 border-b border-border/40 last:border-0">'
-								+'<span>'+t.label+'</span>'
-								+'<span class="font-mono text-[10px] uppercase text-muted-foreground">'+t.cat+'</span>'
-								+'</button>';
-						}).join('');
-						resultsEl.classList.remove('hidden');
-					} else {
-						resultsEl.innerHTML='<p class="px-4 py-3 text-sm text-muted-foreground">Sin resultados para "'+this.value+'"</p>';
-						resultsEl.classList.remove('hidden');
-					}
+				if(!q){ resultsEl.classList.add('hidden'); resultsEl.innerHTML=''; }
+				else {
+					var r = buscar(q).slice(0, 8);
+					resultsEl.innerHTML = r.length ? r.map(function(x){
+						var padre = x.abre!==x.t.id && TOOLS_BY_ID[x.abre] ? ' · en «'+TOOLS_BY_ID[x.abre].label+'»' : '';
+						return '<button type="button" role="option" data-tab="'+x.abre+'" class="rau-search-item flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-muted/40 border-b border-border/40 last:border-0">'
+							+'<span>'+x.t.label+'<span class="text-muted-foreground">'+padre+'</span></span>'
+							+'<span class="font-mono text-[10px] uppercase text-muted-foreground">'+x.t.cat+'</span></button>';
+					}).join('') : '<p class="px-4 py-3 text-sm text-muted-foreground">Sin resultados para «'+this.value.replace(/[<&]/g,'')+'»</p>';
+					resultsEl.classList.remove('hidden');
 				}
 			}
-
-			// Filtro de tarjetas de categoría (comportamiento existente, se mantiene)
-			var visibles = 0;
+			// Filtro de tarjetas de categoría
+			var pal = norm(q).split(/\s+/).filter(Boolean), visibles = 0;
 			document.querySelectorAll('.rau-cat-card').forEach(function(card){
-				var match = !q || card.dataset.label.indexOf(q) > -1;
+				var txt = norm(card.dataset.label), match = pal.every(function(w){ return txt.indexOf(w)>-1; }) || [].some.call(card.querySelectorAll('[data-tab]'), function(b){ return buscar(q).some(function(x){ return x.abre===b.dataset.tab; }); });
 				card.style.display = match ? '' : 'none';
 				if(match) visibles++;
 			});
 			if(noResultsEl) noResultsEl.classList.toggle('hidden', visibles > 0);
+		});
+		// Flechas para moverse por los resultados, Enter para abrir, Escape para cerrar
+		searchEl.addEventListener('keydown', function(e){
+			if(!resultsEl) return;
+			var it = resultsEl.querySelectorAll('.rau-search-item');
+			if(e.key==='ArrowDown' && it.length){ e.preventDefault(); selIdx=(selIdx+1)%it.length; marcar(); }
+			else if(e.key==='ArrowUp' && it.length){ e.preventDefault(); selIdx=(selIdx-1+it.length)%it.length; marcar(); }
+			else if(e.key==='Enter' && it.length){ e.preventDefault(); var b=it[Math.max(0, selIdx)]; searchEl.value=''; resultsEl.classList.add('hidden'); resultsEl.innerHTML=''; openTool(b.dataset.tab); }
+			else if(e.key==='Escape'){ searchEl.value=''; searchEl.dispatchEvent(new Event('input')); searchEl.blur(); }
+		});
+		// Atajo: «/» (o Ctrl/Cmd+K) lleva al buscador desde cualquier parte de Herramientas
+		document.addEventListener('keydown', function(e){
+			var t=e.target, escribiendo=t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+			if((e.key==='/' && !escribiendo) || ((e.ctrlKey||e.metaKey) && (e.key==='k'||e.key==='K'))){
+				e.preventDefault();
+				var cat=document.querySelector('.consola-modo-btn[data-modo="catalogo"]'); if(searchEl.offsetParent===null && cat) cat.click();
+				searchEl.focus(); searchEl.select();
+			}
 		});
 
 		// Clic en un resultado del dropdown -> abre la herramienta directamente
