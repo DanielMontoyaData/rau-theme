@@ -602,7 +602,23 @@ E.registrarVista('estaciones', {nombre:'Estaciones y enlaces', icono:'📡', fn:
 	var v=E.el('<div><div class="em-barra"><h1>Estaciones y enlaces</h1>'+(op?'<div class="em-acciones">'+boton('es-nueva','+ Estación','primario')+boton('es-lista','Pasar lista','')+boton('es-enlace','Prueba de enlace','')+'<button type="button" class="em-btn" data-perfil>Perfil de enlace</button></div>':'<div class="em-acciones"><button type="button" class="em-btn" data-perfil>Perfil de enlace</button></div>')+'</div>'
 		+'<div class="em-barra em-filtros"><label class="em-inline">Mostrar <select class="em-campo" id="es-f">'+E.opciones(core.ET.est_op, filtroEst, 'Todas')+'</select></label><span class="em-nota">Un reporte o una verificación vale '+E.ventana+' min (cámbialo en Campo). Después, el estado es «desconocido».</span></div>'
 		+'<div data-vivo="estaciones">'+E.VIVO.estaciones()+'</div>'
-		+'<section class="em-tarjeta"><h2>Repetidoras</h2><div data-vivo="repes">'+E.VIVO.repes()+'</div>'+(op?'<button type="button" class="em-link" id="es-otra">+ Otra repetidora</button>':'')+'</section></div>');
+		+'<section class="em-tarjeta"><h2>Repetidoras</h2><div data-vivo="repes">'+E.VIVO.repes()+'</div>'+(op?'<button type="button" class="em-link" id="es-otra">+ Otra repetidora</button>':'')+'</section>'
+		+(E.actor && E.actor.cuenta && (E.puede('coordinar') || E.puede('recursos')) ? '<section class="em-tarjeta"><h2>Capacidades de los miembros</h2><p class="em-nota">Quién tiene HF, generador, vehículo… según la ficha de cada miembro en el sitio. Solo quienes autorizaron que la coordinación lo vea.</p><button type="button" class="em-btn" id="es-cap">Ver capacidades</button><div id="es-cap-r"></div></section>' : '')
+		+'</div>');
+	if($('#es-cap',v)) $('#es-cap',v).addEventListener('click', function(){
+		var r=$('#es-cap-r',v), bt=this; bt.disabled=true; r.innerHTML='<p class="em-nota">Consultando…</p>';
+		E.rest('capacidades', {token:false}).then(function(x){
+			bt.disabled=false;
+			if(x.estado!==200 || !x.j){ r.innerHTML='<p class="em-error">No disponible: se necesita una cuenta del sitio con rol de coordinación o recursos.</p>'; return; }
+			var N=x.j.nombres, M=x.j.miembros;
+			function pintar(f){
+				var l=M.filter(function(m){ return !f || m.cap.indexOf(f)>=0; });
+				$('#es-cap-t',r).innerHTML=l.length?'<table class="em-tabla"><thead><tr><th>Indicativo</th><th>Nombre</th><th>Municipio</th><th>Capacidades</th></tr></thead><tbody>'+l.map(function(m){ return '<tr><td class="em-f">'+esc(m.ind)+'</td><td>'+esc(m.nombre)+'</td><td>'+esc(m.municipio)+'</td><td>'+esc(m.cap.map(function(c){ return N[c]||c; }).join(' · '))+(m.nota?'<br><small>'+esc(m.nota)+'</small>':'')+'</td></tr>'; }).join('')+'</tbody></table>':'<p class="em-nota">Nadie con esa capacidad.</p>';
+			}
+			r.innerHTML=M.length?'<label class="em-inline">Filtrar <select class="em-campo" id="es-cap-f"><option value="">Todas</option>'+Object.keys(N).map(function(k){ var n=M.filter(function(m){ return m.cap.indexOf(k)>=0; }).length; return n?'<option value="'+k+'">'+esc(N[k])+' ('+n+')</option>':''; }).join('')+'</select></label><div id="es-cap-t"></div>':'<p class="em-nota">Ningún miembro ha registrado capacidades todavía (se editan en Escritorio → Miembros).</p>';
+			if(M.length){ pintar(''); $('#es-cap-f',r).addEventListener('change', function(){ pintar(this.value); }); }
+		});
+	});
 	if(op){ $('#es-nueva',v).addEventListener('click', function(){ E.formEstacion(); }); $('#es-lista',v).addEventListener('click', E.pasarLista); $('#es-enlace',v).addEventListener('click', function(){ formEnlace(); });
 		$('#es-otra',v).addEventListener('click', function(){ E.modal('Otra repetidora', '<form class="em-form" id="f-or"><label>Nombre y frecuencia<input class="em-campo" name="r" required placeholder="Ej.: Cerro Tatamá 146.940"></label><fieldset><legend>Estado</legend>'+E.chips('e', core.ET.repe_e, 'aire')+'</fieldset><label>Nota<input class="em-campo" name="n"></label><button class="em-btn primario">Registrar</button></form>', function(c){ $('#f-or',c).addEventListener('submit', function(e){ e.preventDefault(); if(E.registrar('repe', {r:this.r.value, e:E.valorDe(this,'e'), n:this.n.value})) E.cerrarModal(); }); }); }); }
 	$('#es-f',v).addEventListener('change', function(){ filtroEst=this.value; E.refrescar(); });

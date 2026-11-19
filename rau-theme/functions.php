@@ -22,6 +22,7 @@ require get_template_directory() . '/inc/dos-pasos.php';
 require get_template_directory() . '/inc/sstv-galeria.php';
 require get_template_directory() . '/inc/vigia-receptor.php';
 require get_template_directory() . '/inc/turnos.php';
+require get_template_directory() . '/inc/capacidades.php';
 
 /**
  * Configuración básica del tema
