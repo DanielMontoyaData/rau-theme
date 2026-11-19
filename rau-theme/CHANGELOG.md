@@ -264,6 +264,56 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.55.0 — Decodificadores FT8, FT4 y CW nuevo en el receptor
+
+En las dos pestañas del receptor KiwiSDR: la página /receptor/ y la pestaña de Herramientas. Ambas
+usan el mismo componente.
+
+- **Grupo «Decodificador»** en los mandos: Ninguno · CW · FT8 · FT4.
+- **FT8 y FT4**
+  - Al elegirlos se sintoniza la frecuencia estándar de la banda en USB con filtro ancho.
+  - Al cerrar cada ranura UTC (15 s o 7,5 s), el audio se decodifica en un *worker* del navegador.
+  - Se muestra una lista como la de WSJT-X: UTC, dB, DT, Hz y mensaje.
+  - Se resaltan los CQ y las estaciones colombianas (HK, HJ, 5J, 5K), con filtro «solo CQ».
+  - La hora de la ranura sale de los paquetes de audio que llegaron con menos demora, con una
+    corrección que se ajusta sola con el DT de lo decodificado.
+- **Motor FT8/FT4** (`assets/radio/ftx.js`)
+  - Es una traducción de ft8_lib de Kārlis Goba (licencia MIT, incluida en
+    `assets/radio/LICENSE-ft8_lib.txt`): cascada, candidatos por Costas, LDPC(174,91), CRC-14 y
+    desempaquetado de los 77 bits.
+  - Le agrega una segunda etapa como la de WSJT-X: bajada a banda base, sincronía fina, métricas
+    de 1, 2 y 3 símbolos coherentes y resta de lo decodificado, hasta en 3 pasadas.
+  - En las 22 grabaciones de prueba de ft8_lib decodifica **337 de los 362 mensajes que sacó
+    WSJT-X (93 %)**, frente al 74 % de ft8_lib sola. Además saca 22 mensajes válidos que la
+    referencia no tiene, y ningún texto basura.
+  - Con señales sintéticas decodifica todo hasta −18 dB en FT8 y −14 dB en FT4, sin
+    decodificaciones falsas.
+  - Tarda unos 1,6 s por ranura FT8 en un computador.
+  - La SNR es aproximada: dentro de ±1 dB con señales sintéticas y con mediana igual a la de
+    WSJT-X en grabaciones reales, pero con ±6 dB de dispersión.
+- **CW nuevo** (`assets/radio/cw.js`)
+  - Tono exacto por espectro y detector coherente con un filtro a la medida de la velocidad
+    (13 Hz a 20 PPM).
+  - Niveles adaptativos que siguen el QSB, silenciador para el ruido y recalibración con los
+    últimos 3 s al encontrar una estación.
+  - Cada letra se lee como la secuencia válida de Morse más probable; las letras pegadas se
+    separan.
+  - En el banco de pruebas (19 casos, 6 textos cada uno) se equivoca en el 41 % de los
+    caracteres, frente al 68 % del decodificador anterior:
+    - con 3 dB de SNR, del 1 al 14 % hasta 30 PPM (el anterior, del 77 al 85 %);
+    - a 40 PPM con buena señal, el 4 % (el anterior, el 36 %);
+    - con mano irregular, el 3,5 % (el anterior, el 42 %).
+  - Las letras dudosas se muestran tenues y las muy improbables se descartan.
+- **Sala de mando**: la «Pantalla de sala» vuelve arriba al activarse.
+- **Pruebas nuevas**
+  - `tests/radio/ftx.test.mjs` (9): codificación, decodificación FT8/FT4 sintética, ruido, resta
+    y comparación con las grabaciones de ft8_lib si se le da la carpeta.
+  - `tests/radio/cw.test.mjs` (8).
+  - `tests/radio/receptor.e2e.mjs` (3): navegador real con un KiwiSDR simulado que entrega audio
+    en su formato.
+
+---
+
 ## 19.54.0 — Sala de mando: control de red, alarmas, comandos y herramientas de trabajo
 
 El centro de mando deja de ser una colección de formularios.

@@ -119,7 +119,19 @@ function rau_receptor_kiwi( $args = array() ) {
 				<button type="button" id="rx-cw-borrar" class="rx-tecla rx-tecla-mini">Borrar</button>
 			</div>
 			<p id="rx-cw-texto" class="rx-cw-texto" aria-live="polite"></p>
-			<p class="rx-cw-nota">Funciona mejor con una sola señal clara: tócala en la cascada para centrarla en el filtro y usa el filtro «Angosto».</p>
+			<p class="rx-cw-nota">Funciona mejor con una sola señal clara: tócala en la cascada para centrarla en el filtro y usa el filtro «Angosto». Las letras tenues son dudosas.</p>
+		</div>
+
+		<div id="rx-ft" class="rx-cw rx-ft hidden">
+			<div class="rx-cw-cab">
+				<span class="rx-serigrafia" id="rx-ft-titulo">Decodificador FT8</span><span id="rx-ft-info">Esperando la próxima ranura…</span>
+				<label class="rx-ft-filtro"><input type="checkbox" id="rx-ft-cq"> solo CQ</label>
+				<button type="button" id="rx-ft-borrar" class="rx-tecla rx-tecla-mini">Borrar</button>
+			</div>
+			<div class="rx-ft-tabla" role="log" aria-live="polite" aria-label="Mensajes decodificados">
+				<table><thead><tr><th>UTC</th><th>dB</th><th>DT</th><th>Hz</th><th>Mensaje</th></tr></thead><tbody id="rx-ft-filas"></tbody></table>
+			</div>
+			<p class="rx-cw-nota">Decodifica cada ranura de tiempo en este navegador. La SNR es aproximada y la hora sale del reloj de tu equipo: si DT se va lejos de 0, revisa que la hora esté sincronizada. Resaltados: CQ y estaciones colombianas.</p>
 		</div>
 
 		<div class="rx-mesa">
@@ -131,6 +143,12 @@ function rau_receptor_kiwi( $args = array() ) {
 			<div class="rx-grupo" role="group" aria-label="Modo">
 				<span class="rx-serigrafia">Modo</span>
 				<div id="rx-modos" class="rx-teclas"></div>
+			</div>
+			<div class="rx-grupo" role="group" aria-label="Decodificador">
+				<span class="rx-serigrafia">Decodificador</span>
+				<div id="rx-decs" class="rx-teclas">
+					<button type="button" data-d="" class="rx-dec rx-tecla" aria-pressed="true">Ninguno</button><button type="button" data-d="cw" class="rx-dec rx-tecla" aria-pressed="false">CW</button><button type="button" data-d="FT8" class="rx-dec rx-tecla" aria-pressed="false">FT8</button><button type="button" data-d="FT4" class="rx-dec rx-tecla" aria-pressed="false">FT4</button>
+				</div>
 			</div>
 			<div class="rx-grupo" role="group" aria-label="Filtro">
 				<span class="rx-serigrafia">Filtro</span>
@@ -260,8 +278,10 @@ function rau_receptor_kiwi( $args = array() ) {
 	</div>
 
 	<?php if ( $relay ) : ?>
+	<script src="<?php echo esc_url( get_template_directory_uri() . '/assets/radio/cw.js?ver=' . RAU_THEME_VERSION ); ?>"></script>
 	<script>
 	(function(){
+		var FT_WORKER=<?php echo wp_json_encode( get_template_directory_uri() . '/assets/radio/ftx-worker.js?ver=' . RAU_THEME_VERSION ); ?>;
 		var RELAY=<?php echo wp_json_encode( preg_replace( '#^http(s?)://#', 'ws$1://', $relay ) ); ?>;
 		var AJAX_RX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 		var PAGINA=<?php echo wp_json_encode( home_url( '/receptor/' ) ); ?>;
@@ -327,6 +347,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			: [[5900,6200,'49 m'],[9400,9900,'31 m'],[11600,12100,'25 m'],[15100,15800,'19 m']];
 		var EMISORAS=[[5000,'WWV, hora oficial de EE. UU.'],[10000,'WWV, hora oficial de EE. UU.'],[15000,'WWV, hora oficial de EE. UU.']];
 		if(!g){ st.freq=(OC_ARRANQUE[0][0]+OC_ARRANQUE[0][1])/2; st.modo='am'; st.zoom=6; st.primera=true; }
+		st.decod = st.modo==='cw' ? 'cw' : '';
 		var q=new URLSearchParams(location.search);
 		if(q.get('f') && +q.get('f')>0){ st.primera=false; st.freq=+q.get('f'); st.modo=MODOS[q.get('m')]?q.get('m'):modoPara(st.freq,''); }
 
@@ -516,7 +537,10 @@ function rau_receptor_kiwi( $args = array() ) {
 			$('rx-ind-agc').classList.toggle('is-on', st.agc); $('rx-agc').setAttribute('aria-pressed', st.agc);
 			document.querySelectorAll('.rx-fav-ir').forEach(function(x){ x.setAttribute('aria-pressed', Math.abs(+x.dataset.f-st.freq)<0.005 && x.dataset.m===st.modo); });
 			pintarBanda();
-			$('rx-cw').classList.toggle('hidden', st.modo!=='cw');
+			if(st.decod==='cw' && st.modo!=='cw') st.decod='';
+			$('rx-cw').classList.toggle('hidden', st.decod!=='cw');
+			$('rx-ft').classList.toggle('hidden', !st.ft);
+			document.querySelectorAll('.rx-dec').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.d===(st.ft?st.ft.modo:st.decod)); });
 			document.querySelectorAll('.rx-modo').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.m===st.modo); });
 		}
 		function enviarModo(){ var f=MODOS[st.modo].f[st.filtro]; send(st.snd, 'SET mod='+st.modo+' low_cut='+f[0]+' high_cut='+f[1]+' freq='+st.freq.toFixed(3)); }
@@ -534,96 +558,95 @@ function rau_receptor_kiwi( $args = array() ) {
 		function zoomA(z){ st.zoom=Math.max(0, Math.min(st.zoomMax, z)); send(st.wf, 'SET zoom='+st.zoom+' cf='+st.freq.toFixed(3)); $('rx-zoom').textContent=st.zoom; $('rx-ancho').textContent=anchoTxt(); vistaLocal(true); }
 		function redondear(f){ return Math.round(f/st.paso)*st.paso; }
 
-		/* ── Decodificador de CW ──────────────────────────────────────────────
-		   Sobre el audio del receptor (≈12 kHz): un banco de filtros Goertzel entre 300 y 900 Hz
-		   busca el tono (la nota del CW), y su nivel, cada 8 ms, decide si la tecla está abajo. El
-		   umbral se adapta al ruido y a la señal, y la duración del punto se aprende sola, así que
-		   sigue cambios de velocidad (5 a 60 PPM). Puntos y rayas se separan por 2 puntos de
-		   largo; las letras, por silencios de más de 2 puntos; las palabras, por más de 5. */
-		var MORSE={'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'G','....':'H','..':'I','.---':'J','-.-':'K','.-..':'L','--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z',
-			'-----':'0','.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9','.-.-.-':'.','--..--':',','..--..':'?','-..-.':'/','-...-':'=','.-.-.':'+','-....-':'-','.--.-.':'@','...-.-':'<SK>','-.--.':'('};
-		function crearDecodificadorCW(tasa, alTexto, alInfo){
-			var hop=Math.round(tasa*0.008), ven=hop*2, frec=[], buf=[], i;
-			for(var f=300; f<=900; f+=50) frec.push(f);
-			var coef=frec.map(function(f){ return 2*Math.cos(2*Math.PI*f/tasa); }), media=frec.map(function(){ return 0; });
-			var ruido=-80, pico=-80, potAnt=0, pasos=0, primero=true, abajo=false, dur=0, silencio=0, dit=60, frontera=120, marcas=[], letra=[], espacio=true, tono=600, pasoMs=hop/tasa*1000;
-			function goertzel(x, c){ var s1=0, s2=0; for(var n=0;n<x.length;n++){ var s0=x[n]+c*s1-s2; s2=s1; s1=s0; } return s1*s1+s2*s2-c*s1*s2; }
-			function prom(a){ return a.reduce(function(x,y){ return x+y; }, 0)/a.length; }
-			/* Las últimas duraciones se parten en dos grupos por el salto más grande entre ellas
-			   (puntos y rayas). Con los dos grupos, la frontera es su media geométrica; con uno solo,
-			   se decide si son puntos o rayas comparando con la estimación anterior. */
-			function aprender(){
-				var o=marcas.slice().sort(function(a,b){ return a-b; }), salto=1, k=-1;
-				for(var j=1;j<o.length;j++){ var r=o[j]/o[j-1]; if(r>salto){ salto=r; k=j; } }
-				if(salto>1.8){ var c=prom(o.slice(0,k)), l=prom(o.slice(k)); dit=(c+l/3)/2; frontera=Math.sqrt(c*l); }
-				else { var m=prom(o); dit = m<1.5*dit ? m : m/3; frontera=2*dit; }
-				dit=Math.max(20, Math.min(250, dit));
-			}
-			// Cada letra se clasifica al terminar, con la frontera ya aprendida de sus propios pulsos
-			function soltarLetra(){
-				if(!letra.length) return;
-				var codigo=letra.map(function(d){ return d<frontera ? '.' : '-'; }).join('');
-				alTexto(MORSE[codigo]||'·'); letra=[]; espacio=false;
-			}
-			function paso(x){
-				var p=coef.map(function(c){ return goertzel(x, c); }), mejor=0;
-				for(i=0;i<p.length;i++){ media[i]=media[i]*0.97+p[i]*0.03; if(media[i]>media[mejor]) mejor=i; }
-				tono=frec[mejor];
-				// Ventana de 16 ms y promedio de dos seguidas: separa el tono del ruido sin borrar los
-				// silencios de 30 ms entre elementos del CW rápido. Elegido entre 72 combinaciones
-				// midiendo velocidad (8 a 40 PPM) y sensibilidad con ruido real del receptor (19.49.0).
-				var pot=Math.max(p[mejor], mejor>0?p[mejor-1]:0, mejor<p.length-1?p[mejor+1]:0), suave=(pot+potAnt)/2; potAnt=pot;
-				var db=10*Math.log10(suave/(x.length*x.length)+1e-12);
-				// Nivel del ruido: promedio mientras la tecla está arriba. Nivel de la señal: sube de
-				// golpe con cada pulso y se promedia mientras dura; sin pulsos, baja despacio.
-				if(primero){ ruido=db; pico=db; primero=false; }
-				pasos++;
-				var umbral=ruido+0.45*(pico-ruido), hay=pico-ruido>9;
-				var ahora=hay && (abajo ? db>umbral-2 : db>umbral+2);
-				if(!ahora) ruido+= (db<ruido ? 0.08 : 0.03)*(db-ruido);
-				if(db>pico) pico=db; else if(ahora) pico+=0.1*(db-pico); else pico-=0.01;
-				if(pico<ruido) pico=ruido;
-				if(ahora){
-					if(!abajo){ abajo=true; dur=0; }
-					dur+=pasoMs;
-					// Ningún elemento de CW dura más de 1,5 s: es ruido o una portadora, y pasa a ser el fondo
-					if(dur>1500){ ruido+=0.05*(db-ruido); if(pico-ruido<9){ abajo=false; dur=0; letra=[]; } }
-				} else {
-					if(abajo){
-						abajo=false; silencio=0;
-						dur-=2*pasoMs;  // la ventana y el promedio alargan cada pulso dos pasos
-						// El primer segundo solo sirve para conocer el ruido: un pico ahí no es una letra
-						if(dur>=0.35*dit && pasos>125){
-							marcas.push(dur); if(marcas.length>14) marcas.shift();
-							aprender();
-							letra.push(dur); if(letra.length>7) letra=[];
-						}
-					}
-					silencio+=pasoMs;
-					// Entre elementos hay 1 punto de silencio, entre letras 3 y entre palabras 7: se corta en la mitad
-					if(letra.length && silencio>2*dit) soltarLetra();
-					if(!espacio && silencio>5*dit){ alTexto(' '); espacio=true; }
-				}
-				alInfo({ppm:Math.round(1200/dit), tono:tono, snr:Math.round(pico-ruido), senal:hay && marcas.length>=4});
-			}
-			return {
-				procesar:function(m){
-					for(var k=0;k<m.length;k++){
-						buf.push(m[k]);
-						if(buf.length>=ven){ paso(buf); buf=buf.slice(hop); }
-					}
-				},
-				reiniciar:function(){ letra=[]; marcas=[]; abajo=false; dur=0; silencio=0; pasos=0; primero=true; espacio=true; }
-			};
-		}
-		function cwTexto(ch){
-			var el=$('rx-cw-texto'), t=(el.textContent+ch).replace(/ {2,}/g,' ');
-			el.textContent=t.length>400 ? t.slice(-400) : t;
+		/* ── Decodificador de CW (assets/radio/cw.js) ─────────────────────────
+		   Tono exacto por espectro, detector coherente con filtro a la medida de la velocidad, niveles
+		   adaptativos y lectura de cada letra como la secuencia válida de Morse más probable. */
+		// Letras con confianza menor a 0,2 se descartan (ruido); entre 0,2 y 0,5 se muestran tenues
+		var cwLetras=[];
+		function cwTexto(ch, conf){
+			if(conf!==undefined && conf<0.2) return;
+			if(ch===' ' && (!cwLetras.length || cwLetras[cwLetras.length-1].c===' ')) return;
+			cwLetras.push({c:ch, d:conf!==undefined && conf<0.5}); if(cwLetras.length>400) cwLetras=cwLetras.slice(-400);
+			$('rx-cw-texto').innerHTML=cwLetras.map(function(x){ var t=x.c.replace(/&/g,'&amp;').replace(/</g,'&lt;'); return x.d ? '<span class="rx-cw-duda">'+t+'</span>' : t; }).join('');
 		}
 		var cwInfoT=0;
 		function cwInfo(o){
 			var ahora=Date.now(); if(ahora-cwInfoT<400) return; cwInfoT=ahora;
-			$('rx-cw-info').textContent = o.senal ? o.ppm+' PPM · tono '+o.tono+' Hz · '+o.snr+' dB sobre el ruido' : 'Sin señal clara en el filtro';
+			$('rx-cw-info').textContent = o.senal ? o.ppm+' PPM · tono '+o.tono+' Hz · '+o.snr+' dB sobre el ruido · banda '+o.banda+' Hz' : 'Sin señal clara en el filtro';
+		}
+
+		/* ── FT8 y FT4 (assets/radio/ftx.js, en un worker) ────────────────────
+		   El audio se guarda como una sola secuencia de muestras con un reloj lineal: la hora de cada
+		   muestra sale de los paquetes que llegaron con menos demora (los demás traen la variación de
+		   la red), menos una corrección que se ajusta sola con el DT de lo decodificado. Al terminar
+		   cada ranura UTC se le pasa al worker su audio completo. */
+		var FT4F={'80 m':3575,'40 m':7047.5,'30 m':10140,'20 m':14080,'17 m':18104,'15 m':21140,'12 m':24919,'10 m':28180};
+		var ftFilas=[], ftWorker=null, ftId=0, ftT=null;
+		function frecFT(modo){
+			var b=bandaDe(st.freq)||BANDAS.filter(function(x){ return x.n===(DIA?'20 m':'40 m'); })[0];
+			if(modo==='FT4') return FT4F[b.n]||14080;
+			var s=b.s.filter(function(x){ return x[0]==='FT8'; })[0]; return s?s[1]:14074;
+		}
+		function elegirDecodificador(d){
+			st.ft=null; clearInterval(ftT);
+			st.decod = d==='cw' ? 'cw' : '';
+			if(d==='cw'){ if(st.modo!=='cw') sintonizar(st.freq, 'cw', false); }
+			else if(d==='FT8' || d==='FT4'){
+				var corr=0.6; try { corr=+localStorage.getItem('rau_rx_ftcorr')||0.6; } catch(e){}
+				st.ft={modo:d, ranura:d==='FT8'?15:7.5, buf:null, n:0, marcas:[], hechas:{}, corr:corr};
+				st.filtro=2; sintonizar(frecFT(d), 'usb');
+				if(!ftWorker){ try { ftWorker=new Worker(FT_WORKER); ftWorker.onmessage=ftResultado; } catch(e){ ftWorker=null; } }
+				$('rx-ft-titulo').textContent='Decodificador '+d;
+				$('rx-ft-info').textContent=ftWorker ? (st.on ? 'Esperando la próxima ranura…' : 'Pulsa «Escuchar» para empezar.') : 'Este navegador no puede decodificar en segundo plano.';
+				ftT=setInterval(ftRevisar, 250);
+			}
+			pintarFreq();
+		}
+		function ftGuardar(m){
+			var ft=st.ft, tasa=st.rate;
+			if(!ft.buf || ft.tasa!==tasa){ ft.tasa=tasa; ft.buf=new Float32Array(Math.round(45*tasa)); ft.n=0; ft.marcas=[]; }
+			var L=ft.buf.length;
+			for(var i=0;i<m.length;i++) ft.buf[(ft.n+i)%L]=m[i];
+			ft.n+=m.length;
+			var ahora=Date.now(); ft.marcas.push([ahora, ft.n]);
+			while(ft.marcas.length && ft.marcas[0][0]<ahora-30000) ft.marcas.shift();
+		}
+		/* Hora (ms) de la muestra 0 según los paquetes menos demorados de los últimos 30 s */
+		function ftAncla(){ var ft=st.ft, a=Infinity; ft.marcas.forEach(function(x){ a=Math.min(a, x[0]-x[1]/ft.tasa*1000); }); return a; }
+		function ftRevisar(){
+			var ft=st.ft; if(!ft || !st.on || !ft.buf || !ftWorker) return;
+			var R=ft.ranura*1000, ahora=Date.now()-ft.corr*1000, S=Math.floor(ahora/R)*R-R;
+			if(ft.hechas[S] || ahora<S+R+300) return;
+			ft.hechas[S]=1;
+			var A=ftAncla(), k0=Math.round((S+ft.corr*1000-A)/1000*ft.tasa), n=Math.round(ft.ranura*ft.tasa), L=ft.buf.length;
+			// Hace falta la ranura entera dentro de lo guardado
+			if(k0<ft.n-L || k0+n>ft.n || k0<0){ $('rx-ft-info').textContent='Juntando audio de una ranura completa…'; return; }
+			var x=new Float32Array(n); for(var i=0;i<n;i++) x[i]=ft.buf[(k0+i)%L];
+			ftWorker.postMessage({id:++ftId, modo:ft.modo, muestras:x, tasa:Math.abs(ft.tasa-12000)<2?12000:ft.tasa});
+			ft.pend={id:ftId, S:S, dial:st.freq, modo:ft.modo};
+			$('rx-ft-info').textContent='Decodificando la ranura de las '+horaUtc(S)+'…';
+		}
+		function horaUtc(ms){ var d=new Date(ms); return [d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()].map(function(v){ return (v<10?'0':'')+v; }).join(''); }
+		function ftResultado(e){
+			var ft=st.ft, d=e.data; if(!ft || !ft.pend || d.id!==ft.pend.id) return;
+			var p=ft.pend; ft.pend=null;
+			if(d.error){ $('rx-ft-info').textContent='Error al decodificar: '+d.error; return; }
+			var res=d.res.filter(function(r){ return r.texto; });
+			res.forEach(function(r){ ftFilas.unshift({utc:horaUtc(p.S), snr:r.snr, dt:r.dt, f:r.freq, t:r.texto, nuevo:true}); });
+			if(ftFilas.length>300) ftFilas.length=300;
+			// Corrección de tiempo: lleva la mediana del DT hacia 0
+			if(res.length>=2){ var dts=res.map(function(r){ return r.dt; }).sort(function(a,b){ return a-b; }), med=dts[dts.length>>1];
+				if(Math.abs(med)>0.15){ ft.corr=Math.max(-2, Math.min(4, ft.corr+0.7*med)); try { localStorage.setItem('rau_rx_ftcorr', ft.corr.toFixed(2)); } catch(e2){} } }
+			$('rx-ft-info').textContent=horaUtc(p.S)+' UTC · '+res.length+(res.length===1?' mensaje':' mensajes')+' en '+(d.ms/1000).toFixed(1)+' s · dial '+(p.dial/1000).toFixed(4)+' MHz USB · corrección de hora '+(ft.corr>=0?'+':'')+ft.corr.toFixed(1)+' s';
+			pintarFt();
+		}
+		var CO=/\b(HK|HJ|5J|5K)[0-9][A-Z0-9]{1,4}\b/g;
+		function pintarFt(){
+			var solo=$('rx-ft-cq').checked, ultima=ftFilas.length?ftFilas[0].utc:'';
+			$('rx-ft-filas').innerHTML=ftFilas.filter(function(r){ return !solo || /^CQ\b/.test(r.t); }).slice(0, 150).map(function(r){
+				var t=r.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(CO, '<b class="rx-ft-co">$&</b>');
+				return '<tr class="'+(/^CQ\b/.test(r.t)?'rx-ft-cqf ':'')+(r.utc===ultima?'rx-ft-ult':'')+'"><td>'+r.utc+'</td><td>'+(r.snr>0?'+':'')+r.snr+'</td><td>'+r.dt.toFixed(1)+'</td><td>'+r.f+'</td><td>'+t+'</td></tr>';
+			}).join('') || '<tr><td colspan="5">Todavía nada decodificado.</td></tr>';
 		}
 
 		/* ── Audio ────────────────────────────────────────────────────────── */
@@ -645,7 +668,8 @@ function rau_receptor_kiwi( $args = array() ) {
 		function reproducir(m){
 			var ctx=st.ctx; if(!ctx || !m.length) return;
 			if(st.grab) grabar(m);
-			if(st.modo==='cw'){ if(!st.cw) st.cw=crearDecodificadorCW(st.rate, cwTexto, cwInfo); st.cw.procesar(m); }
+			if(st.modo==='cw' && st.decod==='cw' && window.RauCW){ if(!st.cw) st.cw=RauCW.crear(st.rate, cwTexto, cwInfo); st.cw.procesar(m); }
+			if(st.ft) ftGuardar(m);
 			m=remuestrear(m); if(!m.length) return;
 			var buf=ctx.createBuffer(1, m.length, ctx.sampleRate); buf.getChannelData(0).set(m);
 			var src=ctx.createBufferSource(); src.buffer=buf; src.connect(st.gain);
@@ -840,7 +864,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			if(x.dataset.b){ var b=BANDAS.filter(function(y){ return y.n===x.dataset.b; })[0], s=b.s.filter(function(y){ return y[0]==='Fonía'; })[0]||b.s[0]; sintonizar(s[1], s[2]); }
 			else { var o=OTRAS.filter(function(y){ return y[0]===x.dataset.o; })[0]; sintonizar(o[1], o[2]); }
 		});
-		$('rx-segmentos').addEventListener('click', function(e){ var x=e.target.closest('.rx-seg'); if(x) sintonizar(+x.dataset.f, x.dataset.m); });
+		$('rx-segmentos').addEventListener('click', function(e){ var x=e.target.closest('.rx-seg'); if(x){ if(x.dataset.m==='cw') st.decod='cw'; sintonizar(+x.dataset.f, x.dataset.m); } });
 
 		/* Perilla: girarla sintoniza un paso cada 12° (30 pasos por vuelta), como un VFO con
 		   «clics». Funciona con ratón y dedo (ángulo alrededor del centro), con la rueda y con flechas. */
@@ -875,7 +899,7 @@ function rau_receptor_kiwi( $args = array() ) {
 			var r=d.el.getBoundingClientRect(); cambiarDigito(d.v, e.clientY<r.top+r.height/2 ? 1 : -1);
 		});
 		$('rx-freq').addEventListener('wheel', function(e){ var d=e.target.closest('.rx-dig'); if(!d) return; e.preventDefault(); cambiarDigito(+d.dataset.v, e.deltaY<0?1:-1); }, {passive:false});
-		document.querySelectorAll('.rx-modo').forEach(function(b){ b.addEventListener('click', function(){ sintonizar(st.freq, b.dataset.m, false); }); });
+		document.querySelectorAll('.rx-modo').forEach(function(b){ b.addEventListener('click', function(){ if(b.dataset.m==='cw') st.decod='cw'; else if(st.ft) st.ft=null; sintonizar(st.freq, b.dataset.m, false); }); });
 		document.querySelectorAll('.rx-paso').forEach(function(b){ b.addEventListener('click', function(){ sintonizar(redondear(st.freq)+st.paso*(+b.dataset.pasos), null, false); }); });
 		// Acepta kHz (7074) o MHz (7.074 o 7,074): por debajo de 31 se entiende MHz
 		$('rx-input').addEventListener('change', function(){ var f=parseFloat(String(this.value).replace(',', '.')); if(!(f>0)) return; if(f<31) f*=1000; sintonizar(f, modoPara(f,'')); });
@@ -916,7 +940,10 @@ function rau_receptor_kiwi( $args = array() ) {
 		});
 		$('rx-power').addEventListener('click', function(){ st.on ? apagar() : encender(); });
 		$('rx-avisar').addEventListener('click', vigilarCanal);
-		$('rx-cw-borrar').addEventListener('click', function(){ $('rx-cw-texto').textContent=''; if(st.cw) st.cw.reiniciar(); });
+		$('rx-cw-borrar').addEventListener('click', function(){ cwLetras=[]; $('rx-cw-texto').textContent=''; if(st.cw) st.cw.reiniciar(); });
+		$('rx-decs').addEventListener('click', function(e){ var b=e.target.closest('.rx-dec'); if(b) elegirDecodificador(b.dataset.d); });
+		$('rx-ft-borrar').addEventListener('click', function(){ ftFilas=[]; pintarFt(); });
+		$('rx-ft-cq').addEventListener('change', pintarFt);
 		// En la consola los ajustes avanzados van plegados para que la lista de estaciones quede cerca
 		$('rx-ajustes').addEventListener('click', function(){ var ab=$('rx-avanzado').classList.toggle('abierto'); this.setAttribute('aria-expanded', ab); });
 

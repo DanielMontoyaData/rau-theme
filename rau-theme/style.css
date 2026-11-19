@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.54.0
+Version: 19.55.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -929,6 +929,20 @@ html.rau-splash-active body {
 .rx-cw-cab #rx-cw-info { flex: 1; }
 .rx-cw-texto { min-height: 2.6rem; margin: .4rem 0 .2rem; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: 1.05rem; letter-spacing: .06em; color: var(--rx-ambar); text-shadow: 0 0 8px rgba(255,181,71,.45); }
 .rx-cw-nota { font-size: 11px; color: rgba(255,181,71,.45); }
+.rx-cw-duda { opacity: .45; }
+/* Decodificador FT8/FT4: lista como la de WSJT-X */
+#rx-app .rx-ft.hidden { display: none; }
+.rx-ft-filtro { display: inline-flex; align-items: center; gap: .3rem; cursor: pointer; }
+.rx-ft-tabla { max-height: 18rem; overflow: auto; margin: .45rem 0 .3rem; border-top: 1px solid rgba(255,181,71,.15); }
+.rx-ft-tabla table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--rx-ambar); }
+.rx-ft-tabla th { position: sticky; top: 0; background: #0e0b05; text-align: left; font-weight: 600; font-size: 10px; letter-spacing: .1em; color: rgba(255,181,71,.6); padding: .3rem .4rem; }
+.rx-ft-tabla td { padding: .18rem .4rem; white-space: nowrap; border-bottom: 1px solid rgba(255,181,71,.06); }
+.rx-ft-tabla td:nth-child(2), .rx-ft-tabla td:nth-child(3), .rx-ft-tabla td:nth-child(4) { text-align: right; }
+.rx-ft-tabla td:last-child { white-space: normal; width: 100%; }
+.rx-ft-tabla tr.rx-ft-ult td { color: #ffd38a; }
+.rx-ft-tabla tr.rx-ft-cqf td:last-child { color: #86efac; }
+.rx-ft-co { color: #67e8f9; font-weight: 700; }
+@media (max-width: 520px) { .rx-ft-tabla td:nth-child(3), .rx-ft-tabla th:nth-child(3) { display: none; } }
 
 /* Bloques de mandos */
 .rx-mesa { display: grid; gap: .75rem; margin-top: .9rem; grid-template-columns: minmax(0, 1fr); }

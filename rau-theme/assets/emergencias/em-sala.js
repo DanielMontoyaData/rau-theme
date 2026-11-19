@@ -247,6 +247,7 @@ E.registrarVista('sala', {nombre:'Sala de mando', icono:'◎', fn:function(){
 function pantallaSala(){
 	var on=!document.body.classList.contains('em-modo-sala');
 	document.body.classList.toggle('em-modo-sala', on);
+	if(on) window.scrollTo(0, 0); // la franja de estado queda a la vista
 	var b=$('#sl-pant'); if(b){ b.setAttribute('aria-pressed', on); b.textContent=on?'Salir de la pantalla de sala':'⛶ Pantalla de sala'; }
 	try { if(on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function(){}); else if(!on && document.fullscreenElement) document.exitFullscreen().catch(function(){}); } catch(e){}
 }
