@@ -348,6 +348,7 @@ foreach ( $tabs_by_cat_sin_orden as $cat => $lista ) {
 					</div>
 					<div id="avisos-lista" class="mt-2 flex flex-wrap gap-1"></div>
 					<div id="avisos-hallados" class="mt-2 space-y-1 font-mono text-[11px]"></div>
+					<button type="button" id="avisos-push" class="mt-2 hidden w-full rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-[10px] text-muted-foreground hover:border-primary/40 hover:text-primary">📱 Avisarme también con la página cerrada</button>
 					<p class="mt-1.5 text-[10px] text-muted-foreground">Mientras esta página esté abierta, revisa el cluster DX, POTA y lo que oye el receptor. Avisa con un tono y una notificación. Una banda («10m») avisa cuando el receptor empieza a oír estaciones en ella.</p>
 				</div>
 				</div>

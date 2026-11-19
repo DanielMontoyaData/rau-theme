@@ -7178,9 +7178,61 @@ rauCuandoVisible('consola-wspr-lista', function(){
 		if(window.Notification && Notification.permission==='default') Notification.requestPermission().catch(function(){});
 		revisar();
 	}
-	document.getElementById('avisos-agregar').addEventListener('click', agregar);
-	document.getElementById('avisos-nuevo').addEventListener('keydown', function(e){ if(e.key==='Enter') agregar(); });
-	document.getElementById('avisos-lista').addEventListener('click', function(e){ var b=e.target.closest('.avisos-quitar'); if(!b) return; var l=leer(); l.splice(+b.dataset.i,1); guardar(l); pintarLista(); });
+	/* Con la página cerrada: la lista se guarda en el servidor, que la revisa cada 10 minutos contra lo que
+	   oye el receptor y avisa al celular (inc/vigia-receptor.php). */
+	var pushBtn=document.getElementById('avisos-push'), VIGIA=<?php echo wp_json_encode( rest_url( 'rau/v1/vigia' ) ); ?>, AJAX=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+	function pushActivo(){ try { return localStorage.getItem('rau_vigia_push')==='1'; } catch(e){ return false; } }
+	function b64(s){ var p='='.repeat((4-s.length%4)%4), b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/')), u=new Uint8Array(b.length); for(var i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+	function pintarPush(){
+		if(!pushBtn) return;
+		var puede='serviceWorker' in navigator && 'PushManager' in window && window.Notification;
+		pushBtn.classList.toggle('hidden', !puede || !leer().length);
+		pushBtn.textContent = pushActivo() ? '📱 Avisos al celular activos · desactivar' : '📱 Avisarme también con la página cerrada';
+	}
+	function suscripcion(crear){
+		return navigator.serviceWorker.ready.then(function(reg){
+			return reg.pushManager.getSubscription().then(function(s){
+				if(s || !crear) return s;
+				return fetch(AJAX+'?action=rau_vapid_public_key').then(function(r){ return r.json(); }).then(function(j){
+					if(!j.success || !j.data.key) throw new Error('sin clave');
+					return reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64(j.data.key)});
+				});
+			});
+		});
+	}
+	function sincronizar(crear){
+		return suscripcion(crear).then(function(s){
+			if(!s) throw new Error('sin suscripción');
+			return fetch(VIGIA, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sub:s.toJSON(), patrones:leer()})}).then(function(r){ return r.json(); });
+		});
+	}
+	if(pushBtn) pushBtn.addEventListener('click', function(){
+		if(pushActivo()){
+			suscripcion(false).then(function(s){ if(s) return fetch(VIGIA, {method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({endpoint:s.endpoint})}); }).catch(function(){});
+			try { localStorage.removeItem('rau_vigia_push'); } catch(e){}
+			pintarPush(); return;
+		}
+		pushBtn.disabled=true; pushBtn.textContent='Activando…';
+		Notification.requestPermission().then(function(p){
+			if(p!=='granted') throw new Error('permiso');
+			return sincronizar(true);
+		}).then(function(j){
+			pushBtn.disabled=false;
+			if(!j || !j.ok) throw new Error(j && j.error || 'error');
+			try { localStorage.setItem('rau_vigia_push','1'); } catch(e){}
+			pintarPush();
+		}).catch(function(e){
+			pushBtn.disabled=false; pintarPush();
+			pushBtn.textContent = e && e.message==='permiso' ? 'Bloqueaste las notificaciones: actívalas en el navegador' : 'No se pudo activar. Intenta de nuevo';
+		});
+	});
+	function alCambiar(){ pintarPush(); if(pushActivo()) sincronizar(false).catch(function(){}); }
+	document.getElementById('avisos-agregar').addEventListener('click', function(){ agregar(); alCambiar(); });
+	document.getElementById('avisos-nuevo').addEventListener('keydown', function(e){ if(e.key==='Enter'){ agregar(); alCambiar(); } });
+	document.getElementById('avisos-lista').addEventListener('click', function(e){ var b=e.target.closest('.avisos-quitar'); if(!b) return; var l=leer(); l.splice(+b.dataset.i,1); guardar(l); pintarLista(); alCambiar(); });
+	// Al volver a la página se renueva la suscripción (vence a los 30 días)
+	if(pushActivo() && 'serviceWorker' in navigator) sincronizar(false).catch(function(){});
+	pintarPush();
 	document.addEventListener('rau:spots', revisar);
 	document.addEventListener('rau:oido', revisar);
 	pintarLista();

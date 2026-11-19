@@ -20,6 +20,7 @@ require get_template_directory() . '/inc/modem-pagina.php';
 require get_template_directory() . '/inc/imagen-social.php';
 require get_template_directory() . '/inc/dos-pasos.php';
 require get_template_directory() . '/inc/sstv-galeria.php';
+require get_template_directory() . '/inc/vigia-receptor.php';
 
 /**
  * Configuración básica del tema
