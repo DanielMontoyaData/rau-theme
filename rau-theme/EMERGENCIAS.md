@@ -512,3 +512,51 @@ Además, en esta versión:
   sonido (`RAUCHAT1\n<indicativo>\n<texto>`) y recepción de paquetes `RAUEM1`, que quedan pendientes para
   «Recibir paquete» del centro de mando.
 
+
+## 14. Paquetes firmados, plantillas, tablero público, simulacros programados y capacidades (19.59.0)
+
+**Paquetes firmados.** Cada dispositivo crea su par de llaves la primera vez que entra a una operación con permiso
+de operar (ECDSA P-256 con WebCrypto; la llave privada no se puede exportar y queda en el navegador). Al sincronizar,
+registra la pública con un registro `llave` (`ind`, `pub`, `fp`). El servidor solo acepta la llave de quien está en
+la sesión y comprueba que la huella sea los primeros 16 hexadecimales del SHA-256 de la llave. En «Campo y sin
+conexión → Pasar registros sin internet», los paquetes salen firmados (campo `fir` del JSON, firma sobre el JSON sin
+ese campo). Al recibir uno, se muestra:
+
+| Resultado | Qué significa |
+|---|---|
+| ✔ Firmado por HK4ABC | Lo armó esa estación con su llave registrada, y no cambió en el camino |
+| ✖ La firma no es válida | Cambió en el camino, o lo firmó otra llave que dice ser esa estación: confirmar por otro medio |
+| Firmado, llave desconocida | Esta copia de la operación aún no tiene esa llave: sincronizar cuando haya internet |
+| Sin firma | Paquete de una versión anterior o de un dispositivo que aún no registró su llave |
+
+Una llave que llega dentro de un paquete no cuenta (cualquiera podría fabricarla): solo las que guardó el servidor.
+
+**Plantillas.** En «Plan de comunicaciones → Preparar plan», «Partir de una plantilla» llena lo vacío (no pisa lo
+escrito) y, al guardar, agrega la lista de verificación del tipo de evento sin repetir acciones que ya existan.
+
+**Tablero público.** «Informes → Tablero público» (coordinación, operaciones del servidor). El resumen lo arma el
+dispositivo (`core.tableroPublico`) y el servidor lo vuelve a construir campo por campo antes de guardarlo
+(`inc/emergencias/tablero.php`): incidentes vigentes, prioridad, estado, verificación, hora de actualización,
+coordenadas redondeadas a dos decimales, conteos, estado de la red y estaciones activas. Nada de nombres, mensajes,
+notas ni fuentes. Se republica solo (máximo una vez por minuto) mientras la operación esté abierta en ese
+dispositivo; la página pública avisa si el dato tiene más de 30 minutos. «Dejar de publicar» borra el enlace.
+
+**Simulacros programados.** Registro `sim_prog` (solo en simulacros, permiso coordinar; `anula` lo cancela). El
+cron de avisos manda «empieza a las HH:MM» cuando faltan 35 minutos o menos y «empieza» a la hora, una vez cada uno.
+El dispositivo de quien lo programó arranca las inyecciones si tiene el simulacro abierto en los 15 minutos
+siguientes. Cada escenario terminado se guarda en el historial del dispositivo y se compara con el anterior del
+mismo escenario y velocidad.
+
+**Capacidades de los miembros.** Escritorio → Miembros → «Capacidades para emergencias», con su propia casilla de
+autorización. `GET /rau-em/v1/capacidades` responde solo a cuentas con rol de administración, coordinación o
+recursos. En el centro de mando: «Estaciones → Capacidades de los miembros», con filtro.
+
+| Prueba | Comando |
+|---|---|
+| Firma de paquetes en el núcleo | `node --test tests/emergencias/core.test.mjs` |
+| Llave propia y huella en el servidor | `RAU_EM_BASE=… node --test tests/emergencias/api.test.mjs` |
+| Firma, plantillas, tablero público y simulacro programado en el navegador | `RAU_EM_BASE=… node --test tests/emergencias/e2e.test.mjs` |
+| Avisos de simulacro programado | `php tests/emergencias/avisos.php /ruta/a/wordpress/wp-load.php` |
+| Capacidades: autorización y permisos | `php tests/sitio/capacidades.php /ruta/a/wordpress/wp-load.php` |
+| De turno ahora | `php tests/sitio/turnos.php /ruta/a/wordpress/wp-load.php` |
+| Todo junto, como en GitHub | `bash tests/ci/todo.sh unidades` y `bash tests/ci/todo.sh integracion /ruta/a/wordpress` |

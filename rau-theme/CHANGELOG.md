@@ -264,6 +264,83 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.59.0 — Herramientas más fáciles de usar, seguridad, pruebas automáticas y centro de mando más completo
+
+**Herramientas** (revisión de diseño en celular y computador)
+- El buscador y los accesos rápidos van arriba de todo. Antes estaban debajo del centro de mando: a más de 4.000 px en computador y 13.000 en celular.
+- Botón «Ver las N herramientas»; el número del texto y el del catálogo ahora coinciden (decía 62 en un lado y 47 en el otro, por contar herramientas agrupadas).
+- Cada herramienta tiene una línea que dice qué hace. Se ve en los resultados del buscador y al pasar sobre el catálogo, y cuenta para la búsqueda: «impedancia» encuentra la carta de Smith.
+- Al abrir una herramienta, el título y la descripción son los suyos, y ya no queda debajo el recuadro vacío del centro de mando.
+- Las pestañas «Construir antena», «Antes de transmitir»… se ven completas en el celular (antes se cortaban de lado).
+- En español: «Carta de Smith», «Línea gris», «Azimut», «radiador / reflector», «DMR BrandMeister en vivo», D-STAR y las fechas de hams.at («en 2 d» en vez de «in 2d»).
+- La calculadora de ROE rápida dice qué es cada casilla: R (Ω) y X (Ω).
+- Las dos herramientas de frecuencias de emergencia quedaron en una sola.
+- El botón «Compartir esta grabación» aparecía antes de grabar: una regla de estilo anulaba el «oculto». Corregido para todo el receptor.
+- Las calculadoras de antena solo siguen al receptor dentro de bandas de radioaficionado. Antes, con el receptor en una emisora de 11,85 MHz, calculaban un dipolo para esa frecuencia.
+- En celular, la lista de estaciones muestra el lugar y la distancia completos (antes se cortaban con «…»), y sin atajo de teclado en el buscador, que en pantalla táctil no sirve.
+
+**Receptor**
+- Al pasar de FT8 o FT4 a RTTY o PSK31, el receptor ahora va a la frecuencia de ese modo. Los segmentos de RTTY y PSK31 incluían las frecuencias de FT4 y FT8 (14.080, 14.074…), así que se quedaba oyendo FT4 con el decodificador de RTTY.
+- **NVIS medido**: el pronóstico y el centro de mando muestran los enlaces de hasta 600 km reportados en la última hora en 160 a 30 m, por banda y con un ejemplo («40 m (2), 80 m (1)… HK4AAA ↔ HK6CCC a 329 km»). Es lo que de verdad funciona dentro del país, al lado de la estimación con una ionosonda lejana.
+- **Avisos al celular con la página cerrada**: «Avísame si aparece» ahora puede avisar al celular. El servidor revisa cada 10 minutos lo que oye el receptor y los enlaces de Colombia en PSK Reporter. Cada coincidencia se avisa una vez cada 3 horas; las suscripciones vencen a los 30 días y se renuevan al volver a la página.
+- **Galería SSTV pública**: con sesión iniciada, una imagen decodificada se publica con un botón y aparece en la página del receptor. Solo PNG del tamaño del decodificador, 20 por persona por día, se borran a los 30 días.
+- **Aporte a PSK Reporter**: la página del receptor muestra cuántos reportes se enviaron en 30 días, por banda y modo, y el más lejano.
+
+**Centro de mando**
+- **Paquetes firmados**: cada dispositivo tiene su par de llaves (ECDSA P-256, WebCrypto; la privada no sale del navegador) y registra la pública en la operación al sincronizar.
+  - Los paquetes sin internet (texto, QR, módem) van firmados.
+  - Quien los recibe ve si los armó esa estación con su llave registrada, si cambiaron en el camino o si no tienen firma.
+  - El servidor solo acepta la llave propia y con su huella correcta. Una llave que llega en un paquete no cuenta.
+- **Plantillas por tipo de evento** (deslizamiento, sismo, inundación o avenida torrencial, incendio forestal, genérica):
+  - llenan lo vacío del plan de comunicaciones y agregan una lista de verificación;
+  - las frecuencias son las que el sitio ya publica (146.520 y los centros NVIS 7.060 y 3.985).
+- **Tablero público de solo lectura**: quien coordina publica un enlace `/tablero-emergencia/<código>/` para la alcaldía, el CMGRD, la Defensa Civil o la UNGRD.
+  - Muestra los incidentes vigentes, las prioridades, la verificación, la red y las estaciones activas.
+  - No muestra nombres, mensajes, notas, fuentes ni coordenadas exactas (se redondean a ~1 km).
+  - Se actualiza solo mientras la operación esté abierta, y se retira con un botón.
+- **Simulacros programados**: fecha, hora, escenario y velocidad. El servidor avisa al celular 30 minutos antes y al empezar, y el dispositivo de quien lo programó arranca las inyecciones a la hora.
+- **Historial de simulacros**: cada escenario terminado se compara con el anterior del mismo escenario y velocidad (respondidas, mediana, más rápido o más lento).
+- **Capacidades de los miembros**: en la ficha de cada miembro (HF, NVIS, generador, solar, vehículo 4×4, primeros auxilios…).
+  - Las ve solo la coordinación del centro de mando, y solo de quien lo autorizó con su propia casilla.
+- **De turno ahora**: la página de Turnos muestra quién está de guardia y su último check-in. Se pone en rojo con más de 24 horas sin reportarse, también en el escritorio.
+- Una repetidora borrada seguía hasta una hora en el mapa y en el centro de mando; ahora sale al instante.
+
+**Club**
+- **Libro de Guardia**:
+  - exportar a ADIF, para firmarlo con TQSL y subirlo a LoTW, o para QRZ y Log4OM;
+  - importar ADIF de WSJT-X, Log4OM o el «Log ADIF» de Herramientas, sin duplicar.
+- **Diploma automático**: cada contacto confirmado emite el diploma «Contacto con HK4RAU», con número verificable. Se descarga como imagen desde el Verificador de Diplomas (`?verificar=<número>`).
+- **Concursos al calendario**: cada concurso (o todos) se descarga como evento .ics con aviso un día antes.
+
+**Seguridad**
+- **Verificación en dos pasos** opcional (TOTP, RFC 6238, con 8 códigos de respaldo de un solo uso).
+  - Se activa en el perfil con un QR.
+  - Solo afecta el formulario de entrada; las contraseñas de aplicación de la API siguen igual.
+  - Pocos intentos por cuenta, y un código no sirve dos veces.
+  - El escritorio lo recomienda una vez a quien puede publicar.
+- **XML-RPC con usuario y contraseña, apagado**: nada instalado lo usa, y `system.multicall` permite probar cientos de contraseñas en una sola petición.
+- **Licencia GPLv3 o posterior** (`LICENCIA.md`), por el código de JS8Call, con la lista de partes de terceros.
+
+**Pruebas automáticas y operación**
+- **GitHub Actions** (`.github/workflows/pruebas.yml`) en cada cambio:
+  - unidades;
+  - un WordPress de prueba con SQLite (`tests/ci/montar-wp.sh`), donde corren todas las pruebas de PHP, de la API y de navegador.
+  - El mismo `tests/ci/todo.sh` sirve a mano.
+- **Monitoreo** (`.github/workflows/monitoreo.yml`): cada 30 minutos revisa la portada, Herramientas, el centro de mando, `/modem/` y que los datos de propagación tengan menos de 2 horas.
+  - Si algo falla, abre un issue (GitHub avisa por correo) y lo cierra cuando vuelve.
+  - GitHub solo corre los horarios desde la rama principal: empieza a funcionar cuando esta rama se una a `main`.
+- **Tareas programadas cada 5 minutos** desde el Worker de Cloudflare (función `scheduled`, ver `cloudflare-worker/README.md` sección 4). Hasta ahora solo corrían cuando alguien visitaba el sitio.
+
+**Corrección del informe anterior**
+- Dije que la API mostraba los usuarios del sitio a cualquiera. No era así: mis consultas iban con la sesión de la cuenta claude-temporal. El tema ya los oculta a quien no tiene sesión desde versiones anteriores.
+
+**Lo que no se hizo, y por qué**
+- **Transmitir JS8 desde el navegador**: hace falta portar el compresor de texto de JS8Call y comprobarlo contra JS8Call real con un radio, y aquí no hay cómo.
+- **Achicar el diccionario de JS8**: con los formatos que el navegador descomprime, lo más que se gana es el 1 %. Además solo se descarga al usar JS8.
+- **Historial de propagación por hora**: ya existía en «Aperturas desde Colombia».
+
+---
+
 ## 19.58.0 — Más modos en el receptor, PSK Reporter, pronóstico, módem con protección, y sitio más pulido
 
 **Receptor** (las dos pestañas)
