@@ -6,6 +6,24 @@
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 ?>
+/* Una sola petición por dato compartido. Medido en la 19.59.0: cada página de Herramientas pedía 8 veces
+   los índices solares, 3 el estado del receptor y 2 los spots DX, los satélites y el directo de YouTube,
+   porque varios bloques los usan por su cuenta. Las lecturas iguales de los últimos 60 s se reparten
+   como copias de la misma respuesta; las actualizaciones periódicas, pasado ese tiempo, siguen yendo al
+   servidor. */
+(function(){
+	if(window.__rauFetchCompartido || !window.fetch) return; window.__rauFetchCompartido=true;
+	var original=window.fetch, cache={}, LISTA=/[?&]action=(rau_solar|rau_solar_history|rau_sdr_status|rau_dx_spots|rau_tle|rau_tle_fuente|rau_yt_live|rau_racha_top|rau_sdr_historial|rau_checkin_hoy_mapa)(&|$)/;
+	window.fetch=function(u, o){
+		var url=typeof u==='string' ? u : (u && u.url) || '';
+		if((!o || !o.method || o.method==='GET') && LISTA.test(url)){
+			var c=cache[url];
+			if(!c || Date.now()-c.t>60000){ c=cache[url]={t:Date.now(), p:original.apply(this, arguments)}; c.p.catch(function(){ delete cache[url]; }); }
+			return c.p.then(function(r){ return r.clone(); });
+		}
+		return original.apply(this, arguments);
+	};
+})();
 /* Nombre e icono de la fase lunar a partir de la fracción del ciclo sinódico (0 = luna nueva).
    Estaba duplicado en el panel Luna de la consola y en la herramienta Fase Lunar (EME): mismos
    ocho umbrales escritos dos veces. Séptima duplicación encontrada en esta revisión. */
@@ -1127,10 +1145,10 @@ function rauFaseLunar(frac){
 	function cargarLeaflet(cb){
 		if(window.L){ cb(); return; }
 		var link=document.createElement('link');
-		link.rel='stylesheet'; link.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+		link.rel='stylesheet'; link.href='<?php echo esc_js( get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.css?ver=1.9.4' ); ?>';
 		document.head.appendChild(link);
 		var script=document.createElement('script');
-		script.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+		script.src='<?php echo esc_js( get_template_directory_uri() . '/assets/vendor/leaflet/leaflet.js?ver=1.9.4' ); ?>';
 		script.onload=cb;
 		document.head.appendChild(script);
 	}
@@ -2198,6 +2216,8 @@ function rauFaseLunar(frac){
 		if(p.dataset.rauVisto) return;
 		p.dataset.rauVisto='1';
 		p.querySelectorAll('iframe[data-src]').forEach(function(f){ f.src=f.dataset.src; f.removeAttribute('data-src'); });
+		// Aviso para las herramientas que cargan datos solo cuando se abren (p. ej. POTA)
+		document.dispatchEvent(new CustomEvent('rau:panel', {detail:p.id}));
 	}
 
 	function activateCategory(catName, opts){
@@ -5640,10 +5660,13 @@ var CODIGOS_Q=[
 
 /* ── POTA Colombia (carga al activar pestaña) ── */
 (function(){
-	var loaded=false;
-	var tabBtn=document.querySelector('[data-tab="pota"]');
-	if(!tabBtn)return;
-	tabBtn.addEventListener('click',function(){
+	var loaded=false, panel=document.getElementById('panel-pota');
+	if(!panel)return;
+	/* Antes solo cargaba al tocar su botón en el catálogo: entrando por /herramientas/pota/, el buscador
+	   o un acceso rápido se quedaba en «Consultando spots activos…» para siempre. */
+	document.addEventListener('rau:panel', function(e){ if(e.detail==='panel-pota') cargar(); });
+	if(panel.dataset.rauVisto || panel.offsetParent) setTimeout(cargar, 0);
+	function cargar(){
 		if(loaded)return; loaded=true;
 		fetch('<?php echo esc_js(admin_url('admin-ajax.php')); ?>?action=rau_pota_spots',{cache:'no-store'})
 		.then(function(r){return r.json();})
@@ -5671,7 +5694,7 @@ var CODIGOS_Q=[
 		.catch(function(e){ rauErr(e);
 			document.getElementById('pota-loading').innerHTML='<p class="text-sm text-muted-foreground">No se pudo cargar la API de POTA. Intenta más tarde.</p>';
 		});
-	});
+	}
 })();
 
 /* ── DX SPOTS ──

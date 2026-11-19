@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.59.0' );
+define( 'RAU_THEME_VERSION', '19.59.1' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -1519,10 +1519,10 @@ function rau_imagen_galeria( $post_id, $url, $alt ) {
 	return $url ? '<img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105">' : '';
 }
 function rau_csp_politica() {
-	return "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://www.youtube.com; "
+	return "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://www.youtube.com https://www.googletagmanager.com https://cdn-reach.hostinger.com; "
 		. "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; "
 		. "img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; worker-src 'self' blob:; "
-		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com; report-uri " . rest_url( 'rau/v1/csp' );
+		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com https://dxheat.com https://www.dxheat.com; report-uri " . rest_url( 'rau/v1/csp' );
 }
 /* Avisos de CSP: se agrupan por directiva y dominio bloqueado; como mucho 60 por IP y hora */
 add_action( 'rest_api_init', function() {

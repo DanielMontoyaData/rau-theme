@@ -264,6 +264,15 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.59.1 — Correcciones del estudio de Herramientas en vivo
+
+- **POTA se quedaba en «Consultando spots activos…» para siempre** al entrar por `/herramientas/pota/`, el buscador o un acceso rápido: solo cargaba si se tocaba su botón en el catálogo. Ahora carga al abrirse por cualquier camino.
+- **Una sola petición por dato compartido**: cada página de Herramientas pedía 8 veces los índices solares, 3 el estado del receptor y 2 los spots DX, los satélites y el directo de YouTube. Ahora las lecturas iguales de los últimos 60 segundos comparten la respuesta (de 8 a 1 en los índices solares, medido).
+- **Leaflet desde el propio sitio** en el mapa de la consola (ya estaba en `assets/vendor`), en vez de unpkg.com.
+- **Política de contenido («solo informar»)**: faltaban Google Tag Manager (Site Kit), el script de Hostinger Reach y el marco de DXheat. Cada visita mandaba 2 avisos al servidor, y al aplicar la política se habrían roto la analítica y el cluster DX.
+
+---
+
 ## 19.59.0 — Herramientas más fáciles de usar, seguridad, pruebas automáticas y centro de mando más completo
 
 **Herramientas** (revisión de diseño en celular y computador)

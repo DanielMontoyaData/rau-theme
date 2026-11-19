@@ -90,4 +90,17 @@ test('Herramientas: buscador arriba, qué hace cada una y vista de herramienta l
 	assert.equal(await p.isVisible('#rx-grab-subir'), false);
 	await p.close();
 });
+test('Herramientas: POTA carga al entrar por su dirección, y los datos compartidos se piden una sola vez', async () => {
+	nav = nav || await chromium.launch({ args: ['--no-proxy-server'] });
+	const p = await nav.newPage(); p.on('pageerror', e => errores.push(e.message));
+	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+	let solar = 0;
+	await p.route(/action=rau_pota_spots/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: [{ activator: 'HK4POT', frequency: '14285', mode: 'SSB', reference: 'CO-0001', name: 'Parque' }] }) }));
+	await p.route(/action=rau_solar(&|$)/, r => { solar++; r.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: { sfi: '118', ssn: '79', aindex: '10', kindex: '2', xray: 'B5.6', bands: [] } }) }); });
+	await p.goto(BASE + '/herramientas/pota/');
+	await p.waitForFunction(() => /HK4POT/.test(document.getElementById('panel-pota').innerText), null, { timeout: 10000 });
+	await p.waitForTimeout(1500);
+	assert.equal(solar, 1, 'los índices solares se piden una vez aunque varios bloques los usen');
+	await p.close();
+});
 test('sin errores de JavaScript', () => { assert.deepEqual(errores, []); });
