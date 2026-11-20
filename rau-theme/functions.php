@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.61.1' );
+define( 'RAU_THEME_VERSION', '19.62.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -26,6 +26,7 @@ require get_template_directory() . '/inc/capacidades.php';
 require get_template_directory() . '/inc/libro-adif.php';
 require get_template_directory() . '/inc/uso-herramientas.php';
 require get_template_directory() . '/inc/portada.php';
+require get_template_directory() . '/inc/condiciones.php';
 
 /**
  * Configuración básica del tema
@@ -1087,6 +1088,7 @@ add_action( 'init', function() {
 			foreach ( rau_get_herramientas_tabs() as $t ) {
 				$urls[] = array( 'loc' => home_url( '/herramientas/' . $t['id'] . '/' ) );
 			}
+			$urls[] = array( 'loc' => home_url( '/condiciones/' ) ); // 19.62.0
 			return $urls;
 		}
 		public function get_max_num_pages( $object_subtype = '' ) {
@@ -1524,7 +1526,7 @@ function rau_csp_politica() {
 	return "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://www.youtube.com https://www.googletagmanager.com https://cdn-reach.hostinger.com https://cdnjs.cloudflare.com; "
 		. "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' data: https://fonts.gstatic.com; "
 		. "img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; worker-src 'self' blob:; "
-		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com https://dxheat.com https://www.dxheat.com; report-uri " . rest_url( 'rau/v1/csp' );
+		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com https://dxheat.com https://www.dxheat.com https://embed.windy.com; report-uri " . rest_url( 'rau/v1/csp' );
 }
 /* Avisos de CSP: se agrupan por directiva y dominio bloqueado; como mucho 60 por IP y hora */
 add_action( 'rest_api_init', function() {

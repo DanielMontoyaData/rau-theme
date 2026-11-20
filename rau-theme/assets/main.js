@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		try { localStorage.setItem('rau-theme', theme); } catch (e) {}
 		if (window.rauMap && window.rauTileLayer) {
 			window.rauMap.removeLayer(window.rauTileLayer);
-			window.rauTileLayer = L.tileLayer(rauTileUrlFor(theme), { attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18 }).addTo(window.rauMap);
+			window.rauTileLayer = L.tileLayer(rauTileUrlFor(theme), rauTileOpts(theme)).addTo(window.rauMap);
 		}
 	}
 	['rauThemeToggle', 'rauThemeToggleMobile'].forEach(function (id) {
@@ -91,19 +91,15 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	});
 
-	function rauTileUrlFor(theme) {
-		return theme === 'light'
-			? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-			: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-	}
+	/* 19.62.0: CARTO empezó a exigir clave y sus mosaicos salían con «API KEY REQUIRED» encima.
+	   Ahora OpenStreetMap; en el tema oscuro, los mismos mosaicos invertidos con CSS (.rau-tiles-oscuras). */
+	function rauTileUrlFor() { return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'; }
+	function rauTileOpts(theme) { return { attribution: '&copy; colaboradores de OpenStreetMap', maxZoom: 19, className: theme === 'light' ? '' : 'rau-tiles-oscuras' }; }
 	var mapEl = document.getElementById('repeaterMap');
 	if (mapEl && typeof L !== 'undefined' && window.RAU_MAP_POINTS && RAU_MAP_POINTS.length) {
 		mapEl.classList.remove('hidden');
 		window.rauMap = L.map('repeaterMap', { scrollWheelZoom: false }).setView([RAU_MAP_POINTS[0].lat, RAU_MAP_POINTS[0].lng], 10);
-		window.rauTileLayer = L.tileLayer(rauTileUrlFor(rauCurrentTheme()), {
-			attribution: '&copy; OpenStreetMap &copy; CARTO',
-			maxZoom: 18
-		}).addTo(window.rauMap);
+		window.rauTileLayer = L.tileLayer(rauTileUrlFor(rauCurrentTheme()), rauTileOpts(rauCurrentTheme())).addTo(window.rauMap);
 		RAU_MAP_POINTS.forEach(function (r) {
 			L.circleMarker([r.lat, r.lng], { radius: 8, color: '#22d9f4', fillColor: '#22d9f4', fillOpacity: 0.85, weight: 2 })
 				.addTo(window.rauMap)

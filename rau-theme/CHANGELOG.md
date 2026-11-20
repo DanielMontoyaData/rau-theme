@@ -264,6 +264,40 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.62.0 — Condiciones: todo lo que afecta salir al aire, para tu ubicación
+
+Página nueva en `/condiciones/` (en el menú, después de Herramientas; si la ponen a mano en otro lugar, se
+respeta). Enlazada desde «En el aire ahora» en la portada.
+
+- **Ubicación**: GPS del celular, búsqueda de ciudad o municipio, locator Maidenhead (FJ26), la estación
+  guardada en Herramientas, un clic en el mapa o un enlace compartido (`?lat=&lon=` o `?loc=FJ26`).
+  Se redondea a 0,1° (unos 11 km) antes de consultar; el servidor nunca recibe la ubicación exacta.
+- **Semáforo** de 7 tarjetas con qué hacer: tormenta eléctrica (próximas 3 h), viento y ráfagas (6 h),
+  HF (bandas + absorción D-RAP en el punto), sol (llamaradas, escala R), campo magnético (Kp, escala G),
+  6 m (cluster DX) y satélites (próxima pasada).
+- **Mapa**: radar de lluvia animado de las últimas 2 h (RainViewer) con línea de tiempo, día/noche y línea
+  gris en vivo, repetidoras RAU, sismos de 7 días, ionosondas con su MUF, radio de 50 km; fondos oscuro,
+  claro, satélite y relieve; pantalla completa. Segunda vista con el mapa animado de **Windy** (viento,
+  lluvia, rayos, nubes, temperatura, inestabilidad).
+- **Paneles**: el tiempo (ahora, gráfica de 48 h con lluvia y tormentas, 3 días, calidad del aire y UV) ·
+  HF desde aquí (bandas de día/noche en el punto, foF2 y MUF de la ionosonda más cercana, NVIS, DX,
+  absorción, NVIS medido, horas de línea gris) · el sol y el campo magnético (escalas R/S/G explicadas,
+  Kp y su pronóstico, rayos X, flujo solar, viento solar y Bz, avisos de NOAA) · sol, luna (fase, EME) y
+  pasadas de satélites de radioaficionado en 12 h · 6 m y 2 m en el cluster y lluvias de meteoros ·
+  sismos cercanos · repetidoras más cercanas, receptor del club y próxima actividad.
+- **Avisos al celular** para el punto: tormenta eléctrica, ráfagas ≥ 60 km/h, llamarada fuerte,
+  tormenta geomagnética y 6 m abierta. Revisión cada 15 min; como mucho uno por tema cada 2–6 h.
+- **Fuentes** (gratuitas, sin clave): Open-Meteo (respaldo automático: MET Norway), NOAA SWPC, red GIRO
+  vía KC2G, HamQSL, USGS, RainViewer, Windy, CelesTrak. Cada una se guarda el tiempo que tiene sentido y,
+  si falla, se usa la última buena; los vecinos de la misma zona comparten la consulta.
+- **Mapas de todo el sitio**: CARTO empezó a exigir una clave y sus mosaicos salían con «API KEY
+  REQUIRED» encima. El mapa de repetidoras y esta página usan ahora OpenStreetMap (invertido en el tema
+  oscuro).
+- Pruebas: `tests/sitio/condiciones.php` (31, con todas las fuentes simuladas), una prueba de navegador y
+  un presupuesto de rendimiento para `/condiciones/`.
+
+---
+
 ## 19.61.1 — Ajustes de la portada tras revisarla en computador, tableta, celular y modo claro
 
 - Receptor: aunque esté lleno se puede entrar. El botón sigue diciendo «Abrir el receptor» y debajo una

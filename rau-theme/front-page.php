@@ -212,7 +212,7 @@ for ( $i = 1; $i <= 3; $i++ ) { $f = (int) get_theme_mod( 'rau_home_foto_' . $i 
 </section>
 
 <section id="en-el-aire" class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
-	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">En el aire ahora</p>
+	<div class="mb-3 flex flex-wrap items-baseline justify-between gap-2"><p class="font-mono text-xs uppercase tracking-[0.25em] text-primary">En el aire ahora</p><a href="<?php echo esc_url( home_url( '/condiciones/' ) ); ?>" class="text-sm font-medium text-primary hover:underline">Condiciones completas para tu zona: tiempo, tormentas, sol y bandas →</a></div>
 	<div class="grid gap-4 lg:grid-cols-2">
 		<!-- Gauge de propagación solar — medidor tipo reloj -->
 		<div class="rounded-2xl border border-border/70 bg-card">

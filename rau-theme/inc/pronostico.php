@@ -10,13 +10,16 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /* Ionosondas: la más cercana a Medellín con medición de menos de 3 horas y confianza ≥ 50 */
-function rau_pron_ionosonda( $ahora = null ) {
+/* $aqui: otro punto en vez de Medellín (Condiciones, 19.62.0); $d: la lista ya descargada, para no pedirla otra vez */
+function rau_pron_ionosonda( $ahora = null, $aqui = null, $d = null ) {
 	$ahora = $ahora ?: time();
-	$r = rau_remote_get( 'https://prop.kc2g.com/api/stations.json', array( 'timeout' => 15, 'user-agent' => 'HK4RAU/1.0 (info@hk4rau.com)' ), 10 );
-	if ( is_wp_error( $r ) || 200 !== (int) wp_remote_retrieve_response_code( $r ) ) return null;
-	$d = json_decode( wp_remote_retrieve_body( $r ), true );
+	if ( null === $d ) {
+		$r = rau_remote_get( 'https://prop.kc2g.com/api/stations.json', array( 'timeout' => 15, 'user-agent' => 'HK4RAU/1.0 (info@hk4rau.com)' ), 10 );
+		if ( is_wp_error( $r ) || 200 !== (int) wp_remote_retrieve_response_code( $r ) ) return null;
+		$d = json_decode( wp_remote_retrieve_body( $r ), true );
+	}
 	if ( ! is_array( $d ) ) return null;
-	$aqui = array( 6.2442, -75.5812 ); $mejor = null;
+	$aqui = $aqui ?: array( 6.2442, -75.5812 ); $mejor = null;
 	foreach ( $d as $s ) {
 		if ( empty( $s['fof2'] ) || empty( $s['time'] ) || ! isset( $s['station']['latitude'] ) ) continue;
 		$t = strtotime( $s['time'] . ' UTC' ); $cs = (float) ( $s['cs'] ?? 0 );

@@ -170,4 +170,48 @@ test('19.61: portada nueva — qué es RAU, bandas, receptor lleno, actividades 
 		await q.close();
 	}
 });
+test('19.62: Condiciones — semáforo, mapa con radar y capas, Windy, buscar por locator y menú', async () => {
+	nav = nav || await chromium.launch({ args: ['--no-proxy-server'] });
+	const p = await nav.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errores.push(e.message));
+	const horas = Array.from({ length: 48 }, (_, i) => ({ t: '2026-11-20T' + String((10 + i) % 24).padStart(2, '0') + ':00', temp: 20 + (i % 6), hr: 70, pp: i === 1 ? 90 : 20, mm: 0, cod: i === 1 ? 95 : 3, viento: 8, rafaga: 20, cape: 900, li: 1, vis: 20000, dia: 1 }));
+	const datos = { punto: { lat: 6.2, lon: -75.6, locator: 'FJ26ee', cerca: { nombre: 'Envigado', km: 3 } },
+		clima: { fuente: 'Open-Meteo', offset: -18000, elevacion: 1495, actual: { temp: 22.4, sensacion: 23, hr: 70, dia: 1, mm: 0, cod: 3, nubes: 80, presion: 850, viento: 8, dir: 90, rafaga: 20, vis: 20000, cape: 900 }, horas, dias: [{ fecha: '2026-11-20', cod: 95, max: 26, min: 16, mm: 5, pp: 80 }, { fecha: '2026-11-21', cod: 3, max: 27, min: 17, mm: 0, pp: 10 }, { fecha: '2026-11-22', cod: 61, max: 25, min: 16, mm: 2, pp: 60 }] },
+		aire: { pm25: 12, pm10: 20, aqi: 55, uv: 4 },
+		espacio: { kp: { valor: 1.3 }, kp_pron: 3.7, rayosx: { actual: 'B2.0', max: 'B5.0' }, escalas: { R: 0, S: 0, G: 0, prob_r: 10, prob_rx: 5 }, viento: { vel: 420, dens: 3.2, bz: -4.2, bt: 6 }, alertas: [], sfi: 140, ssn: 90, bandas: [{ name: '80m-40m', day: 'Good', night: 'Good' }, { name: '12m-10m', day: 'Poor', night: 'Poor' }] },
+		drap: { mhz: 0, mensaje: 'Normal' },
+		iono: { iono: { nombre: 'Boa Vista, Brazil', km: 1694, fof2: 8.6, mufd: 27, hace: 20 }, nvis: { banda: '40 m', texto: 'foF2 8,6 MHz.' }, dx: ['40 m', '20 m'], estaciones: [{ n: 'Boa Vista, Brazil', lat: 2.8, lon: -60.7, mufd: 27, fof2: 8.6, hace: 20 }] },
+		sismos: [{ mag: 4.1, lugar: 'Antioquia', t: 1795200000, km: 80, prof: 30, lat: 6.9, lon: -75.9, url: '' }],
+		repetidoras: [{ name: 'Repetidora Medellín', freq: '146.675', offset: '-600 kHz', tone: '100.0', km: 11 }],
+		semaforo: { tormenta: { nivel: 2, texto: 'Tormenta eléctrica prevista hacia las 11:00. Desconecta las antenas.' }, viento: { nivel: 0, texto: 'Viento tranquilo.' }, hf: { nivel: 0, texto: 'Abiertas: 80–40m.' }, sol: { nivel: 0, texto: 'Sol tranquilo.' }, geomag: { nivel: 0, texto: 'Campo tranquilo.' } },
+		generado: 1795200000 };
+	const pedidos = [];
+	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+	await p.route(/wp-json\/rau\/v1\/condiciones\?/, r => { pedidos.push(r.request().url()); r.fulfill({ contentType: 'application/json', body: JSON.stringify(datos) }); });
+	await p.route(/api\.rainviewer\.com/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ host: 'https://tilecache.rainviewer.com', radar: { past: [{ time: 1795200000, path: '/v2/radar/a' }, { time: 1795200600, path: '/v2/radar/b' }], nowcast: [] } }) }));
+	await p.goto(BASE + '/condiciones/?lat=6.24&lon=-75.58');
+	await p.waitForSelector('#cnd-luz-tormenta[data-n="2"]');
+	assert.match(await p.innerText('#cnd-luz-tormenta'), /Desconecta las antenas/);
+	assert.match(await p.innerText('#cnd-clima'), /22°[\s\S]*Inestabilidad/i);
+	assert.match(await p.innerText('#cnd-hf'), /Boa Vista[\s\S]*NVIS/i);
+	assert.match(await p.innerText('#cnd-esp'), /R0[\s\S]*Kp ahora/i);
+	assert.match(await p.innerText('#cnd-sis'), /M4,1 Antioquia/);
+	assert.ok(pedidos.every(u => /lat=6\.2&lon=-75\.6/.test(u)), 'al servidor solo va el punto redondeado: ' + pedidos[0]);
+	await p.waitForSelector('#cnd-mapa .leaflet-marker-icon');
+	await p.waitForFunction(() => !document.getElementById('cnd-linea').hidden, null, { timeout: 15000 });
+	assert.equal(await p.inputValue('#cnd-cuadro'), '1', 'el radar arranca en el cuadro más reciente');
+	await p.click('#cnd-capas-btn'); await p.check('[data-capa-mapa="iono"]');
+	await p.waitForFunction(() => [...document.querySelectorAll('#cnd-mapa .cnd-marca')].some(m => m.textContent.trim() === '27'));
+	await p.click('[data-vista="windy"]');
+	assert.match(await p.getAttribute('#cnd-windy', 'src'), /embed\.windy\.com\/embed2\.html\?lat=6\.24&lon=-75\.58.*overlay=wind/);
+	await p.click('[data-capa="thunder"]');
+	assert.match(await p.getAttribute('#cnd-windy', 'src'), /overlay=thunder/);
+	assert.equal(await p.isVisible('#cnd-mapa'), false, 'en la vista de Windy no se ve el otro mapa');
+	await p.fill('#cnd-buscar', 'FJ35'); await p.click('#cnd-sug button');
+	await p.waitForFunction(() => /lat=5\.5/.test(location.search));
+	assert.match(await p.innerText('#cnd-lugar'), /FJ35/);
+	assert.ok(await p.$('header a[href*="/condiciones"]'), 'Condiciones está en el menú');
+	await p.close();
+	const h = await (await fetch(BASE + '/wp-sitemap-herramientas-1.xml')).text().catch(() => '');
+	if (h) assert.match(h, /\/condiciones\//, 'en el mapa del sitio');
+});
 test('sin errores de JavaScript', () => { assert.deepEqual(errores, []); });

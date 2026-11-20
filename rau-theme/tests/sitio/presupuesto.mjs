@@ -16,6 +16,7 @@ const PRESUPUESTO = {
 	'/emergencias/':  { kb: 700, js: 450, lcp: 4000, tbt: 800 },
 	'/herramientas/': { kb: 1600, js: 900, lcp: 5000, tbt: 2500 },
 	'/modem/':        { kb: 150, js: 120, lcp: 2500, tbt: 300 },
+	'/condiciones/':  { kb: 1400, js: 450, lcp: 4000, tbt: 800 },
 };
 let nav; const filas = [];
 after(async () => { if (nav) await nav.close(); if (filas.length) console.table(filas); });

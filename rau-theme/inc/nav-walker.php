@@ -97,6 +97,7 @@ class RAU_Mobile_Nav_Walker extends Walker_Nav_Menu {
 function rau_default_links() {
 	return array(
 		home_url( '/repetidores' ) => 'Repetidores',
+		home_url( '/condiciones' ) => 'Condiciones',
 		home_url( '/canales' )     => 'Canales',
 		home_url( '/pulguero' )    => 'Pulguero',
 		home_url( '/qsl' )         => 'Libro QSL',
