@@ -36,6 +36,8 @@ $iconos = array(
 	'gota'     => '<path d="M12 2.7 6.3 8.4a8 8 0 1 0 11.4 0z"/>',
 	'antena'   => '<path d="M4.9 19.1a10 10 0 0 1 0-14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="2"/>',
 	'tabla'    => '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+	'buscar'   => '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+	'cme'      => '<circle cx="7" cy="12" r="4"/><path d="M13 7c3 1.5 5 3 8 5-3 2-5 3.5-8 5M12 12h9"/>',
 );
 if ( ! function_exists( 'rau_cnd_ic' ) ) { function rau_cnd_ic( $id, $clase = 'cnd-ic' ) { return '<svg class="' . esc_attr( $clase ) . '" aria-hidden="true" focusable="false"><use href="#cnd-i-' . esc_attr( $id ) . '"/></svg>'; } }
 $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
@@ -53,6 +55,7 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 		<div class="cnd-ubic">
 			<span class="cnd-lugar" id="cnd-lugar"><?php echo rau_cnd_ic( 'ubic' ); ?><span id="cnd-lugar-txt">Medellín</span> <span class="cnd-mono cnd-mut cnd-mini" id="cnd-loc"></span></span>
 			<button type="button" class="cnd-btn solo-ic" id="cnd-gps" title="Usar mi ubicación" aria-label="Usar mi ubicación"><?php echo rau_cnd_ic( 'gps' ); ?></button>
+			<button type="button" class="cnd-btn solo-ic cnd-solo-movil" id="cnd-buscar-btn" aria-expanded="false" aria-controls="cnd-buscar" title="Buscar un lugar" aria-label="Buscar un lugar"><?php echo rau_cnd_ic( 'buscar' ); ?></button>
 			<div class="cnd-buscar cnd-sala-oculto">
 				<input id="cnd-buscar" type="search" autocomplete="off" placeholder="Ciudad, municipio o locator (FJ26)" aria-label="Buscar ciudad, municipio o locator Maidenhead" aria-controls="cnd-sug" aria-autocomplete="list">
 				<div class="cnd-sug" id="cnd-sug" role="listbox" hidden></div>
@@ -126,6 +129,7 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 		<div class="cnd-lado">
 			<?php $caja( 'cnd-ahora', 'nube', 'Ahora' ); ?>
 			<?php $caja( 'cnd-reg', 'registro', 'Registro de eventos' ); ?>
+			<div id="cnd-rota" aria-label="Paneles que rotan en el modo sala"></div>
 		</div>
 	</div>
 
@@ -134,6 +138,7 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 		<?php $caja( 'cnd-sitios', 'tabla', 'Sitios RAU' ); ?>
 		<?php $caja( 'cnd-hf', 'hf', 'HF desde aquí', 'cnd-ancho2' ); ?>
 		<?php $caja( 'cnd-esp', 'sol', 'Clima espacial' ); ?>
+		<?php $caja( 'cnd-solar', 'cme', 'Tormentas solares', 'cnd-ancho' ); ?>
 		<?php $caja( 'cnd-tend', 'sol', 'Tendencias del sol', 'cnd-ancho2' ); ?>
 		<?php $caja( 'cnd-cielo', 'sat', 'Satélites, sol y luna' ); ?>
 		<?php $caja( 'cnd-vhf', 'seis', '6 m, meteoros y VHF' ); ?>
@@ -178,7 +183,7 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 	</div>
 
 	<p class="cnd-pie">
-		Fuentes: tiempo de <a href="https://open-meteo.com/" rel="noopener" target="_blank">Open-Meteo</a> (respaldo: <a href="https://api.met.no/" rel="noopener" target="_blank">MET Norway</a>) · radar de <a href="https://www.rainviewer.com/" rel="noopener" target="_blank">RainViewer</a> · mapa animado de <a href="https://www.windy.com/" rel="noopener" target="_blank">Windy</a> · clima espacial y absorción D-RAP de <a href="https://www.swpc.noaa.gov/" rel="noopener" target="_blank">NOAA SWPC</a> · ionosondas de la red GIRO vía <a href="https://prop.kc2g.com/" rel="noopener" target="_blank">KC2G</a> · bandas de <a href="https://www.hamqsl.com/" rel="noopener" target="_blank">HamQSL</a> · enlaces de <a href="https://pskreporter.info/" rel="noopener" target="_blank">PSK Reporter</a> · sismos del <a href="https://earthquake.usgs.gov/" rel="noopener" target="_blank">USGS</a> · satélites de <a href="https://celestrak.org/" rel="noopener" target="_blank">CelesTrak</a> · mapas © colaboradores de OpenStreetMap, Esri y OpenTopoMap.
+		Fuentes: tiempo de <a href="https://open-meteo.com/" rel="noopener" target="_blank">Open-Meteo</a> (respaldo: <a href="https://api.met.no/" rel="noopener" target="_blank">MET Norway</a>) · radar de <a href="https://www.rainviewer.com/" rel="noopener" target="_blank">RainViewer</a> · mapa animado de <a href="https://www.windy.com/" rel="noopener" target="_blank">Windy</a> · clima espacial, absorción D-RAP y pronósticos de <a href="https://www.swpc.noaa.gov/" rel="noopener" target="_blank">NOAA SWPC</a> · eyecciones de masa coronal de <a href="https://kauai.ccmc.gsfc.nasa.gov/DONKI/" rel="noopener" target="_blank">NASA DONKI</a> · imágenes del sol de <a href="https://sdo.gsfc.nasa.gov/" rel="noopener" target="_blank">NASA SDO</a> y de la corona de SOHO LASCO · ionosondas de la red GIRO vía <a href="https://prop.kc2g.com/" rel="noopener" target="_blank">KC2G</a> · bandas de <a href="https://www.hamqsl.com/" rel="noopener" target="_blank">HamQSL</a> · enlaces de <a href="https://pskreporter.info/" rel="noopener" target="_blank">PSK Reporter</a> · sismos del <a href="https://earthquake.usgs.gov/" rel="noopener" target="_blank">USGS</a> · satélites de <a href="https://celestrak.org/" rel="noopener" target="_blank">CelesTrak</a> · mapas © colaboradores de OpenStreetMap, Esri y OpenTopoMap.
 		Tu ubicación se redondea a unos 11 km antes de consultar y no se guarda. No hay rayos en tiempo real: las redes que los publican no permiten usarlos en otros sitios; el radar y la capa «Rayos» de Windy (pronóstico) son la mejor guía. Para alertas oficiales sigue al IDEAM, la UNGRD y tu sistema local de alerta temprana.
 	</p>
 </main>

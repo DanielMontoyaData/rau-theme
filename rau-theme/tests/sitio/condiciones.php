@@ -11,6 +11,8 @@ global $wpdb;
 $limpiar = function() use ( $wpdb ) { $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient%rau_cond%' OR option_name LIKE 'rau_condr_%' OR option_name LIKE '_transient%rau_caida_%' OR option_name LIKE '_transient%rau_solar_data%'" ); wp_cache_flush(); };
 $limpiar();
 
+/* Pronóstico de 3 días de NOAA (formato real) */
+$GLOBALS['pron3_txt'] = ":Product: 3-Day Forecast\n:Issued: 2026 Nov 20 1230 UTC\n#\nA. NOAA Geomagnetic Activity Observation and Forecast\n\nNOAA Kp index breakdown Nov 20-Nov 22 2026\n\n             Nov 20       Nov 21       Nov 22\n00-03UT       0.67         2.33         2.33\n03-06UT       2.00         2.67         2.00\n06-09UT       1.33         2.00         2.00\n09-12UT       0.67         2.00         2.67\n12-15UT       1.67         1.33         5.67\n15-18UT       2.67         2.00         2.67\n18-21UT       2.67         2.00         2.67\n21-00UT       3.00         2.33         3.00\n\nRationale: G1 (Minor) storm levels are likely on 22 Nov due to CME arrival.\n\nB. NOAA Solar Radiation\n              Nov 20  Nov 21  Nov 22\nS1 or greater    1%      1%      5%\n\nC. NOAA Radio Blackout\n              Nov 20        Nov 21        Nov 22\nR1-R2           10%           15%           20%\nR3 or greater    1%            1%            5%\n";
 /* Respuestas simuladas */
 $ahora_local = gmdate( 'Y-m-d\TH:00', time() - 5 * HOUR_IN_SECONDS );
 $horas = array(); for ( $i = -2; $i < 50; $i++ ) $horas[] = gmdate( 'Y-m-d\TH:00', time() - 5 * HOUR_IN_SECONDS + $i * HOUR_IN_SECONDS );
@@ -36,6 +38,7 @@ add_filter( 'pre_http_request', function( $pre, $args, $url ) use ( &$om, &$open
 	if ( false !== strpos( $url, 'api.met.no' ) ) return $r( array( 'geometry' => array( 'coordinates' => array( -75.6, 6.2, 1500 ) ), 'properties' => array( 'timeseries' => array(
 		array( 'time' => gmdate( 'Y-m-d\TH:00:00\Z', time() + 1800 ), 'data' => array( 'instant' => array( 'details' => array( 'air_temperature' => 19, 'relative_humidity' => 90, 'wind_speed' => 5, 'wind_from_direction' => 45, 'cloud_area_fraction' => 100 ) ), 'next_1_hours' => array( 'summary' => array( 'symbol_code' => 'heavyrainandthunder' ), 'details' => array( 'precipitation_amount' => 4 ) ) ) ) ) ) ) );
 	if ( false !== strpos( $url, 'planetary_k_index_1m' ) ) return $r( array( array( 'time_tag' => 'x', 'estimated_kp' => $kp ) ) );
+	if ( false !== strpos( $url, 'noaa-planetary-k-index.json' ) ) return $r( array( array( 'time_tag' => gmdate( 'Y-m-d H:00:00', time() - 3 * 3600 ), 'Kp' => 1.67 ) ) );
 	if ( false !== strpos( $url, 'k-index-forecast' ) ) return $r( array( array( 'time_tag' => gmdate( 'Y-m-d\TH:00:00', time() + 3 * HOUR_IN_SECONDS ), 'kp' => 3.67, 'observed' => 'predicted' ) ) );
 	if ( false !== strpos( $url, 'xray-flares-latest' ) ) return $r( array( $flare ) );
 	if ( false !== strpos( $url, 'noaa-scales' ) ) return $r( array( '0' => array( 'R' => array( 'Scale' => (string) $escalaR ), 'S' => array( 'Scale' => '0' ), 'G' => array( 'Scale' => '0' ) ), '1' => array( 'R' => array( 'MinorProb' => '10', 'MajorProb' => '5' ) ) ) );
@@ -48,6 +51,16 @@ add_filter( 'pre_http_request', function( $pre, $args, $url ) use ( &$om, &$open
 	if ( false !== strpos( $url, 'earthquake.usgs.gov' ) ) return $r( array( 'features' => array(
 		array( 'properties' => array( 'mag' => 4.1, 'place' => 'Antioquia', 'time' => ( time() - 7200 ) * 1000, 'url' => 'u' ), 'geometry' => array( 'coordinates' => array( -75.9, 6.9, 30 ) ) ),
 		array( 'properties' => array( 'mag' => 6.0, 'place' => 'Japón', 'time' => ( time() - 3600 ) * 1000, 'url' => 'u' ), 'geometry' => array( 'coordinates' => array( 140, 35, 10 ) ) ) ) ) );
+	if ( false !== strpos( $url, '3-day-forecast' ) ) return $r( $GLOBALS['pron3_txt'] );
+	if ( false !== strpos( $url, '27-day-outlook' ) ) return $r( "#  UTC      Radio Flux   Planetary   Largest\n2026 Nov 16     119          15          4\n2026 Nov 17     113          20          5\n" );
+	if ( false !== strpos( $url, 'solar_regions' ) ) return $r( array( array( 'observed_date' => '2026-11-19', 'region' => 1, 'number_spots' => 3, 'location' => 'N1W1', 'm_flare_probability' => 99 ), array( 'observed_date' => '2026-11-20', 'region' => 4579, 'location' => 'N16W09', 'mag_class' => 'BGD', 'number_spots' => 12, 'area' => 300, 'c_flare_probability' => 60, 'm_flare_probability' => 30, 'x_flare_probability' => 10 ), array( 'observed_date' => '2026-11-20', 'region' => 4581, 'location' => 'S07E25', 'mag_class' => 'A', 'number_spots' => 2, 'c_flare_probability' => 5, 'm_flare_probability' => 1, 'x_flare_probability' => 1 ) ) );
+	if ( false !== strpos( $url, 'integral-protons' ) ) return $r( array( array( 'time_tag' => gmdate( 'Y-m-d\TH:i:s\Z', time() - 600 ), 'energy' => '>=10 MeV', 'flux' => 0.4 ), array( 'time_tag' => gmdate( 'Y-m-d\TH:i:s\Z', time() - 600 ), 'energy' => '>=100 MeV', 'flux' => 0.01 ) ) );
+	if ( false !== strpos( $url, 'kyoto-dst' ) ) return $r( array( array( 'time_tag' => gmdate( 'Y-m-d\TH:00:00', time() - 3600 ), 'dst' => -35 ) ) );
+	if ( false !== strpos( $url, 'observed-solar-cycle' ) ) return $r( array( array( 'time-tag' => '2019-11', 'ssn' => 1 ), array( 'time-tag' => '2024-08', 'ssn' => 215.5, 'smoothed_ssn' => 160 ) ) );
+	if ( false !== strpos( $url, 'predicted-solar-cycle' ) ) return $r( array( array( 'time-tag' => '2026-12', 'predicted_ssn' => 80, 'low_ssn' => 70, 'high_ssn' => 90 ), array( 'time-tag' => '2029-06', 'predicted_ssn' => 20 ) ) );
+	if ( false !== strpos( $url, 'api.nasa.gov/DONKI' ) ) return $r( array( array( 'activityID' => '2026-11-19T08:09:00-CME-001', 'startTime' => gmdate( 'Y-m-d\\TH:i\\Z', time() - 6 * 3600 ), 'link' => 'https://ccmc/1', 'note' => 'Halo CME',
+		'cmeAnalyses' => array( array( 'isMostAccurate' => true, 'speed' => 1200, 'halfAngle' => 45, 'type' => 'O', 'enlilList' => array( array( 'isEarthGB' => true, 'estimatedShockArrivalTime' => gmdate( 'Y-m-d\TH:i\Z', time() + 36 * 3600 ), 'kp_90' => 5, 'kp_180' => 7 ) ) ) ) ),
+		array( 'activityID' => '2026-11-20T12:15:00-CME-001', 'startTime' => '2026-11-20T12:15Z', 'cmeAnalyses' => array( array( 'isMostAccurate' => true, 'speed' => 400, 'halfAngle' => 10, 'type' => 'S' ) ) ) ) );
 	if ( false !== strpos( $url, 'geocoding-api' ) ) return $r( array( 'results' => array( array( 'name' => 'Rionegro', 'admin1' => 'Antioquia', 'country_code' => 'CO', 'country' => 'Colombia', 'latitude' => 6.155, 'longitude' => -75.374 ) ) ) );
 	return $r( '', 404 );
 }, 10, 3 );
@@ -66,7 +79,7 @@ ok( 'Open-Meteo' === $c['clima']['fuente'] && 48 === count( $c['clima']['horas']
 ok( 2 === $c['semaforo']['tormenta']['nivel'] && false !== strpos( $c['semaforo']['tormenta']['texto'], 'Desconecta las antenas' ), 'tormenta en la próxima hora: alerta con qué hacer' );
 ok( 2 === $c['semaforo']['viento']['nivel'] && 65 == $c['semaforo']['viento']['kmh'], 'ráfagas de 65 km/h: alerta de no subir a la torre' );
 ok( 2 === $c['semaforo']['hf']['nivel'] && false !== strpos( $c['semaforo']['hf']['texto'], 'por debajo de ~13 MHz' ), 'absorción de 12,5 MHz en la zona: HF en alerta' );
-ok( 0 === $c['semaforo']['sol']['nivel'] && 0 === $c['semaforo']['geomag']['nivel'], 'sol y campo magnético tranquilos' );
+ok( 0 === $c['semaforo']['sol']['nivel'] && 1 === $c['semaforo']['geomag']['nivel'] && ! empty( $c['semaforo']['geomag']['pronostico'] ), 'sol tranquilo; campo magnético en atención por lo que NOAA pronostica' );
 ok( 'Boa Vista, Brazil' === $c['iono']['iono']['nombre'] && '40 m' === $c['iono']['nvis']['banda'], 'ionosonda más cercana al punto y NVIS en 40 m' );
 ok( 1 === count( $c['sismos'] ) && 'Antioquia' === $c['sismos'][0]['lugar'], 'solo los sismos a menos de 500 km' );
 ok( 3.7 === $c['espacio']['kp_pron'] && 420 == $c['espacio']['viento']['vel'] && 'ALERT' === $c['espacio']['alertas'][0]['tipo'], 'clima espacial: pronóstico de Kp, viento solar y avisos de NOAA' );
@@ -124,7 +137,7 @@ ok( 2 === $s6['n'] && false !== strpos( $s6['ejemplos'][0], 'PY2XX' ), '6 m: sol
 $limpiar(); $om['hourly']['weather_code'] = $col( 3 ); $om['hourly']['weather_code'][2] = 95;
 $c4 = rau_condiciones( 5.07, -75.51 );
 ok( ! empty( $c4['semaforo']['tormenta']['en_curso'] ) && false !== strpos( $c4['semaforo']['tormenta']['texto'], 'en curso' ), 'tormenta en la hora actual: «en curso», no una hora que ya pasó' );
-ok( ! empty( $c4['eventos'] ) && preg_grep( '/Tormenta eléctrica prevista/', wp_list_pluck( $c4['eventos'], 'texto' ) ), 'registro de eventos con la tormenta prevista' );
+ok( ! empty( $c4['eventos'] ) && preg_grep( '/Tormenta eléctrica (prevista|en curso)/', wp_list_pluck( $c4['eventos'], 'texto' ) ), 'registro de eventos con la tormenta (en curso si ya es la hora)' );
 ok( isset( $c4['tend']['kp'], $c4['salud'], $c4['drap_mapa'] ), 'la respuesta trae tendencias, salud de fuentes y capa D-RAP' );
 ok( 'Advertencia: se espera un índice K geomagnético de 4' === rau_cond_traducir( 'WARNING: Geomagnetic K-index of 4 expected' ) && false !== strpos( rau_cond_traducir( 'ALERT: X-ray Flux exceeded M5' ), 'llamarada' ), 'avisos de NOAA en español' );
 // Salud: Open-Meteo y NOAA respondieron
@@ -161,6 +174,32 @@ $q = new WP_REST_Request( 'DELETE', '/rau/v1/condiciones/avisos' ); $q->set_head
 rest_do_request( $q ); ok( 4 === count( get_option( 'rau_cond_avisos' ) ), 'quitar un punto deja los demás' );
 $q = new WP_REST_Request( 'POST', '/rau/v1/condiciones/avisos/prueba' ); $q->set_header( 'Content-Type', 'application/json' ); $q->set_body( wp_json_encode( array( 'endpoint' => 'https://fcm.googleapis.com/fcm/send/otro' ) ) );
 ok( 404 === rest_do_request( $q )->get_status(), 'la prueba solo va a un celular que tenga avisos' );
+
+/* ── 19.64.0: tormentas solares y arreglos ── */
+$p3 = rau_cond_pron3_leer( $GLOBALS['pron3_txt'] );
+ok( 3 === count( $p3['dias'] ) && 24 === count( $p3['kp'] ) && 5.67 === $p3['kp_max'] && '2026-11-22' === gmdate( 'Y-m-d', $p3['dias'][2] ), 'pronóstico de NOAA: 3 días × 8 bloques de Kp' );
+ok( gmmktime( 12, 0, 0, 11, 22, 2026 ) === $p3['kp'][20][0] && 5.67 === $p3['kp'][20][1], 'cada Kp con su hora UTC' );
+ok( array( 10, 15, 20 ) === $p3['r12'] && array( 1, 1, 5 ) === $p3['s1'] && false !== strpos( $p3['razon_g'], 'CME arrival' ), 'probabilidades de R y S y la explicación de NOAA' );
+$limpiar(); delete_transient( 'rau_cond_cmes' ); delete_option( 'rau_cond_cmes_ult' );
+$so = rau_cond_solar();
+ok( 2 === count( $so['o27'] ) && 5 === $so['o27'][1][3], 'pronóstico de 27 días' );
+ok( 2 === count( $so['regiones'] ) && 4579 === $so['regiones'][0]['n'] && 30 === $so['regiones'][0]['pm'], 'regiones activas del último día, la más peligrosa primero' );
+ok( 1 === count( $so['protones'] ) && -35 === $so['dst'][0][1] && 1 === count( $so['ciclo']['obs'] ) && 1 === count( $so['ciclo']['pred'] ), 'protones, Dst y ciclo 25 (desde 2019-12, pronóstico hasta 2028)' );
+$ct = array_values( array_filter( $so['cmes'], function( $x ) { return $x['tierra']; } ) );
+ok( 2 === count( $so['cmes'] ) && 1 === count( $ct ) && $ct[0]['llegada'] > time() && '5–7' === $ct[0]['kp'] && 1200 === $ct[0]['vel'], 'eyecciones de NASA: la dirigida a la Tierra con su llegada y Kp esperado' );
+ok( 1 === $so['tormenta']['nivel'] && false !== strpos( $so['tormenta']['viene'], 'Eyección solar dirigida a la Tierra' ), 'nivel de tormenta solar con la llegada de la eyección' );
+$c6 = rau_condiciones( 3.4, -76.5 );
+ok( 1 === $c6['semaforo']['geomag']['nivel'] && ! empty( $c6['semaforo']['geomag']['pronostico'] ), 'el semáforo avisa lo que viene aunque el campo esté tranquilo ahora' );
+ok( preg_grep( '/Llegada estimada de la eyección solar/', wp_list_pluck( $c6['eventos'], 'texto' ) ) && preg_grep( '/Eyección de masa coronal a 1\.200 km\/s · dirigida a la Tierra/', wp_list_pluck( $c6['eventos'], 'texto' ) ), 'registro: la eyección y su llegada' );
+ok( isset( $c6['espacio']['kp_oficial'] ), 'Kp oficial de 3 horas junto al estimado' );
+// La ionosonda se graba al consultar, sin esperar la tarea programada
+delete_option( 'rau_cond_ionoh' ); $limpiar(); rau_condiciones( 10.9, -74.8 );
+ok( ! empty( get_option( 'rau_cond_ionoh' )['BVJ03'] ), 'la ionosonda se registra al consultar' );
+// Avisos: una sola vez por eyección
+delete_option( 'rau_cond_avisos' ); $post( array( 'sub' => $sub, 'lat' => 6.24, 'lon' => -75.58, 'temas' => array( 'geomag' ) ) );
+$limpiar(); $enviados = array(); rau_cond_avisos_revisar( $falso ); rau_cond_avisos_revisar( $falso );
+ok( 1 === count( preg_grep( '/Eyección solar hacia la Tierra/', $enviados ) ), 'aviso de eyección hacia la Tierra, una sola vez' );
+delete_transient( 'rau_cond_cmes' ); delete_transient( 'rau_cond_solar' );
 
 $limpiar(); delete_option( 'rau_cond_avisos' );
 echo "\n$n comprobaciones, $fallos fallas\n"; exit( $fallos ? 1 : 0 );

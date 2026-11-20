@@ -64,7 +64,8 @@ function grafica(cont,cfg){
 	if(cfg.der) (cfg.der.ticks||[]).forEach(function(v){ var y=YD(v); s+='<text x="'+(pl+w+4)+'" y="'+(y+3)+'">'+(cfg.der.fmt?cfg.der.fmt(v):v)+'</text>'; });
 	(cfg.hlineas||[]).forEach(function(l){ var y=(l.eje==='der'?YD:YI)(l.v); s+='<line x1="'+pl+'" x2="'+(pl+w)+'" y1="'+y+'" y2="'+y+'" style="stroke:'+l.color+';stroke-dasharray:4 3"/>'+(l.et?'<text x="'+(pl+w-2)+'" y="'+(y-3)+'" text-anchor="end" style="fill:'+l.color+'">'+l.et+'</text>':''); });
 	var paso=cfg.pasoX||((x1-x0)>864e5?6*36e5:(x1-x0)>6*36e5?3*36e5:36e5);
-	for(var t=Math.ceil((x0+OFF*1000)/paso)*paso-OFF*1000;t<=x1;t+=paso){ var xx=X(t); s+='<line class="rejilla" x1="'+xx+'" x2="'+xx+'" y1="'+pt+'" y2="'+(pt+h)+'"/><text x="'+xx+'" y="'+(H-6)+'" text-anchor="middle">'+(paso>=864e5||fh(t)==='00:00'?enPunto(t).getUTCDate()+'/'+(enPunto(t).getUTCMonth()+1):fh(t).slice(0,2)+'h')+'</text>'; }
+	if(cfg.ticksX) cfg.ticksX.forEach(function(t){ var xx=X(t); s+='<line class="rejilla" x1="'+xx+'" x2="'+xx+'" y1="'+pt+'" y2="'+(pt+h)+'"/><text x="'+xx+'" y="'+(H-6)+'" text-anchor="middle">'+esc(cfg.etX(t))+'</text>'; });
+	else for(var t=Math.ceil((x0+OFF*1000)/paso)*paso-OFF*1000;t<=x1;t+=paso){ var xx=X(t); s+='<line class="rejilla" x1="'+xx+'" x2="'+xx+'" y1="'+pt+'" y2="'+(pt+h)+'"/><text x="'+xx+'" y="'+(H-6)+'" text-anchor="middle">'+(paso>=864e5||fh(t)==='00:00'?enPunto(t).getUTCDate()+'/'+(enPunto(t).getUTCMonth()+1):fh(t).slice(0,2)+'h')+'</text>'; }
 	cfg.series.forEach(function(se){
 		var Y=se.eje==='der'?YD:YI, d=se.datos.filter(function(p){ return p[1]!=null&&p[0]>=x0-36e5&&p[0]<=x1+36e5; });
 		if(se.tipo==='barras'){ var bw=se.ancho||Math.max(2,w/(Math.max(d.length,1))*.7); d.forEach(function(p){ var y=Y(p[1]), y0=Y(se.base!=null?se.base:(se.eje==='der'?cfg.der.min:cfg.izq.min)); s+='<rect x="'+(X(p[0]+(se.centro||0))-bw/2).toFixed(1)+'" y="'+Math.min(y,y0).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.abs(y0-y).toFixed(1)+'" style="fill:'+(typeof se.color==='function'?se.color(p):se.color)+(se.opacidad?';opacity:'+se.opacidad:'')+'"/>'; }); }
@@ -83,7 +84,7 @@ function grafica(cont,cfg){
 		cfg.series.forEach(function(se){ if(se.sinTip) return; var mejor=null; se.datos.forEach(function(p){ if(p[1]==null) return; if(!mejor||Math.abs(p[0]-t)<Math.abs(mejor[0]-t)) mejor=p; }); if(mejor&&Math.abs(mejor[0]-t)<(cfg.tolerancia||3*36e5)) filas.push('<span style="color:'+(typeof se.color==='function'?se.color(mejor):se.color)+'">■</span> '+esc(se.nombre)+': '+(se.fmt?se.fmt(mejor[1]):n(mejor[1],1))+(se.unidad?' '+se.unidad:'')); });
 		if(!filas.length){ ocultar(); return; }
 		cur.style.display=''; cur.setAttribute('x1',px); cur.setAttribute('x2',px);
-		tip.hidden=false; tip.innerHTML='<b>'+fhd(t)+'</b><br>'+filas.join('<br>'); var izq=(px/W)*r.width; tip.style.left=Math.min(Math.max(0,izq+10),r.width-tip.offsetWidth)+'px'; tip.style.top='4px';
+		tip.hidden=false; tip.innerHTML='<b>'+(cfg.etTip?cfg.etTip(t):fhd(t))+'</b><br>'+filas.join('<br>'); var izq=(px/W)*r.width; tip.style.left=Math.min(Math.max(0,izq+10),r.width-tip.offsetWidth)+'px'; tip.style.top='4px';
 	}
 	svg.addEventListener('mousemove',mover); svg.addEventListener('touchmove',mover,{passive:true}); svg.addEventListener('mouseleave',ocultar); svg.addEventListener('touchend',ocultar);
 }
@@ -292,7 +293,7 @@ function pintarHF(){
 		series:[{tipo:'linea',datos:serie.map(function(x){ return [x[0]*1000,x[2]]; }),color:'hsl(var(--ok))',nombre:'MUF 3000 km',unidad:'MHz',corte:2*36e5},{tipo:'linea',datos:serie.map(function(x){ return [x[0]*1000,x[1]]; }),color:'hsl(var(--nv))',nombre:'foF2',unidad:'MHz',corte:2*36e5}],
 		hlineas:[{v:14.2,color:'hsl(var(--muted-foreground) / .6)',et:'20 m'},{v:7.1,color:'hsl(var(--muted-foreground) / .6)',et:'40 m'}],
 		leyenda:[['MUF 3000 km (MHz)','hsl(var(--ok))'],['foF2 (MHz)','hsl(var(--nv))']]});
-	else $('cnd-muf-g').innerHTML='<p class="cnd-mini cnd-mut" style="margin:0">La gráfica de MUF y foF2 de 24 h aparece cuando haya mediciones guardadas (se registran cada 15 min).</p>';
+	else $('cnd-muf-g').innerHTML='<p class="cnd-mini cnd-mut" style="margin:0">La gráfica de MUF y foF2 de 24 h aparece cuando haya mediciones guardadas (se registran cada 10 minutos).</p>';
 	edad('cnd-hf',io&&io.iono?'ionosonda '+haceTxt(io.iono.hace*60):'',io&&io.iono&&io.iono.hace>90);
 }
 var ESC={R:['Apagones de radio','Sin apagones','Menor: HF débil de día un rato','Moderado: HF cae de día ~1 h','Fuerte: HF cerrado de día ~1 h','Severo: HF cerrado horas','Extremo'],
@@ -302,7 +303,8 @@ function pintarEspacio(){
 	var e=datos.espacio; if(!e){ cuerpo('cnd-esp','<p class="cnd-vacio">NOAA no respondió.</p>'); return; }
 	var kp=e.kp?e.kp.valor:null, v=e.viento||{}, x=e.rayosx||{}, es=e.escalas||{R:0,S:0,G:0};
 	var h='<div class="cnd-escalas">'+['R','S','G'].map(function(k){ var s=+es[k]||0; return '<div class="cnd-escala" data-n="'+s+'"><span class="cnd-mini cnd-mut">'+ESC[k][0]+'</span><b>'+k+s+'</b><span class="cnd-mini">'+esc(ESC[k][s+1])+'</span></div>'; }).join('')+'</div>';
-	h+='<div class="cnd-kpis"><div class="cnd-kpi"><span>Kp ahora</span><b style="color:'+(kp>=5?'hsl(var(--al))':kp>=4?'hsl(var(--at))':'hsl(var(--ok))')+'">'+n(kp,1)+'</b><small>'+(e.kp_pron!=null?'máx. 24 h: '+n(e.kp_pron,1):'0 tranquilo · 9 extremo')+'</small></div>'
+	var ko=e.kp_oficial?e.kp_oficial.valor:null;
+	h+='<div class="cnd-kpis"><div class="cnd-kpi"><span>Kp estimado ahora</span><b style="color:'+(kp>=5?'hsl(var(--al))':kp>=4?'hsl(var(--at))':'hsl(var(--ok))')+'">'+n(kp,1)+'</b><small>'+(ko!=null?'oficial (3 h): '+n(ko,1)+' · ':'')+(e.kp_pron!=null?'máx. 24 h: '+n(e.kp_pron,1):'')+'</small></div>'
 		+'<div class="cnd-kpi"><span>Rayos X</span><b>'+esc(x.actual||'—')+'</b><small>'+(x.max?'pico '+esc(x.max)+(x.max_hora?' a las '+fh(new Date(x.max_hora).getTime()):''):'')+'</small></div>'
 		+'<div class="cnd-kpi"><span>Flujo solar</span><b>'+n(e.sfi)+'</b><small>SFI'+(e.ssn!=null?' · manchas '+n(e.ssn):'')+'</small></div>'
 		+'<div class="cnd-kpi"><span>Viento solar</span><b>'+n(v.vel)+'</b><small>km/s · '+n(v.dens,1)+' p/cm³</small></div>'
@@ -355,7 +357,10 @@ function pintarVHF(){
 	var met='<div class="cnd-graf-tit"><span>Lluvias de meteoros (dispersión meteórica en 6 y 2 m, MSK144)</span></div><ul class="cnd-lista">'+lista.map(function(m){ return '<li><span>'+esc(m.n)+' <span class="cnd-mut cnd-mini">· hasta '+m.zhr+'/h</span></span><span class="der cnd-mini">'+(Math.abs(m.dias)<=2?'<b>activa ahora</b>':m.f.toLocaleDateString('es-CO',{day:'numeric',month:'short'})+' · en '+m.dias+' d')+'</span></li>'; }).join('')+'</ul>';
 	cuerpo('cnd-vhf','<p class="cnd-chico" style="margin:0">'+esc(s6?s6.texto:'Revisando 6 m…')+'</p><div id="cnd-seis"><p class="cnd-mini cnd-mut" style="margin:0">Revisando el cluster DX…</p></div>'+met);
 	fetch(C.ajax+'?action=rau_dx_spots').then(function(r){ return r.json(); }).then(function(j){
-		var sp=(j&&j.success&&j.data)||[], v=sp.filter(function(s){ var f=parseFloat(s.freq); return (f>=50&&f<=54)||(f>=144&&f<=148); }), el=$('cnd-seis'); if(!el) return;
+		var sp=(j&&j.success&&j.data)||[], v=sp.filter(function(s){ var f=parseFloat(s.freq); return (f>=50&&f<=54)||(f>=144&&f<=148); }), el=$('cnd-seis');
+		var n6=sp.filter(function(s){ var f=parseFloat(s.freq); return f>=50&&f<=54; }).length, psk=s6&&s6.texto&&/PSK/.test(s6.texto)?(s6.texto.match(/^(\d+)/)||[0,0])[1]*1:0, tot=n6+psk;
+		if(n6){ var tx=(psk?s6.texto.replace(/\.$/,'')+' y ':'')+n6+' reporte'+(n6>1?'s':'')+' en 6 m en el cluster ahora.'; luz('seis',tot>=3?2:1,tx); var p0=$('cnd-vhf')&&$('cnd-vhf').querySelector('.cnd-cuerpo p'); if(p0) p0.textContent=tx; }
+		if(!el) return;
 		el.innerHTML=v.length?'<ul class="cnd-lista">'+v.slice(0,6).map(function(s){ return '<li><span><b class="cnd-mono">'+esc(s.dx)+'</b> <span class="cnd-mut cnd-mini">por '+esc(s.sp)+' · '+esc(s.info||'')+'</span></span><span class="der cnd-mono">'+esc(s.freq)+'</span></li>'; }).join('')+'</ul>'
 			:'<p class="cnd-mini cnd-mut" style="margin:0">Ni 6 m ni 2 m tienen reportes en los últimos spots del cluster. Las aperturas de esporádica E duran minutos: llama CQ de todos modos.</p>';
 	}).catch(function(){});
@@ -408,13 +413,73 @@ function pintarRegistro(){
 	var e=((datos&&datos.eventos)||[]).map(function(x){ return {t:x.t*1000,n:x.nivel,txt:x.texto,fut:!!x.futuro}; });
 	pasadasLista.slice(0,2).forEach(function(p){ e.push({t:p.aos,n:0,txt:'Pasada de '+p.n+' ('+Math.round(p.max)+'°)',fut:true}); });
 	var sp=salidaPuesta(punto.lat,punto.lon,-.833); if(sp) [[sp[0],'Amanecer: línea gris'],[sp[1],'Atardecer: línea gris']].forEach(function(x){ if(x[0]>Date.now()) e.push({t:x[0],n:0,txt:x[1],fut:true}); });
-	e.sort(function(a,b){ return b.t-a.t; });
-	cuerpo('cnd-reg',e.length?'<ul class="cnd-lista cnd-reg cnd-scroll">'+e.map(function(x){ return '<li data-n="'+x.n+'"'+(x.fut?' data-fut':'')+'><time>'+(fdia(x.t)==='hoy'?'':'<span class="cnd-mini">'+esc(fdia(x.t))+'</span><br>')+fh(x.t)+'</time><span>'+(x.fut?'<b class="cnd-mini cnd-mono" style="color:hsl(var(--primary))">PREVISTO </b>':'')+esc(x.txt)+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Sin eventos en las últimas 24 horas.</p>');
+	var ah=Date.now(), fut=e.filter(function(x){ return x.fut&&x.t>ah; }).sort(function(a,b){ return a.t-b.t; }), pas=e.filter(function(x){ return !(x.fut&&x.t>ah); }).sort(function(a,b){ return b.t-a.t; });
+	var fila=function(x){ return '<li data-n="'+x.n+'"'+(x.fut?' data-fut':'')+'><time>'+(fdia(x.t)==='hoy'?'':'<span class="cnd-mini">'+esc(fdia(x.t))+'</span><br>')+fh(x.t)+'</time><span>'+esc(x.txt)+'</span></li>'; };
+	cuerpo('cnd-reg','<div class="cnd-scroll">'+(fut.length?'<p class="cnd-reg-sec">Próximo</p><ul class="cnd-lista cnd-reg">'+fut.slice(0,6).map(fila).join('')+'</ul>':'')
+		+'<p class="cnd-reg-sec">Últimas 24 horas</p>'+(pas.length?'<ul class="cnd-lista cnd-reg">'+pas.map(fila).join('')+'</ul>':'<p class="cnd-vacio" style="padding:.2rem 0">Sin eventos.</p>')+'</div>');
 	edad('cnd-reg','24 h · '+zona());
 }
 
 var anchoPrevio=0, tRes=null;
-window.addEventListener('resize',function(){ clearTimeout(tRes); tRes=setTimeout(function(){ var w=document.documentElement.clientWidth; if(!datos||Math.abs(w-anchoPrevio)<40) return; anchoPrevio=w; [pintarClima,pintarHF,pintarTendencias].forEach(function(f){ try{ f(); }catch(e){} }); },250); });
+window.addEventListener('resize',function(){ clearTimeout(tRes); tRes=setTimeout(function(){ var w=document.documentElement.clientWidth; if(!datos||Math.abs(w-anchoPrevio)<40) return; anchoPrevio=w; [pintarClima,pintarHF,pintarTendencias,pintarSolar].forEach(function(f){ try{ f(); }catch(e){} }); },250); });
+
+/* ── tormentas solares (NOAA SWPC + NASA DONKI + imágenes de SDO y LASCO) ── */
+var solDat=null, solarT=0;
+function colKp(v){ return v>=5?'hsl(var(--al))':v>=4?'hsl(var(--at))':'hsl(var(--ok))'; }
+function mesMs(tt){ var p=String(tt).split('-'); return Date.UTC(+p[0],+p[1]-1,15); }
+function pintarSolar(){
+	if(!solDat){ return; }
+	var so=solDat, p=so.pron3, tor=so.tormenta||{}, esp=datos&&datos.espacio||{}, g=+(esp.escalas&&esp.escalas.G)||0, s=+(esp.escalas&&esp.escalas.S)||0, r=+(esp.escalas&&esp.escalas.R)||0;
+	var nivel=Math.max(g||s||r?2:0, tor.nivel||0), txt=g||s||r?'En curso: '+(g?'tormenta geomagnética G'+g+' ':'')+(s?'tormenta de protones S'+s+' ':'')+(r?'apagón de radio R'+r:''):(tor.viene||'Sin tormentas solares en curso ni previstas en los próximos 3 días.');
+	var ts=Date.now(), c1='<div class="cnd-nivel-sol" data-n="'+nivel+'">'+ic(nivel?'cme':'escudo')+'<span><b>'+(nivel===2?'TORMENTA EN CURSO':nivel===1?'ATENCIÓN':'SIN TORMENTA')+'</b> · '+esc(txt)+'</span></div>'
+		+'<div class="cnd-sol-img"><figure><img loading="lazy" decoding="async" src="https://sdo.gsfc.nasa.gov/assets/img/latest/latest_512_0193.jpg?'+Math.floor(ts/9e5)+'" alt="El Sol en ultravioleta extremo (193 Å) visto por SDO de la NASA"><figcaption>Sol hoy · SDO 193 Å (llamaradas)</figcaption></figure>'
+		+'<figure><img loading="lazy" decoding="async" src="https://services.swpc.noaa.gov/images/animations/lasco-c3/latest.jpg?'+Math.floor(ts/9e5)+'" alt="La corona solar vista por el coronógrafo LASCO C3 de SOHO"><figcaption>Corona · LASCO C3 (eyecciones)</figcaption></figure></div>'
+		+(so.regiones&&so.regiones.length?'<div class="cnd-graf-tit"><span>Regiones activas · probabilidad de llamarada hoy</span><span>'+esc(so.regiones_fecha||'')+'</span></div><div class="cnd-tabla-caja"><table class="cnd-tabla"><thead><tr><th>Región</th><th>Clase</th><th class="num">Manchas</th><th class="num">C</th><th class="num">M</th><th class="num">X</th></tr></thead><tbody>'
+			+so.regiones.map(function(x){ return '<tr><td class="cnd-mono">'+x.n+' <span class="cnd-mut cnd-mini">'+esc(x.lugar)+'</span></td><td class="cnd-mono">'+esc(x.mag||'—')+'</td><td class="num">'+x.manchas+'</td><td class="num">'+x.pc+'%</td><td class="num" style="color:'+(x.pm>=25?'hsl(var(--at))':'inherit')+'">'+x.pm+'%</td><td class="num" style="color:'+(x.px>=10?'hsl(var(--al))':'inherit')+'">'+x.px+'%</td></tr>'; }).join('')+'</tbody></table></div><p class="cnd-mini cnd-mut" style="margin:0">Clase magnética: α y β simples; γ y δ son las que producen llamaradas fuertes.</p>':'');
+	var c2='';
+	if(p&&p.kp&&p.kp.length===24){
+		c2+='<div class="cnd-graf-tit"><span>Pronóstico de NOAA · Kp cada 3 h (UTC)</span><span>emitido '+fhd(p.emitido*1000)+'</span></div><div class="cnd-kp3"><div></div>'+['00','03','06','09','12','15','18','21'].map(function(x){ return '<div class="h">'+x+'</div>'; }).join('');
+		for(var d=0;d<3;d++){ c2+='<div class="d">'+new Date(p.dias[d]*1000).toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric'})+'</div>'; for(var k=0;k<8;k++){ var v=p.kp[d*8+k]; v=v?v[1]:null; c2+='<div class="c" style="background:'+(v==null?'transparent':'hsl(var(--'+(v>=5?'al':v>=4?'at':'ok')+') / '+(v>=4?.85:.25)+')')+';color:'+(v>=4?'#fff':'inherit')+'">'+(v==null?'—':n(v,1))+'</div>'; } }
+		c2+='</div><div class="cnd-tabla-caja"><table class="cnd-tabla"><thead><tr><th>Probabilidad</th>'+p.dias.map(function(t){ return '<th class="num">'+new Date(t*1000).toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric'})+'</th>'; }).join('')+'</tr></thead><tbody>'
+			+[['Apagón de radio R1–R2',p.r12],['Apagón fuerte R3 o más',p.r3],['Tormenta de protones S1+',p.s1]].map(function(f){ return f[1]&&f[1].length?'<tr><td>'+f[0]+'</td>'+f[1].map(function(x){ return '<td class="num" style="color:'+(x>=25?'hsl(var(--at))':'inherit')+'">'+x+' %</td>'; }).join('')+'</tr>':''; }).join('')+'</tbody></table></div>'
+			+(p.razon_g?'<p class="cnd-mini cnd-mut" style="margin:0">NOAA (en inglés): «'+esc(p.razon_g)+'»</p>':'');
+	}
+	var cm=(so.cmes||[]).slice().sort(function(a,b){ return (b.tierra&&b.llegada?1:0)-(a.tierra&&a.llegada?1:0)||b.t-a.t; });
+	c2+='<div class="cnd-graf-tit"><span>Eyecciones de masa coronal · 10 días (NASA DONKI)</span></div>'+(cm.length?'<ul class="cnd-lista cnd-cme cnd-scroll" style="max-height:15rem">'+cm.map(function(c){ return '<li><span>'+(c.tierra?'<b class="t" style="background:hsl(var(--al));color:#fff">HACIA LA TIERRA</b> ':'')+'<b class="cnd-mono">'+(c.vel?n(c.vel)+' km/s':'velocidad sin medir')+'</b> <span class="cnd-mini cnd-mut">· '+fhd(c.t*1000)+(c.tipo?' · tipo '+esc(c.tipo):'')+'</span>'
+		+(c.tierra&&c.llegada?'<br><span class="cnd-chico" style="color:hsl(var(--al))">Llegada estimada: '+fhd(c.llegada*1000)+' ('+zona()+')'+(c.kp?' · Kp esperado '+esc(c.kp):'')+'</span>':'')+'</span><span class="der">'+(c.url?'<a class="cnd-mini" href="'+esc(c.url)+'" target="_blank" rel="noopener">detalle</a>':'')+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Sin eyecciones registradas en los últimos 10 días (o NASA no respondió).</p>')
+		+'<p class="cnd-mini cnd-mut" style="margin:0">Una eyección (CME) tarda de 1 a 4 días en llegar. Si llega con el campo hacia el sur (Bz negativo), provoca tormenta geomagnética: HF inestable y bandas altas cerradas.</p>';
+	var c3='<div class="cnd-graf-tit"><span>Protones ≥10 MeV · 24 h</span><span>S1 = 10 pfu</span></div><div id="cnd-g-pr"></div><div class="cnd-graf-tit"><span>Índice Dst · 3 días</span><span>negativo = tormenta</span></div><div id="cnd-g-dst"></div>'
+		+'<div class="cnd-graf-tit"><span>Pronóstico de 27 días (NOAA)</span><span>para planear concursos</span></div><div id="cnd-g-27"></div><div class="cnd-graf-tit"><span>Ciclo solar 25 · manchas por mes</span></div><div id="cnd-g-ciclo"></div>';
+	cuerpo('cnd-solar','<div class="cnd-solar-rej"><div style="display:flex;flex-direction:column;gap:.6rem">'+c1+'</div><div style="display:flex;flex-direction:column;gap:.6rem">'+c2+'</div><div style="display:flex;flex-direction:column;gap:.3rem">'+c3+'</div></div>');
+	var pr=(so.protones||[]).map(function(x){ return [x[0]*1000,x[1]]; });
+	if(pr.length) grafica($('cnd-g-pr'),{titulo:'Protones de 10 MeV o más',H:110,x0:Date.now()-864e5,x1:Date.now(),izq:{min:.01,max:1e4,log:true,ticks:[.1,1,10,100,1000],fmt:function(v){ return v>=1?String(v):v; }},hlineas:[{v:10,color:'hsl(var(--at) / .8)',et:'S1'},{v:100,color:'hsl(var(--al) / .8)',et:'S2'}],tolerancia:18e5,
+		series:[{tipo:'area',datos:pr,color:'hsl(var(--nv))',nombre:'Protones ≥10 MeV',unidad:'pfu',fmt:function(v){ return v<1?v.toFixed(2):n(v,1); }}]});
+	var ds=(so.dst||[]).map(function(x){ return [x[0]*1000,x[1]]; });
+	if(ds.length){ var mn=Math.min(-60,Math.floor(Math.min.apply(null,ds.map(function(x){ return x[1]; }))/20)*20);
+		grafica($('cnd-g-dst'),{titulo:'Índice Dst',H:110,x0:ds[0][0],x1:Date.now(),pasoX:864e5,izq:{min:mn,max:40,ticks:[mn,-50,0,40]},hlineas:[{v:-50,color:'hsl(var(--at) / .8)',et:'moderada'},{v:-100,color:'hsl(var(--al) / .8)',et:'intensa'}],tolerancia:36e5,
+			series:[{tipo:'linea',datos:ds,color:'hsl(var(--primary))',nombre:'Dst',unidad:'nT'}]}); }
+	var o=(so.o27||[]);
+	if(o.length){ var tks=o.filter(function(x,i){ return i%4===0; }).map(function(x){ return x[0]*1000; });
+		grafica($('cnd-g-27'),{titulo:'Pronóstico de 27 días',H:120,x0:o[0][0]*1000-432e5,x1:o[o.length-1][0]*1000+432e5,ticksX:tks,etX:function(t){ var d=new Date(t); return d.getUTCDate()+'/'+(d.getUTCMonth()+1); },etTip:function(t){ return new Date(t).toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'}); },
+			izq:{min:0,max:9,ticks:[0,3,5,9]},der:{min:60,max:Math.max(200,Math.ceil(Math.max.apply(null,o.map(function(x){ return x[1]; }))/20)*20),ticks:[100,150]},tolerancia:432e5,ahora:false,
+			series:[{tipo:'barras',datos:o.map(function(x){ return [x[0]*1000,x[3]]; }),color:function(q){ return colKp(q[1]); },nombre:'Kp máximo',base:0},{tipo:'linea',eje:'der',datos:o.map(function(x){ return [x[0]*1000,x[1]]; }),color:'hsl(var(--at))',nombre:'Flujo solar',unidad:'sfu'}],
+			leyenda:[['Kp máximo del día (izq.)','hsl(var(--ok))'],['Flujo solar 10,7 cm (der.)','hsl(var(--at))']]}); }
+	var ob=((so.ciclo&&so.ciclo.obs)||[]), pd=((so.ciclo&&so.ciclo.pred)||[]);
+	if(ob.length){ var x0=mesMs(ob[0][0]), x1=mesMs((pd.length?pd[pd.length-1]:ob[ob.length-1])[0]), tk=[]; for(var y=new Date(x0).getUTCFullYear()+1;y<=new Date(x1).getUTCFullYear();y++) tk.push(Date.UTC(y,0,1));
+		grafica($('cnd-g-ciclo'),{titulo:'Ciclo solar 25',H:120,x0:x0,x1:x1,ticksX:tk,etX:function(t){ return String(new Date(t).getUTCFullYear()); },etTip:function(t){ return new Date(t).toLocaleDateString('es-CO',{timeZone:'UTC',month:'short',year:'numeric'}); },
+			izq:{min:0,max:250,ticks:[0,100,200]},tolerancia:20*864e5,
+			bandas:pd.length?[{x0:mesMs(pd[0][0]),x1:x1,color:'hsl(var(--muted-foreground) / .06)'}]:[],
+			series:[{tipo:'barras',datos:ob.map(function(x){ return [mesMs(x[0]),x[1]]; }),color:'hsl(var(--at) / .55)',nombre:'Manchas del mes',base:0},
+				{tipo:'linea',datos:pd.map(function(x){ return [mesMs(x[0]),x[3]]; }),color:'hsl(var(--muted-foreground) / .6)',guion:'3 3',grosor:1,nombre:'Pronóstico alto'},
+				{tipo:'linea',datos:pd.map(function(x){ return [mesMs(x[0]),x[1]]; }),color:'hsl(var(--primary))',nombre:'Pronóstico NOAA'},
+				{tipo:'linea',datos:pd.map(function(x){ return [mesMs(x[0]),x[2]]; }),color:'hsl(var(--muted-foreground) / .6)',guion:'3 3',grosor:1,nombre:'Pronóstico bajo'}],
+			leyenda:[['Manchas observadas','hsl(var(--at) / .7)'],['Pronóstico de NOAA y su rango','hsl(var(--primary))']]}); }
+	edad('cnd-solar','NOAA · NASA · '+zona());
+}
+function cargarSolar(){
+	if(solDat&&Date.now()-solarT<10*60000){ pintarSolar(); return; }
+	fetch(C.api+'/solar').then(function(r){ return r.json(); }).then(function(j){ solDat=j; solarT=Date.now(); try{ pintarSolar(); }catch(e){ if(window.console) console.warn('solar',e); } }).catch(function(){ cuerpo('cnd-solar','<p class="cnd-vacio">No se pudo consultar el clima espacial.</p>'); });
+}
 
 /* ── ubicación y carga ── */
 function textoLugar(){ $('cnd-lugar-txt').textContent=punto.nombre||(datos&&datos.punto&&datos.punto.cerca?'cerca de '+datos.punto.cerca.nombre:punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)); $('cnd-loc').textContent=locator(punto.lat,punto.lon); $('cnd-reloj-local-et').textContent='Hora local · '+zona(); }
@@ -435,7 +500,7 @@ function cargar(){
 	proxima=Date.now()+REFRESCO;
 	fetch(C.api+'?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(j){
 		datos=j; OFF=(j.clima&&j.clima.offset!=null)?j.clima.offset:Math.round(punto.lon/15)*3600; textoLugar();
-		[pintarFuentes,pintarSemaforo,pintarAhora,pintarClima,pintarHF,pintarEspacio,pintarTendencias,pintarSismos,pintarRAU,pintarCielo,pintarVHF,pintarRegistro,pintarCapasDatos,estadoGeneral].forEach(function(f){ try{ f(); }catch(e){ if(window.console) console.warn('condiciones',e); } });
+		[pintarFuentes,pintarSemaforo,pintarAhora,pintarClima,pintarHF,pintarEspacio,pintarTendencias,cargarSolar,pintarSismos,pintarRAU,pintarCielo,pintarVHF,pintarRegistro,pintarCapasDatos,estadoGeneral].forEach(function(f){ try{ f(); }catch(e){ if(window.console) console.warn('condiciones',e); } });
 		$('cnd-impresion').innerHTML='<b>Hoja de condiciones · RAU</b> · '+esc(punto.nombre||'')+' '+locator(punto.lat,punto.lon)+' ('+punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)+') · '+fhd(Date.now())+' '+zona()+' / '+new Date().toISOString().slice(11,16)+' UTC · '+esc(location.origin)+'/condiciones/';
 	}).catch(function(){ var e=$('cnd-estado'); e.dataset.n=-1; e.textContent='Sin conexión con el servidor · reintentando'; });
 	fetch(C.api+'/sitios').then(function(r){ return r.json(); }).then(function(s){ sitios=Array.isArray(s)?s:[]; pintarSitios(); }).catch(function(){ cuerpo('cnd-sitios','<p class="cnd-vacio">No se pudo consultar el tiempo de los sitios.</p>'); });
@@ -456,6 +521,9 @@ function inicio(){
 }
 
 /* ── controles ── */
+function alturaMenu(){ var h=document.querySelector('header'), cs=h&&getComputedStyle(h); var top=(h&&cs.position==='sticky'&&cs.display!=='none'&&!document.body.classList.contains('cnd-sala'))?h.offsetHeight:0; $('cnd').style.setProperty('--cnd-top',top+'px'); }
+alturaMenu(); window.addEventListener('resize',alturaMenu);
+$('cnd-buscar-btn').addEventListener('click',function(){ var b=document.querySelector('.cnd-buscar'), on=!b.classList.contains('abierta'); b.classList.toggle('abierta',on); this.setAttribute('aria-expanded',String(on)); if(on) $('cnd-buscar').focus(); });
 $('cnd-gps').addEventListener('click',usarGPS);
 var tBus=null, sug=$('cnd-sug');
 $('cnd-buscar').addEventListener('input',function(){
@@ -482,8 +550,18 @@ document.addEventListener('fullscreenchange',function(){ var full=document.fulls
 $('cnd-play').addEventListener('click',animar);
 $('cnd-cuadro').addEventListener('input',function(){ if(radarTimer) animar(); radarI=+this.value; mostrarCuadro(radarI); });
 /* Modo sala: pantalla completa sin el resto del sitio; el mapa alterna radar y Windy cada minuto */
+var ROTA=['cnd-sitios','cnd-solar','cnd-hf','cnd-tend','cnd-clima'], rotaI=0, rotaTimer=null, marcas={};
+var PINTA={'cnd-solar':function(){ pintarSolar(); },'cnd-hf':function(){ pintarHF(); },'cnd-tend':function(){ pintarTendencias(); },'cnd-clima':function(){ pintarClima(); },'cnd-sitios':function(){ pintarSitios(); }};
+function rotar(){
+	var slot=$('cnd-rota'); ROTA.forEach(function(id){ var el=$(id); if(el&&el.parentNode===slot&&marcas[id]) marcas[id].parentNode.insertBefore(el,marcas[id]); });
+	var id=ROTA[rotaI%ROTA.length], el=$(id); rotaI++; if(!el) return;
+	if(!marcas[id]){ marcas[id]=document.createComment(id); el.parentNode.insertBefore(marcas[id],el); }
+	slot.appendChild(el); try{ if(datos&&PINTA[id]) PINTA[id](); }catch(e){}
+}
+function devolver(){ var slot=$('cnd-rota'); ROTA.forEach(function(id){ var el=$(id); if(el&&el.parentNode===slot&&marcas[id]) marcas[id].parentNode.insertBefore(el,marcas[id]); }); [pintarClima,pintarHF,pintarTendencias,pintarSolar].forEach(function(f){ try{ if(datos) f(); }catch(e){} }); }
 function sala(on){
-	document.body.classList.toggle('cnd-sala',on); $('cnd-sala').setAttribute('aria-pressed',String(on)); $('cnd-sala').querySelector('span').textContent=on?'Salir de sala':'Modo sala';
+	document.body.classList.toggle('cnd-sala',on); alturaMenu();
+	clearInterval(rotaTimer); rotaTimer=null; if(on){ rotar(); rotaTimer=setInterval(rotar,20000); } else devolver(); $('cnd-sala').setAttribute('aria-pressed',String(on)); $('cnd-sala').querySelector('span').textContent=on?'Salir de sala':'Modo sala';
 	clearInterval(salaTimer); salaTimer=null;
 	if(on){ if(document.documentElement.requestFullscreen&&!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
 		if(radarCuadros.length&&!radarTimer) animar();

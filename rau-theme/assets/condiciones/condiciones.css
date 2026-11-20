@@ -12,7 +12,7 @@
 .cnd-mut{color:hsl(var(--muted-foreground))}.cnd-chico{font-size:.8rem}.cnd-mini{font-size:.72rem}.cnd-mono{font-family:var(--mono)}
 .cnd-ic{width:1.15rem;height:1.15rem;flex:none;display:inline-block;vertical-align:-.2em}
 /* Barra de mando */
-.cnd-barra{position:sticky;top:0;z-index:900;margin:0 -1rem 1rem;padding:.6rem 1rem;background:hsl(var(--background)/.92);backdrop-filter:blur(10px);border-bottom:1px solid hsl(var(--border)/.7);display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .9rem}
+.cnd-barra{position:static;top:var(--cnd-top,0);z-index:40;margin:0 -1rem 1rem;padding:.6rem 1rem;background:hsl(var(--background)/.92);backdrop-filter:blur(10px);border-bottom:1px solid hsl(var(--border)/.7);display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .9rem}
 @media (min-width:640px){.cnd-barra{margin:0 -1.5rem 1.2rem;padding:.6rem 1.5rem}}
 .cnd-marca-t{display:flex;flex-direction:column;gap:.15rem;margin-right:.3rem}
 .cnd-marca-t small{font:600 9.5px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:hsl(var(--primary))}
@@ -185,3 +185,52 @@ body.cnd-sala #cnd-mapa,body.cnd-sala #cnd-windy{height:calc(100vh - 21rem);min-
 @media (max-width:639px){.cnd-mapa-caja .leaflet-bottom.leaflet-left{bottom:0}}
 .cnd-cuerpo{min-width:0;display:flex;flex-direction:column;gap:.6rem}
 @media (max-width:639px){.cnd-solo-ancho{display:none}.cnd-tabla{font-size:.78rem}.cnd-tabla td,.cnd-tabla th{padding:.4rem .25rem}.cnd-relojes{gap:.6rem}.cnd-reloj b{font-size:1rem}}
+
+/* 19.64.0: la barra queda fija debajo del menú del sitio (no detrás); en el celular no se queda fija y es más compacta */
+@media (min-width:1024px){.cnd-barra{position:sticky}}
+.cnd-solo-movil{display:none}
+@media (max-width:639px){
+	.cnd-solo-movil{display:inline-flex}
+	.cnd-buscar{display:none;flex-basis:100%;max-width:none}.cnd-buscar.abierta{display:block}
+	.cnd-barra{gap:.45rem .6rem}.cnd-marca-t small{display:none}.cnd-estado{font-size:.7rem;padding:.35rem .55rem}
+	.cnd-acciones{margin-left:0;width:100%;justify-content:space-between}
+	#cnd-sala span{display:none}
+}
+/* Registro en dos partes */
+.cnd-reg-sec{font:600 9.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:hsl(var(--muted-foreground));margin:.2rem 0 .1rem}
+/* Tormentas solares */
+.cnd-solar-rej{display:grid;gap:1rem}
+@media (min-width:900px){.cnd-solar-rej{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media (min-width:1300px){.cnd-solar-rej{grid-template-columns:minmax(0,1.1fr) minmax(0,1.3fr) minmax(0,1fr)}}
+.cnd-sol-img{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
+.cnd-sol-img figure{margin:0;position:relative;border-radius:.5rem;overflow:hidden;background:#000;aspect-ratio:1}
+.cnd-sol-img img{width:100%;height:100%;object-fit:cover;display:block}
+.cnd-sol-img figcaption{position:absolute;left:0;right:0;bottom:0;padding:.25rem .4rem;background:rgb(0 0 0/.6);color:#e2e8f0;font:500 .65rem var(--mono)}
+.cnd-nivel-sol{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border-radius:.6rem;border:1px solid hsl(var(--border));font-size:.88rem}
+.cnd-nivel-sol[data-n="0"]{border-color:hsl(var(--ok)/.5);background:hsl(var(--ok)/.07)}.cnd-nivel-sol[data-n="1"]{border-color:hsl(var(--at)/.6);background:hsl(var(--at)/.08)}.cnd-nivel-sol[data-n="2"]{border-color:hsl(var(--al)/.6);background:hsl(var(--al)/.1)}
+.cnd-kp3{display:grid;grid-template-columns:3.4rem repeat(8,minmax(0,1fr));gap:2px;font:500 .68rem var(--mono)}
+.cnd-kp3 .h{text-align:center;color:hsl(var(--muted-foreground));padding-bottom:2px}
+.cnd-kp3 .d{color:hsl(var(--muted-foreground));display:flex;align-items:center}
+.cnd-kp3 .c{text-align:center;padding:.3rem 0;border-radius:3px;font-weight:700}
+.cnd-cme li{align-items:flex-start}
+.cnd-cme .t{font:700 .62rem var(--mono);letter-spacing:.08em;padding:.12rem .3rem;border-radius:.25rem}
+/* Modo sala en una sola pantalla: semáforo, mapa y una columna que rota entre paneles */
+body.cnd-sala .cnd{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding-bottom:.6rem}
+body.cnd-sala .cnd-barra{margin-bottom:.6rem}
+body.cnd-sala .cnd-sem{margin-bottom:.6rem}
+body.cnd-sala .cnd-luz{min-height:0;padding:.55rem .7rem}
+body.cnd-sala .cnd-principal{flex:1;min-height:0;margin:0;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr)}
+body.cnd-sala .cnd-mapa-caja{min-height:0}
+body.cnd-sala #cnd-mapa,body.cnd-sala #cnd-windy{height:auto;flex:1;min-height:0}
+body.cnd-sala .cnd-lado{min-height:0;overflow:hidden;grid-template-rows:auto auto minmax(0,1fr)}
+body.cnd-sala .cnd-rej{display:none}
+body.cnd-sala #cnd-rota{display:flex;min-height:0;overflow:hidden}
+body.cnd-sala #cnd-rota>.cnd-caja{flex:1;overflow:hidden}
+body.cnd-sala #cnd-reg .cnd-scroll{max-height:9.5rem}
+#cnd-rota{display:none}
+.cnd-rota-pie{font:500 .66rem var(--mono);color:hsl(var(--muted-foreground));text-align:right}
+/* En la columna del modo sala, el panel solar va resumido: nivel, pronóstico de 3 días y eyecciones */
+#cnd-rota .cnd-solar-rej{grid-template-columns:1fr}
+#cnd-rota .cnd-solar-rej>div:nth-child(3),#cnd-rota .cnd-sol-img,#cnd-rota #cnd-solar .cnd-tabla-caja,#cnd-rota #cnd-solar .cnd-graf-tit+.cnd-tabla-caja+p{display:none}
+#cnd-rota #cnd-solar .cnd-solar-rej>div:first-child .cnd-graf-tit,#cnd-rota #cnd-solar .cnd-solar-rej>div:first-child>p{display:none}
+@media (max-width:639px){.cnd-kp3{grid-template-columns:2.6rem repeat(8,minmax(0,1fr));font-size:.6rem}.cnd-kp3 .c{padding:.25rem 0}}

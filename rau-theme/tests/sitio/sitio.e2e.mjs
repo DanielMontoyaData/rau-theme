@@ -187,6 +187,12 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	const pedidos = [];
 	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
 	await p.route(/wp-json\/rau\/v1\/condiciones\?/, r => { pedidos.push(r.request().url()); r.fulfill({ contentType: 'application/json', body: JSON.stringify(datos) }); });
+	const solarMock = { pron3: { emitido: 1795195800, dias: [1795132800, 1795219200, 1795305600], kp: Array.from({ length: 24 }, (_, i) => [1795132800 + i * 10800, i === 20 ? 5.67 : 2]), kp_max: 5.67, r12: [10, 15, 20], r3: [1, 1, 5], s1: [1, 1, 5], razon_g: 'G1 likely.' },
+		o27: [[1795132800, 119, 15, 4], [1795219200, 113, 20, 5]], regiones: [{ n: 4579, lugar: 'N16W09', mag: 'BGD', manchas: 12, area: 300, pc: 60, pm: 30, px: 10 }], regiones_fecha: '2026-11-20',
+		protones: [[1795190000, 0.4], [1795193600, 0.5]], dst: [[1795100000, -10], [1795190000, -35]], ciclo: { obs: [['2024-08', 215, 160], ['2024-09', 140, null]], pred: [['2026-12', 80, 70, 90], ['2027-06', 60, 50, 70]] },
+		cmes: [{ id: 'a', t: 1795170000, vel: 1200, tipo: 'O', tierra: true, llegada: Math.floor(Date.now() / 1000) + 36 * 3600, kp: '5–7', url: '' }, { id: 'b', t: 1795180000, vel: 400, tipo: 'S', tierra: false, llegada: null, kp: null, url: '' }],
+		tormenta: { nivel: 1, viene: 'Eyección solar dirigida a la Tierra: llegada estimada dom 22.' } };
+	await p.route(/wp-json\/rau\/v1\/condiciones\/solar/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(solarMock) }));
 	await p.route(/wp-json\/rau\/v1\/condiciones\/sitios/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ n: 'Repetidora Medellín — Monte Alvernia', f: '146.675', lat: 6.25, lon: -75.6, url: '/x', temp: 18, cod: 95, lluvia: 90, tormenta: { nivel: 2, texto: 'Tormenta' }, viento: { nivel: 0, kmh: 12 } }]) }));
 	await p.route(/api\.rainviewer\.com/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ host: 'https://tilecache.rainviewer.com', radar: { past: [{ time: 1795200000, path: '/v2/radar/a' }, { time: 1795200600, path: '/v2/radar/b' }], nowcast: [] } }) }));
 	await p.goto(BASE + '/condiciones/?lat=6.24&lon=-75.58');
@@ -194,7 +200,7 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.match(await p.innerText('#cnd-luz-tormenta'), /Desconecta las antenas/);
 	assert.match(await p.innerText('#cnd-ahora'), /22°[\s\S]*CAPE/i);
 	assert.match(await p.innerText('#cnd-hf'), /Boa Vista[\s\S]*NVIS/i);
-	assert.match(await p.innerText('#cnd-esp'), /R0[\s\S]*Kp ahora/i);
+	assert.match(await p.innerText('#cnd-esp'), /R0[\s\S]*Kp estimado ahora/i);
 	assert.match(await p.innerText('#cnd-sis'), /M4,1 Antioquia/);
 	assert.ok(pedidos.every(u => /lat=6\.2&lon=-75\.6/.test(u)), 'al servidor solo va el punto redondeado: ' + pedidos[0]);
 	// 19.63: barra de mando, estados con texto, relojes, matriz de bandas, gráficas y sitios
@@ -211,6 +217,23 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	await p.click('#cnd-sala');
 	assert.ok(await p.evaluate(() => !document.body.classList.contains('cnd-sala')));
 	assert.ok(await p.$('#cnd-imprimir'), 'botón de imprimir o PDF');
+	// 19.64: tormentas solares, registro en dos partes, barra debajo del menú y sala en una sola pantalla
+	await p.waitForSelector('#cnd-solar .cnd-kp3');
+	assert.equal(await p.$$eval('#cnd-solar .cnd-kp3 .c', l => l.length), 24, 'pronóstico de NOAA: 3 días × 8 bloques');
+	assert.match(await p.innerText('#cnd-solar'), /HACIA LA TIERRA[\s\S]*Llegada estimada[\s\S]*Kp esperado 5–7/i, 'la eyección dirigida a la Tierra con su llegada');
+	assert.match(await p.innerText('#cnd-solar'), /4579[\s\S]*30%/, 'regiones activas con su probabilidad de llamarada');
+	assert.ok(await p.$('#cnd-solar img[src*="sdo.gsfc.nasa.gov"]') && await p.$('#cnd-solar img[src*="lasco-c3"]'), 'imágenes del sol y de la corona');
+	assert.ok((await p.$$('#cnd-solar .cnd-graf svg')).length >= 4, 'protones, Dst, 27 días y ciclo solar');
+	assert.match(await p.innerText('#cnd-reg'), /Últimas 24 horas/i, 'registro separado en próximo y pasado');
+	const top = await p.evaluate(() => { scrollTo(0, 1500); return new Promise(r => setTimeout(() => r([document.querySelector('header').getBoundingClientRect().bottom, document.querySelector('.cnd-barra').getBoundingClientRect().top]), 300)); });
+	assert.ok(top[1] >= top[0] - 1, 'la barra de mando queda debajo del menú del sitio, no detrás: ' + top);
+	await p.evaluate(() => scrollTo(0, 0));
+	await p.setViewportSize({ width: 1920, height: 1080 }); await p.click('#cnd-sala'); await p.waitForTimeout(600);
+	const sala = await p.evaluate(() => [document.documentElement.scrollHeight, innerHeight, (document.querySelector('#cnd-rota > .cnd-caja') || {}).id]);
+	assert.ok(sala[0] <= sala[1] + 2, 'el modo sala cabe en una pantalla de 1920×1080: ' + sala);
+	assert.ok(sala[2], 'la columna del modo sala muestra un panel rotativo');
+	await p.click('#cnd-sala'); await p.waitForTimeout(300);
+	assert.equal(await p.$$eval('#cnd-rota > *', l => l.length), 0, 'al salir, los paneles vuelven a su lugar');
 	await p.waitForSelector('#cnd-mapa .leaflet-marker-icon');
 	await p.waitForFunction(() => !document.getElementById('cnd-linea').hidden, null, { timeout: 15000 });
 	assert.equal(await p.inputValue('#cnd-cuadro'), '1', 'el radar arranca en el cuadro más reciente');

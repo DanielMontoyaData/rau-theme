@@ -264,6 +264,32 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.64.0 — Tormentas solares y arreglos de la revisión en vivo
+
+**Tormentas solares** (panel nuevo en Condiciones, todo de fuentes oficiales y gratuitas)
+- Nivel de tormenta solar: lo que está pasando (escalas G, S y R de NOAA) y lo que viene.
+- **Eyecciones de masa coronal** de los últimos 10 días (NASA DONKI): velocidad, tipo y, si van hacia la Tierra, la **llegada estimada** (modelo WSA-Enlil) y el Kp esperado. Se marcan «HACIA LA TIERRA» y van primero. DONKI se consulta cada 3 horas con la clave pública; si se define `RAU_NASA_KEY` en wp-config.php (gratuita en api.nasa.gov) se usa esa.
+- **Pronóstico de NOAA de 3 días**: Kp de cada bloque de 3 horas en una tabla de colores, probabilidad de apagón R1–R2 y R3+ y de tormenta de protones S1+, y la explicación de NOAA.
+- **Imágenes del Sol hoy** (SDO 193 Å, donde se ven las llamaradas) y de la corona (LASCO C3, donde se ven las eyecciones).
+- **Regiones activas** con su clase magnética y la probabilidad de llamarada C, M y X de hoy.
+- Gráficas: protones ≥10 MeV de 24 h (umbrales S1 y S2), índice Dst de 3 días (moderada, intensa), pronóstico de 27 días (Kp máximo y flujo solar, para planear concursos) y el ciclo solar 25 con el pronóstico de NOAA y su rango.
+- El semáforo del campo magnético avisa lo que viene (tormenta G pronosticada o eyección en camino) aunque hoy esté tranquilo; el registro de eventos muestra la eyección y su llegada; los avisos al celular de «tormenta geomagnética» avisan una vez por cada eyección dirigida a la Tierra.
+
+**Arreglos de lo visto en vivo**
+- La barra de mando quedaba detrás del menú del sitio al bajar; ahora queda justo debajo. En el celular ya no se queda fija (ocupaba media pantalla) y es más compacta: el buscador se abre con un botón.
+- El registro decía «16:00 PREVISTO tormenta» a las 17:00: una tormenta de una hora que ya empezó es «en curso o inminente». El registro ahora va en dos partes: Próximo y Últimas 24 horas.
+- La tormenta eléctrica ya no se fija en la hora que está terminando: después del minuto 40, mira las 3 horas siguientes.
+- 6 m: la tarjeta decía «sin actividad» mientras el panel mostraba un spot en 50,313 MHz; ahora se entera de lo que trae el cluster.
+- Kp: «estimado ahora» (al minuto) y el oficial de 3 horas, lado a lado (antes 0,0 contra 1,7 en la gráfica, sin explicación).
+- La ionosonda se registra también cada vez que alguien consulta, sin depender solo de la tarea programada; la matriz de bandas se llena más rápido.
+
+**Modo sala en una sola pantalla**
+- En 1920×1080 cabe todo sin desplazarse: barra, semáforo, mapa grande y una columna con Ahora, el registro y un panel que rota cada 20 segundos entre sitios RAU, tormentas solares (resumido), HF, tendencias y pronóstico. Al salir, cada panel vuelve a su lugar.
+
+Pruebas: 61 en `tests/sitio/condiciones.php` (pronóstico de NOAA con su formato real, eyecciones, regiones, avisos de eyección una sola vez…) y la prueba de navegador ampliada (panel solar, barra debajo del menú, sala en una pantalla).
+
+---
+
 ## 19.63.0 — Condiciones como centro de mando
 
 Rediseño completo de `/condiciones/` y lo que lo alimenta.

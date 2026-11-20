@@ -59,7 +59,7 @@ function rau_cond_traer( $url, $ttl, $formato = 'json', $timeout = 12 ) {
 /* Salud de las fuentes: último acierto y último fallo por servicio, para el tablero y el monitoreo */
 function rau_cond_fuente_de( $url ) {
 	$h = (string) wp_parse_url( $url, PHP_URL_HOST );
-	$m = array( 'api.open-meteo.com' => 'Open-Meteo', 'air-quality-api.open-meteo.com' => 'Calidad del aire', 'geocoding-api.open-meteo.com' => 'Buscador', 'api.met.no' => 'MET Norway',
+	$m = array( 'api.nasa.gov' => 'NASA DONKI', 'api.open-meteo.com' => 'Open-Meteo', 'air-quality-api.open-meteo.com' => 'Calidad del aire', 'geocoding-api.open-meteo.com' => 'Buscador', 'api.met.no' => 'MET Norway',
 		'services.swpc.noaa.gov' => 'NOAA SWPC', 'prop.kc2g.com' => 'Ionosondas (KC2G)', 'earthquake.usgs.gov' => 'USGS', 'www.hamqsl.com' => 'HamQSL' );
 	return $m[ $h ] ?? $h;
 }
@@ -73,7 +73,7 @@ function rau_cond_salud_anotar( $url, $ok ) {
 /* Estado de cada fuente: verde si respondió hace poco, ámbar si el último dato es viejo, rojo si falla */
 function rau_cond_salud() {
 	$s = get_option( 'rau_cond_salud', array() ); $out = array();
-	$esperado = array( 'Open-Meteo' => 30, 'NOAA SWPC' => 30, 'Ionosondas (KC2G)' => 60, 'USGS' => 60, 'HamQSL' => 120, 'Calidad del aire' => 120, 'MET Norway' => 0, 'Buscador' => 0 );
+	$esperado = array( 'Open-Meteo' => 30, 'NOAA SWPC' => 30, 'Ionosondas (KC2G)' => 60, 'USGS' => 60, 'HamQSL' => 120, 'Calidad del aire' => 120, 'NASA DONKI' => 400, 'MET Norway' => 0, 'Buscador' => 0 );
 	foreach ( $esperado as $f => $min ) {
 		$x = $s[ $f ] ?? null; if ( ! $x ) { if ( $min ) $out[] = array( 'fuente' => $f, 'estado' => 'sin_datos', 'hace' => null ); continue; }
 		$hace = $x['ok'] ? (int) round( ( time() - $x['ok'] ) / 60 ) : null;
@@ -221,6 +221,8 @@ function rau_cond_espacio() {
 	$out = array( 'kp' => null, 'kp_pron' => null, 'rayosx' => null, 'escalas' => null, 'viento' => null, 'alertas' => array(), 'sfi' => null, 'bandas' => array() );
 	list( $kp ) = rau_cond_traer( $b . 'json/planetary_k_index_1m.json', 5 * MINUTE_IN_SECONDS );
 	if ( is_array( $kp ) && $kp ) { $u = end( $kp ); $out['kp'] = array( 'valor' => round( (float) ( $u['estimated_kp'] ?? $u['kp_index'] ?? 0 ), 1 ), 'hora' => $u['time_tag'] ?? '' ); }
+	list( $k3 ) = rau_cond_traer( $b . 'products/noaa-planetary-k-index.json', 30 * MINUTE_IN_SECONDS );
+	if ( is_array( $k3 ) && $k3 ) { $u3 = end( $k3 ); if ( is_array( $u3 ) && isset( $u3['Kp'] ) ) $out['kp_oficial'] = array( 'valor' => round( (float) $u3['Kp'], 2 ), 'hora' => $u3['time_tag'] ?? '' ); }
 	list( $kf ) = rau_cond_traer( $b . 'products/noaa-planetary-k-index-forecast.json', HOUR_IN_SECONDS );
 	if ( is_array( $kf ) ) {
 		$max = null; $hasta = time() + DAY_IN_SECONDS;
@@ -285,7 +287,7 @@ function rau_cond_ionosfera( $lat, $lon, $hora_local ) {
 	if ( ! is_array( $est ) ) return null;
 	$iono = rau_pron_ionosonda( null, array( $lat, $lon ), $est );
 	$res = rau_pron_calcular( $iono, array( 'sfi' => null, 'kp' => null ), $hora_local );
-	$res['codigo'] = null;
+	$res['codigo'] = null; rau_cond_iono_grabar( $est );
 	if ( $iono ) foreach ( $est as $x ) if ( ( $x['station']['name'] ?? '' ) === $iono['nombre'] ) { $res['codigo'] = $x['station']['code'] ?? null; break; }
 	$res['estaciones'] = array();
 	foreach ( $est as $s ) {
@@ -327,9 +329,11 @@ function rau_cond_semaforo( $clima, $esp, $drap ) {
 		$t = array( 'nivel' => 0, 'texto' => 'Sin tormentas previstas en las próximas 3 horas.' );
 		$tormentosa = array( 95, 96, 99 );
 		if ( in_array( (int) $clima['actual']['cod'], $tormentosa, true ) ) $t = array( 'nivel' => 2, 'texto' => 'Tormenta eléctrica en curso en tu zona. Desconecta las antenas del equipo y no operes desde la torre.', 'en_curso' => true );
-		foreach ( 2 === $t['nivel'] ? array() : array_slice( $clima['horas'], 0, 3 ) as $i => $h ) {
+		// Si la hora en curso ya va por el minuto 40, se mira desde la siguiente: a las 16:59 la franja de las 16:00 ya no sirve
+		$min = (int) gmdate( 'i', time() + (int) $clima['offset'] ); $desde = $min >= 40 ? 1 : 0;
+		foreach ( 2 === $t['nivel'] ? array() : array_slice( $clima['horas'], $desde, 3 ) as $j => $h ) { $i = $j + $desde;
 			if ( in_array( (int) $h['cod'], $tormentosa, true ) ) {
-				$t = 0 === $i ? array( 'nivel' => 2, 'texto' => 'Tormenta eléctrica en curso o a punto de empezar. Desconecta las antenas del equipo y no operes desde la torre.', 'hora' => $h['t'], 'en_curso' => true )
+				$t = 0 === $i || ( 1 === $i && $desde ) ? array( 'nivel' => 2, 'texto' => 'Tormenta eléctrica en curso o a punto de empezar. Desconecta las antenas del equipo y no operes desde la torre.', 'hora' => $h['t'], 'en_curso' => true )
 					: array( 'nivel' => 2, 'texto' => 'Tormenta eléctrica prevista hacia las ' . substr( $h['t'], 11, 5 ) . '. Desconecta las antenas del equipo y no operes desde la torre.', 'hora' => $h['t'] );
 				break;
 			}
@@ -353,6 +357,11 @@ function rau_cond_semaforo( $clima, $esp, $drap ) {
 		$s['geomag'] = ( $g >= 1 || ( null !== $kp && $kp >= 5 ) ) ? array( 'nivel' => 2, 'texto' => 'Tormenta geomagnética (Kp ' . number_format( (float) $kp, 1, ',', '' ) . ( $g ? ', G' . $g : '' ) . '): HF inestable, sobre todo en bandas altas y rutas polares.' )
 			: ( null !== $kp && $kp >= 4 ? array( 'nivel' => 1, 'texto' => 'Campo geomagnético activo (Kp ' . number_format( (float) $kp, 1, ',', '' ) . '): posibles altibajos.' )
 			: array( 'nivel' => 0, 'texto' => 'Campo geomagnético tranquilo' . ( null !== $kp ? ' (Kp ' . number_format( (float) $kp, 1, ',', '' ) . ')' : '' ) . '.' ) );
+		// 19.64.0: lo que viene (pronóstico de 3 días de NOAA y eyecciones dirigidas a la Tierra)
+		if ( 2 !== $s['geomag']['nivel'] && function_exists( 'rau_cond_solar' ) ) {
+			$sol = rau_cond_solar();
+			if ( ! empty( $sol['tormenta']['viene'] ) ) $s['geomag'] = array( 'nivel' => 1, 'texto' => $sol['tormenta']['viene'], 'pronostico' => true );
+		}
 	}
 	// HF: bandas de HamQSL según sea de día o de noche en el punto, con la absorción local encima
 	if ( $esp && $esp['bandas'] ) {
@@ -480,6 +489,10 @@ function rau_cond_avisos_revisar( $enviar = 'rau_send_web_push' ) {
 			'geomag'   => isset( $sem['geomag'] ) && 2 === $sem['geomag']['nivel'] ? array( '🧲 Tormenta geomagnética', $sem['geomag']['texto'] ) : null,
 			'seis'     => $seis && $seis['n'] >= 3 ? array( '📡 6 metros abierta', $seis['texto'] ) : null,
 		);
+		if ( in_array( 'geomag', $a['temas'], true ) && function_exists( 'rau_cond_solar' ) ) foreach ( (array) ( rau_cond_solar()['cmes'] ?? array() ) as $cm ) {
+			if ( ! $cm['tierra'] || ! $cm['llegada'] || $cm['llegada'] < time() || ! empty( $a['ult'][ 'cme_' . $cm['id'] ] ) ) continue;
+			if ( call_user_func( $enviar, $a['sub'], '☀️ Eyección solar hacia la Tierra', 'Llegada estimada ' . wp_date( 'D j, H:i', $cm['llegada'], new DateTimeZone( 'America/Bogota' ) ) . ' (hora Colombia)' . ( $cm['kp'] ? ', Kp ' . $cm['kp'] : '' ) . '. Puede degradar HF.', $url ) ) { $a['ult'][ 'cme_' . $cm['id'] ] = time(); $enviados++; }
+		}
 		foreach ( $a['temas'] as $t ) {
 			if ( empty( $candidatos[ $t ] ) ) continue;
 			if ( ! empty( $a['ult'][ $t ] ) && time() - $a['ult'][ $t ] < RAU_COND_TEMAS[ $t ] * HOUR_IN_SECONDS ) continue;
@@ -576,8 +589,10 @@ function rau_cond_iono_grabar( $est = null ) {
 		$ult = ! empty( $h[ $code ] ) ? end( $h[ $code ] ) : null; if ( $ult && $ult[0] >= $t ) continue;
 		$h[ $code ][] = array( $t, round( (float) $s['fof2'], 2 ), isset( $s['mufd'] ) ? round( (float) $s['mufd'], 1 ) : null ); $n++;
 	}
+	$antes = 0; foreach ( $h as $l ) $antes += count( $l );
 	foreach ( $h as $code => $l ) { $h[ $code ] = array_values( array_filter( $l, function( $x ) { return $x[0] > time() - 50 * HOUR_IN_SECONDS; } ) ); if ( ! $h[ $code ] ) unset( $h[ $code ] ); }
-	update_option( 'rau_cond_ionoh', $h, false );
+	$despues = 0; foreach ( $h as $l ) $despues += count( $l );
+	if ( $n || $despues !== $antes ) update_option( 'rau_cond_ionoh', $h, false );
 	return $n;
 }
 /* Matriz de las próximas 24 horas: lo medido ayer a la misma hora (pronóstico por persistencia) */
@@ -652,10 +667,16 @@ function rau_cond_eventos( $d ) {
 	foreach ( (array) ( $d['sismos'] ?? array() ) as $s ) if ( $s['t'] >= $t0 ) $e[] = array( 't' => $s['t'], 'tipo' => 'sismo', 'nivel' => $s['mag'] >= 5 ? 2 : 1, 'texto' => 'Sismo M' . number_format( $s['mag'], 1, ',', '' ) . ' · ' . $s['lugar'] . ' (a ' . $s['km'] . ' km)' );
 	if ( ! empty( $d['clima']['horas'] ) ) { $off = (int) $d['clima']['offset']; $ant = false;
 		foreach ( array_slice( $d['clima']['horas'], 0, 12 ) as $h ) { $tor = in_array( (int) $h['cod'], array( 95, 96, 99 ), true );
-			if ( $tor && ! $ant ) $e[] = array( 't' => strtotime( $h['t'] . ':00 UTC' ) - $off, 'tipo' => 'tormenta', 'nivel' => 2, 'texto' => 'Tormenta eléctrica prevista', 'futuro' => true );
+			if ( $tor && ! $ant ) { $te = strtotime( $h['t'] . ':00 UTC' ) - $off; $ya = $te <= time();
+				$e[] = array( 't' => $ya ? time() : $te, 'tipo' => 'tormenta', 'nivel' => 2, 'texto' => $ya ? 'Tormenta eléctrica en curso o inminente' : 'Tormenta eléctrica prevista', 'futuro' => ! $ya ); }
 			$ant = $tor; } }
+	if ( function_exists( 'rau_cond_solar' ) ) { $sol = rau_cond_solar();
+		foreach ( (array) ( $sol['cmes'] ?? array() ) as $c ) {
+			if ( $c['t'] >= $t0 ) $e[] = array( 't' => $c['t'], 'tipo' => 'cme', 'nivel' => $c['tierra'] ? 1 : 0, 'texto' => 'Eyección de masa coronal' . ( $c['vel'] ? ' a ' . number_format( $c['vel'], 0, ',', '.' ) . ' km/s' : '' ) . ( $c['tierra'] ? ' · dirigida a la Tierra' : '' ) );
+			if ( $c['tierra'] && $c['llegada'] && $c['llegada'] > time() ) $e[] = array( 't' => $c['llegada'], 'tipo' => 'cme', 'nivel' => 2, 'texto' => 'Llegada estimada de la eyección solar' . ( $c['kp'] ? ' (Kp ' . $c['kp'] . ')' : '' ), 'futuro' => true );
+		} }
 	usort( $e, function( $a, $b ) { return $b['t'] - $a['t']; } );
-	return array_slice( $e, 0, 20 );
+	return array_slice( $e, 0, 24 );
 }
 
 /* Sitios RAU: tiempo, tormenta y viento en cada repetidora, en una sola tabla */
@@ -678,7 +699,7 @@ function rau_cond_precargar() {
 		list( $la, $lo ) = rau_cond_redondear( $p[0], $p[1] ); delete_transient( 'rau_cond_todo_' . md5( $la . ',' . $lo ) ); rau_condiciones( $la, $lo );
 	}
 	delete_transient( 'rau_cond_sitios' ); rau_cond_sitios();
-	rau_cond_iono_grabar();
+	rau_cond_iono_grabar(); rau_cond_solar();
 }
 add_action( 'init', function() { if ( ! wp_next_scheduled( 'rau_cond_precarga' ) ) wp_schedule_event( time() + 300, 'rau_10min', 'rau_cond_precarga' ); } );
 add_action( 'rau_cond_precarga', 'rau_cond_precargar' );
@@ -701,4 +722,100 @@ add_action( 'rest_api_init', function() {
 		}
 		return new WP_REST_Response( array( 'error' => 'No hay avisos activos en este navegador.' ), 404 );
 	} ) );
+} );
+
+/* ════════ 19.64.0: tormentas solares ════════
+   Todo de fuentes oficiales y gratuitas: NOAA SWPC (pronóstico de 3 y 27 días, regiones activas, protones, Dst,
+   ciclo solar) y NASA DONKI (eyecciones de masa coronal con su llegada estimada a la Tierra, modelo WSA-Enlil).
+   DONKI con la clave pública DEMO_KEY admite pocas consultas por hora; se pide cada 3 horas. Si el sitio define
+   RAU_NASA_KEY en wp-config.php (clave gratuita de api.nasa.gov) se usa esa. */
+function rau_cond_solar() {
+	$c = get_transient( 'rau_cond_solar' ); if ( is_array( $c ) ) return $c;
+	$b = 'https://services.swpc.noaa.gov/'; $out = array( 'pron3' => null, 'o27' => array(), 'regiones' => array(), 'protones' => array(), 'dst' => array(), 'ciclo' => array( 'obs' => array(), 'pred' => array() ), 'cmes' => array(), 'tormenta' => array() );
+	list( $t3 ) = rau_cond_traer( $b . 'text/3-day-forecast.txt', HOUR_IN_SECONDS, 'texto' );
+	if ( is_string( $t3 ) ) $out['pron3'] = rau_cond_pron3_leer( $t3 );
+	list( $t27 ) = rau_cond_traer( $b . 'text/27-day-outlook.txt', 6 * HOUR_IN_SECONDS, 'texto' );
+	if ( is_string( $t27 ) && preg_match_all( '/^(\d{4} \w{3} \d{2})\s+(\d+)\s+(\d+)\s+(\d+)\s*$/m', $t27, $mm, PREG_SET_ORDER ) ) foreach ( $mm as $x ) { $f = explode( ' ', $x[1] ); $t = strtotime( $f[2] . ' ' . $f[1] . ' ' . $f[0] . ' 12:00 UTC' ); if ( $t ) $out['o27'][] = array( $t, (int) $x[2], (int) $x[3], (int) $x[4] ); }
+	list( $rg ) = rau_cond_traer( $b . 'json/solar_regions.json', HOUR_IN_SECONDS, 'json', 20 );
+	if ( is_array( $rg ) && $rg ) { $ult = max( array_map( function( $x ) { return (string) ( $x['observed_date'] ?? '' ); }, $rg ) );
+		foreach ( $rg as $x ) { if ( ( $x['observed_date'] ?? '' ) !== $ult || null === ( $x['number_spots'] ?? null ) ) continue;
+			$out['regiones'][] = array( 'n' => (int) $x['region'], 'lugar' => (string) $x['location'], 'mag' => (string) ( $x['mag_class'] ?? '' ), 'manchas' => (int) $x['number_spots'], 'area' => (int) ( $x['area'] ?? 0 ),
+				'pc' => (int) ( $x['c_flare_probability'] ?? 0 ), 'pm' => (int) ( $x['m_flare_probability'] ?? 0 ), 'px' => (int) ( $x['x_flare_probability'] ?? 0 ), 'm' => (int) ( $x['m_xray_events'] ?? 0 ), 'x' => (int) ( $x['x_xray_events'] ?? 0 ) ); }
+		usort( $out['regiones'], function( $a, $b ) { return ( $b['pm'] * 10 + $b['px'] * 100 + $b['area'] / 100 ) <=> ( $a['pm'] * 10 + $a['px'] * 100 + $a['area'] / 100 ); } );
+		$out['regiones'] = array_slice( $out['regiones'], 0, 8 ); $out['regiones_fecha'] = $ult; }
+	list( $pr ) = rau_cond_traer( $b . 'json/goes/primary/integral-protons-1-day.json', 10 * MINUTE_IN_SECONDS, 'json', 20 );
+	if ( is_array( $pr ) ) { $g = array(); foreach ( $pr as $x ) { if ( '>=10 MeV' !== ( $x['energy'] ?? '' ) || ! isset( $x['flux'] ) ) continue; $t = strtotime( $x['time_tag'] ); $k = (int) floor( $t / 900 ) * 900; $g[ $k ] = max( $g[ $k ] ?? 0, (float) $x['flux'] ); }
+		ksort( $g ); foreach ( $g as $t => $f ) $out['protones'][] = array( $t, $f ); }
+	list( $ds ) = rau_cond_traer( $b . 'products/kyoto-dst.json', 30 * MINUTE_IN_SECONDS );
+	if ( is_array( $ds ) ) foreach ( $ds as $x ) { if ( ! isset( $x['dst'] ) ) continue; $t = strtotime( $x['time_tag'] . ' UTC' ); if ( $t > time() - 3 * DAY_IN_SECONDS ) $out['dst'][] = array( $t, (int) $x['dst'] ); }
+	list( $co ) = rau_cond_traer( $b . 'json/solar-cycle/observed-solar-cycle-indices.json', DAY_IN_SECONDS, 'json', 20 );
+	if ( is_array( $co ) ) foreach ( $co as $x ) { $tt = (string) ( $x['time-tag'] ?? '' ); if ( $tt < '2019-12' ) continue; $out['ciclo']['obs'][] = array( $tt, round( (float) $x['ssn'], 1 ), isset( $x['smoothed_ssn'] ) && $x['smoothed_ssn'] >= 0 ? round( (float) $x['smoothed_ssn'], 1 ) : null ); }
+	list( $cp ) = rau_cond_traer( $b . 'json/solar-cycle/predicted-solar-cycle.json', DAY_IN_SECONDS );
+	if ( is_array( $cp ) ) foreach ( $cp as $x ) { $tt = (string) ( $x['time-tag'] ?? '' ); if ( $tt > '2028-12' ) continue; $out['ciclo']['pred'][] = array( $tt, (float) $x['predicted_ssn'], (float) ( $x['low_ssn'] ?? 0 ), (float) ( $x['high_ssn'] ?? 0 ) ); }
+	$out['cmes'] = rau_cond_cmes();
+	$out['tormenta'] = rau_cond_tormenta_solar( $out );
+	set_transient( 'rau_cond_solar', $out, 15 * MINUTE_IN_SECONDS );
+	return $out;
+}
+/* Pronóstico de 3 días de NOAA: Kp por bloque de 3 horas y probabilidades de R y S */
+function rau_cond_pron3_leer( $txt ) {
+	$o = array( 'emitido' => null, 'dias' => array(), 'kp' => array(), 's1' => array(), 'r12' => array(), 'r3' => array(), 'kp_max' => null, 'razon_g' => '' );
+	if ( preg_match( '/:Issued:\s*(\d{4}) (\w{3}) (\d{1,2}) (\d{2})(\d{2}) UTC/', $txt, $m ) ) $o['emitido'] = strtotime( "$m[3] $m[2] $m[1] $m[4]:$m[5] UTC" );
+	$anio = $m[1] ?? gmdate( 'Y' );
+	if ( preg_match( '/NOAA Kp index breakdown[^\n]*\n\s*\n?\s*((?:\w{3} \d{1,2}\s+){3})/', $txt, $d ) && preg_match_all( '/(\w{3}) (\d{1,2})/', $d[1], $dd, PREG_SET_ORDER ) ) {
+		foreach ( $dd as $x ) { $t = strtotime( "$x[2] $x[1] $anio 00:00 UTC" ); if ( $t && $o['emitido'] && $t < $o['emitido'] - 200 * DAY_IN_SECONDS ) $t = strtotime( "$x[2] $x[1] " . ( $anio + 1 ) . ' 00:00 UTC' ); $o['dias'][] = $t; }
+	}
+	if ( preg_match_all( '/^(\d{2})-(\d{2})UT\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/m', $txt, $kk, PREG_SET_ORDER ) && count( $o['dias'] ) === 3 ) {
+		foreach ( $kk as $x ) for ( $i = 0; $i < 3; $i++ ) { $o['kp'][] = array( $o['dias'][ $i ] + (int) $x[1] * HOUR_IN_SECONDS, (float) $x[ 3 + $i ] ); }
+		usort( $o['kp'], function( $a, $b ) { return $a[0] - $b[0]; } );
+		$o['kp_max'] = max( array_map( function( $x ) { return $x[1]; }, $o['kp'] ) );
+	}
+	if ( preg_match( '/S1 or greater\s+(\d+)%\s+(\d+)%\s+(\d+)%/', $txt, $x ) ) $o['s1'] = array( (int) $x[1], (int) $x[2], (int) $x[3] );
+	if ( preg_match( '/R1-R2\s+(\d+)%\s+(\d+)%\s+(\d+)%/', $txt, $x ) ) $o['r12'] = array( (int) $x[1], (int) $x[2], (int) $x[3] );
+	if ( preg_match( '/R3 or greater\s+(\d+)%\s+(\d+)%\s+(\d+)%/', $txt, $x ) ) $o['r3'] = array( (int) $x[1], (int) $x[2], (int) $x[3] );
+	if ( preg_match( '/A\. NOAA Geomagnetic.*?Rationale:\s*(.+?)\n\s*\n/s', $txt, $x ) ) $o['razon_g'] = preg_replace( '/\s+/', ' ', trim( $x[1] ) );
+	return $o;
+}
+/* Eyecciones de masa coronal de los últimos 10 días (NASA DONKI), con la llegada estimada si van hacia la Tierra */
+function rau_cond_cmes() {
+	$c = get_transient( 'rau_cond_cmes' ); if ( is_array( $c ) ) return $c;
+	$clave = defined( 'RAU_NASA_KEY' ) && RAU_NASA_KEY ? RAU_NASA_KEY : 'DEMO_KEY';
+	$url = 'https://api.nasa.gov/DONKI/CME?startDate=' . gmdate( 'Y-m-d', time() - 10 * DAY_IN_SECONDS ) . '&endDate=' . gmdate( 'Y-m-d' ) . '&api_key=' . rawurlencode( $clave );
+	$r = rau_remote_get( $url, array( 'timeout' => 20, 'user-agent' => 'HK4RAU/1.0 (+https://hk4rau.com)' ), 30 );
+	$ok = ! is_wp_error( $r ) && 200 === (int) wp_remote_retrieve_response_code( $r ); rau_cond_salud_anotar( 'https://api.nasa.gov/', $ok );
+	$d = $ok ? json_decode( wp_remote_retrieve_body( $r ), true ) : null;
+	if ( ! is_array( $d ) ) { $viejo = get_option( 'rau_cond_cmes_ult' ); set_transient( 'rau_cond_cmes', is_array( $viejo ) ? $viejo : array(), 30 * MINUTE_IN_SECONDS ); return is_array( $viejo ) ? $viejo : array(); }
+	$out = array();
+	foreach ( $d as $x ) {
+		$an = null; foreach ( (array) ( $x['cmeAnalyses'] ?? array() ) as $a ) if ( ! empty( $a['isMostAccurate'] ) ) { $an = $a; break; }
+		$tierra = false; $llegada = null; $kp = null;
+		foreach ( (array) ( $an['enlilList'] ?? array() ) as $en ) {
+			if ( ! empty( $en['isEarthGB'] ) || ! empty( $en['estimatedShockArrivalTime'] ) ) { $tierra = $tierra || ! empty( $en['isEarthGB'] ) || ! empty( $en['estimatedShockArrivalTime'] );
+				if ( ! empty( $en['estimatedShockArrivalTime'] ) ) $llegada = strtotime( $en['estimatedShockArrivalTime'] );
+				$ks = array_filter( array( $en['kp_18'] ?? null, $en['kp_90'] ?? null, $en['kp_135'] ?? null, $en['kp_180'] ?? null ), 'is_numeric' ); if ( $ks ) $kp = min( $ks ) . ( max( $ks ) > min( $ks ) ? '–' . max( $ks ) : '' ); }
+		}
+		$out[] = array( 'id' => (string) $x['activityID'], 't' => strtotime( $x['startTime'] ), 'vel' => $an ? (int) round( (float) $an['speed'] ) : null, 'tipo' => $an['type'] ?? '', 'angulo' => $an ? (int) $an['halfAngle'] : null,
+			'tierra' => $tierra, 'llegada' => $llegada, 'kp' => $kp, 'url' => (string) ( $x['link'] ?? '' ), 'nota' => mb_substr( (string) ( $x['note'] ?? '' ), 0, 240 ) );
+	}
+	usort( $out, function( $a, $b ) { return $b['t'] - $a['t']; } ); $out = array_slice( $out, 0, 15 );
+	update_option( 'rau_cond_cmes_ult', $out, false );
+	set_transient( 'rau_cond_cmes', $out, 3 * HOUR_IN_SECONDS );
+	return $out;
+}
+/* Nivel de tormenta solar: lo que pasa ahora y lo que viene, en una frase para el semáforo */
+function rau_cond_tormenta_solar( $s ) {
+	$p = $s['pron3']; $viene = ''; $nivel = 0; $partes = array();
+	if ( $p && null !== $p['kp_max'] ) {
+		$g = $p['kp_max'] >= 9 ? 5 : ( $p['kp_max'] >= 8 ? 4 : ( $p['kp_max'] >= 7 ? 3 : ( $p['kp_max'] >= 6 ? 2 : ( $p['kp_max'] >= 5 ? 1 : 0 ) ) ) );
+		if ( $g ) { $cuando = null; foreach ( $p['kp'] as $k ) if ( $k[1] >= 5 && $k[0] > time() - 3 * HOUR_IN_SECONDS ) { $cuando = $k[0]; break; }
+			if ( $cuando ) { $viene = 'NOAA pronostica tormenta geomagnética G' . $g . ' (Kp ' . number_format( $p['kp_max'], 1, ',', '' ) . ') desde el ' . wp_date( 'D j, H:i', $cuando, new DateTimeZone( 'America/Bogota' ) ) . '. Planea HF con margen.'; $nivel = 1; } }
+		$partes[] = 'Kp máximo previsto en 3 días: ' . number_format( $p['kp_max'], 2, ',', '' );
+	}
+	foreach ( (array) $s['cmes'] as $c ) if ( $c['tierra'] && $c['llegada'] && $c['llegada'] > time() - 6 * HOUR_IN_SECONDS && $c['llegada'] < time() + 4 * DAY_IN_SECONDS ) {
+		$viene = 'Eyección solar dirigida a la Tierra: llegada estimada ' . wp_date( 'D j, H:i', $c['llegada'], new DateTimeZone( 'America/Bogota' ) ) . ' (hora Colombia)' . ( $c['kp'] ? ', Kp ' . $c['kp'] : '' ) . '. Puede degradar HF.'; $nivel = max( $nivel, 1 ); break;
+	}
+	return array( 'nivel' => $nivel, 'viene' => $viene, 'resumen' => implode( ' · ', $partes ) );
+}
+add_action( 'rest_api_init', function() {
+	register_rest_route( 'rau/v1', '/condiciones/solar', array( 'methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function() { $r = new WP_REST_Response( rau_cond_solar() ); $r->header( 'Cache-Control', 'public, max-age=600' ); return $r; } ) );
 } );
