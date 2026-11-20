@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.60.0' );
+define( 'RAU_THEME_VERSION', '19.61.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -25,6 +25,7 @@ require get_template_directory() . '/inc/turnos.php';
 require get_template_directory() . '/inc/capacidades.php';
 require get_template_directory() . '/inc/libro-adif.php';
 require get_template_directory() . '/inc/uso-herramientas.php';
+require get_template_directory() . '/inc/portada.php';
 
 /**
  * Configuración básica del tema

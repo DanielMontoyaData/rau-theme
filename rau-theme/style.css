@@ -3,7 +3,7 @@ Theme Name: RAU Radioaficionados Unidos
 Theme URI: https://hk4rau.com
 Author: RAU
 Description: Tema de WordPress construido a partir del diseño real de la aplicacion RAU (React + Tailwind). Usa el CSS compilado original del proyecto para una fidelidad visual exacta: fondo oscuro, cian como color principal, carmesi solo para la red de emergencia.
-Version: 19.60.0
+Version: 19.61.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GNU General Public License v3 or later
@@ -1057,3 +1057,27 @@ body:has(#rau-tools.rau-vista-herramienta) #rau-intro { display: none; }
 	.rau-tabla-ancha-aviso { display: block; }
 }
 .rau-tabla-ancha-aviso { display: none; font-size: .75rem; color: hsl(var(--muted-foreground)); margin: .25rem 0; }
+
+/* ── Portada 19.61.0: utilidades nuevas (la hoja está compilada, se agregan a mano) ── */
+.rau-portada{padding-top:2.5rem;padding-bottom:3rem}
+@media (min-width:640px){.rau-portada{padding-top:5rem;padding-bottom:5rem;min-height:72dvh}}
+@media (min-width:1024px){.rau-portada{min-height:84dvh}}
+.border-emerald-500\/40{border-color:rgb(16 185 129 / .4)}
+.bg-emerald-500\/10{background-color:rgb(16 185 129 / .1)}
+.border-amber-500\/40{border-color:rgb(245 158 11 / .4)}
+.border-amber-500\/50{border-color:rgb(245 158 11 / .5)}
+.bg-amber-500\/10{background-color:rgb(245 158 11 / .1)}
+.ring-amber-500\/20{--tw-ring-color:rgb(245 158 11 / .2)}
+.text-amber-300{color:rgb(252 211 77)}
+[data-theme="light"] .text-amber-300{color:#92400e}
+.bg-rose-500\/15{background-color:rgb(244 63 94 / .15)}
+.border-rose-500\/50{border-color:rgb(244 63 94 / .5)}
+.hover\:bg-rose-600:hover{background-color:rgb(225 29 72)}
+.border-primary\/25{border-color:hsl(var(--primary) / .25)}
+.gap-x-3{column-gap:.75rem}
+.line-clamp-3{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}
+.scroll-mt-20{scroll-margin-top:5rem}
+.aspect-\[16\/9\]{aspect-ratio:16/9}
+@media (min-width:1024px){.lg\:gap-12{gap:3rem}}
+/* La burbuja del chat tapaba tarjetas en el celular: más pequeña y pegada a la esquina */
+@media (max-width:639px){#rau-bot-toggle{width:3rem;height:3rem;right:.75rem;bottom:.75rem}}

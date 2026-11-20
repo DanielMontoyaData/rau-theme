@@ -1,17 +1,22 @@
 <?php
 /**
- * Página de inicio — traducción literal de pages/HomePage.jsx
+ * Página de inicio.
+ *
+ * 19.61.0 — orden nuevo, pensado para quien llega por primera vez sin estorbar a quien ya es de RAU:
+ *   1. Portada: título, dos botones y la próxima actividad (que se vuelve «En vivo ahora» durante la
+ *      malla o cuando el canal de YouTube transmite).
+ *   2. Qué es RAU: quiénes somos, tres cifras reales, «empieza aquí» en tres pasos y fotos del club.
+ *   3. En el aire ahora: propagación por bandas y el receptor del club.
+ *   4. Repetidoras.  5. Próximas actividades (con los concursos).  6. Novedades (si hay entradas).
+ *   7. Comunidad: quiénes se reportaron hoy, Libro de Visitas, cómo asociarse y Código de Ética.
+ * Lo que solo aparece cuando hace falta: la franja de emergencia (operación real con tablero público).
+ * Se quitaron: Radio RAU (un dial de juguete), la tarjeta repetida del Libro de Visitas en la portada
+ * y la franja suelta del próximo concurso.
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 get_header();
 
-// La sección se titula "Próximas actividades", pero la consulta no tenía filtro de fecha: como
-// ordena por 'start' ascendente, lo que pintaba eran los eventos MÁS ANTIGUOS del catálogo. En
-// septiembre la portada seguía anunciando actividades de julio. Además, con posts_per_page => -1
-// la rejilla crecía sin límite con cada evento publicado.
-// Se usa el mismo patrón de meta_query que ya emplea el boletín en functions.php, para no tener
-// dos formas distintas de preguntar lo mismo. La comparación es contra el día de hoy, no contra
-// el instante actual, para que un evento de esta misma tarde siga apareciendo por la mañana.
+// Solo eventos desde hoy (antes salían los más antiguos del catálogo); los semanales se corren solos.
 $events    = new WP_Query( array(
 	'post_type'      => 'evento',
 	'posts_per_page' => 6,
@@ -21,27 +26,47 @@ $events    = new WP_Query( array(
 	'order'          => 'ASC',
 	'meta_query'     => array( array( 'key' => 'start', 'value' => current_time( 'Y-m-d' ), 'compare' => '>=', 'type' => 'DATE' ) ),
 ) );
-// Todas las repetidoras, la principal (HK4RAU) primero y el resto por nombre. Antes salían las 4
-// últimas publicadas: Medellín, la principal, quedaba fuera de la portada.
+// Todas las repetidoras, la principal (HK4RAU) primero y el resto por nombre.
 $repetidores_home = new WP_Query( array( 'post_type' => 'repetidor', 'posts_per_page' => -1, 'post_status' => 'publish' ) );
 $repetidores_home->posts = rau_ordenar_repetidoras( $repetidores_home->posts );
 $alerts    = new WP_Query( array( 'post_type' => 'alerta', 'posts_per_page' => -1, 'meta_query' => array( array( 'key' => 'active', 'value' => '1' ) ), 'post_status' => 'publish' ) );
 $historias = new WP_Query( array( 'post_type' => 'historia', 'posts_per_page' => 4, 'post_status' => 'publish' ) );
-$libro_preview = new WP_Query( array( 'post_type' => 'libro_visitas', 'posts_per_page' => 3, 'post_status' => 'publish', 'orderby' => 'date', 'order' => 'DESC' ) );
-$libro_total_q = new WP_Query( array( 'post_type' => 'libro_visitas', 'posts_per_page' => 1, 'post_status' => 'publish', 'fields' => 'ids' ) );
-$libro_total   = (int) $libro_total_q->found_posts;
+$libro_preview = new WP_Query( array( 'post_type' => 'libro_visitas', 'posts_per_page' => 2, 'post_status' => 'publish', 'orderby' => 'date', 'order' => 'DESC' ) );
+$libro_total   = (int) ( wp_count_posts( 'libro_visitas' )->publish ?? 0 );
+// Novedades: solo entradas de los últimos 60 días; si no hay, la sección no aparece.
+$novedades = new WP_Query( array( 'post_type' => 'post', 'posts_per_page' => 3, 'post_status' => 'publish', 'ignore_sticky_posts' => true, 'no_found_rows' => true, 'date_query' => array( array( 'after' => '60 days ago' ) ) ) );
 
 $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
+$codigo_etica_id   = rau_content_by_section( 'codigo_etica' );
+$url_checkin       = rau_portada_url_plantilla( 'page-checkin.php', '/check-in-de-malla/' );
+$url_repetidoras   = get_post_type_archive_link( 'repetidor' );
+$emergencia        = rau_portada_emergencia();
+$datos             = rau_portada_datos();
+$proximo           = $events->posts ? $events->posts[0] : null;
 ?>
 
-<?php if ( $alerts->have_posts() ) : ?>
-<div class="overflow-hidden border-b border-accent/40 bg-accent/10">
+<?php if ( $emergencia ) : ?>
+<div class="border-b border-rose-500/50 bg-rose-500/15" role="alert">
+	<div class="mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+		<p class="flex items-center gap-2 text-sm font-semibold text-foreground">
+			<span class="relative flex h-2.5 w-2.5 shrink-0"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-75"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span></span>
+			<span>Red de emergencia activa: <?php echo esc_html( $emergencia['nombre'] ); ?><?php if ( $emergencia['zona'] ) : ?> · <?php echo esc_html( $emergencia['zona'] ); ?><?php endif; ?><?php if ( $emergencia['canal'] ) : ?> · <span class="font-mono"><?php echo esc_html( $emergencia['canal'] ); ?></span><?php endif; ?></span>
+		</p>
+		<a href="<?php echo esc_url( $emergencia['url'] ); ?>" class="inline-flex items-center rounded-md bg-rose-500 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Ver tablero público →</a>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php if ( $alerts->have_posts() ) :
+	// Antes iba en rojo (el color de alerta) aunque solo anuncie el programa y la frecuencia de contacto.
+	// El rojo queda para la franja de emergencia de arriba, que solo aparece cuando de verdad hay una. ?>
+<div class="overflow-hidden border-b border-primary/25 bg-primary/5">
 	<div class="flex whitespace-nowrap py-2">
 		<div class="marquee-track flex shrink-0">
 			<?php for ( $rep = 0; $rep < 4; $rep++ ) : $alerts->rewind_posts(); while ( $alerts->have_posts() ) : $alerts->the_post(); ?>
-				<span class="mx-8 flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-accent-foreground/90">
-					<svg class="h-4 w-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 01-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 011-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 011.52 0C14.51 3.81 17 5 19 5a1 1 0 011 1z"></path></svg>
-					<?php the_title(); ?> — <?php echo esc_html( get_post_meta( get_the_ID(), 'frequency', true ) ); ?>
+				<span class="mx-8 flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-muted-foreground"<?php echo $rep ? ' aria-hidden="true"' : ''; ?>>
+					<svg class="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5M19.1 4.9C23 8.8 23 15.1 19.1 19"></path><circle cx="12" cy="12" r="2"></circle></svg>
+					<?php the_title(); ?> — <span class="text-foreground"><?php echo esc_html( get_post_meta( get_the_ID(), 'frequency', true ) ); ?></span>
 				</span>
 			<?php endwhile; endfor; wp_reset_postdata(); ?>
 		</div>
@@ -55,12 +80,12 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 		<div class="absolute inset-0 h-full w-full object-cover opacity-30">
 			<?php echo get_the_post_thumbnail( get_option( 'page_on_front' ), 'rau-hero', array( 'class' => 'h-full w-full object-cover', 'fetchpriority' => 'high', 'decoding' => 'async', 'alt' => '' ) ); ?>
 		</div>
-	<?php else : ?>
-		<img src="https://images.pexels.com/photos/15491339/pexels-photo-15491339.jpeg?auto=compress&cs=tinysrgb&w=1280&fm=webp" alt="Torre de antena de radioaficionado" class="absolute inset-0 h-full w-full object-cover opacity-30" fetchpriority="high" decoding="async">
+	<?php else : $img = get_template_directory_uri() . '/assets/images/'; // servida por el propio sitio (antes desde Pexels) ?>
+		<img src="<?php echo esc_url( $img . 'hero-torre-1280.webp' ); ?>" srcset="<?php echo esc_url( $img . 'hero-torre-768.webp' ); ?> 768w, <?php echo esc_url( $img . 'hero-torre-1280.webp' ); ?> 1280w" sizes="100vw" width="1280" height="1920" alt="" class="absolute inset-0 h-full w-full object-cover opacity-30" fetchpriority="high" decoding="async">
 	<?php endif; ?>
 	<div class="absolute inset-0 bg-gradient-to-b from-background/70 via-background/80 to-background"></div>
 
-	<section class="relative mx-auto max-w-[96rem] px-4 sm:px-6 flex min-h-[92dvh] flex-col justify-center py-24">
+	<section class="rau-portada relative mx-auto max-w-[96rem] px-4 sm:px-6 flex flex-col justify-center">
 		<div class="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 w-fit">
 			<span class="relative flex h-2 w-2">
 				<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75"></span>
@@ -81,34 +106,21 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 		</div>
 
 		<?php
-		$hero_flags = rau_get_flag_counts();
-		$hero_reps  = wp_count_posts( 'repetidor' )->publish ?? 0;
+		// Dos tarjetas: la próxima actividad y la licencia. La del Libro de Visitas se quitó porque
+		// el libro ya tiene su lugar más abajo. La de la actividad se vuelve «En vivo ahora» sola (ver script).
+		$p_start = $proximo ? get_post_meta( $proximo->ID, 'start', true ) : '';
+		$p_ts    = $p_start ? strtotime( get_gmt_from_date( $p_start ) . ' UTC' ) : 0;
 		?>
-		<div class="mt-10 flex flex-wrap gap-x-8 gap-y-3 font-mono text-sm">
-			<div><span class="text-2xl font-bold text-primary"><?php echo esc_html( count( rau_get_herramientas_tabs() ) ); ?></span> <span class="text-muted-foreground">herramientas gratis</span></div>
-			<div><span class="text-2xl font-bold text-primary"><?php echo esc_html( $hero_reps ); ?></span> <span class="text-muted-foreground"><?php echo 1 === (int) $hero_reps ? 'repetidor' : 'repetidores'; ?></span></div>
-			<?php if ( $hero_flags ) : ?>
-			<div><span class="text-2xl font-bold text-primary"><?php echo esc_html( count( $hero_flags ) ); ?></span> <span class="text-muted-foreground">países alcanzados</span></div>
-			<?php endif; ?>
-		</div>
-
-		<?php
-		// Lo primero que se ve tenía solo textos fijos: nada decía que el sitio está vivo. Tres cosas con
-		// fecha que cambian solas: la próxima actividad, la guía de la licencia y el último mensaje del
-		// Libro de Visitas.
-		$proximo = $events->posts ? $events->posts[0] : null;
-		$ultimo  = $libro_preview->posts ? $libro_preview->posts[0] : null;
-		?>
-		<div class="mt-10 grid max-w-4xl gap-3 sm:grid-cols-3">
-			<?php if ( $proximo ) : $p_start = get_post_meta( $proximo->ID, 'start', true ); ?>
-			<a href="<?php echo esc_url( get_permalink( $proximo ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
-				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Próxima actividad</p>
+		<div class="mt-10 grid max-w-3xl gap-3 sm:grid-cols-2">
+			<?php if ( $proximo ) : ?>
+			<a id="home-proxima" href="<?php echo esc_url( get_permalink( $proximo ) ); ?>" data-inicio="<?php echo esc_attr( $p_ts ); ?>" data-frec="<?php echo esc_attr( get_post_meta( $proximo->ID, 'frequency', true ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
+				<p class="home-prox-eti font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Próxima actividad</p>
 				<p class="mt-1 text-sm font-semibold"><?php echo esc_html( ucfirst( date_i18n( 'l j \d\e F', strtotime( $p_start ) ) ) ); ?></p>
 				<p class="text-sm text-muted-foreground"><?php echo esc_html( get_the_title( $proximo ) ); ?></p>
 			</a>
 			<?php else : ?>
-			<a href="<?php echo esc_url( get_post_type_archive_link( 'evento' ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
-				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Calendario</p>
+			<a id="home-proxima" href="<?php echo esc_url( get_post_type_archive_link( 'evento' ) ); ?>" data-inicio="0" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
+				<p class="home-prox-eti font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Calendario</p>
 				<p class="mt-1 text-sm text-muted-foreground">Mallas, ruedas y concursos de la red</p>
 			</a>
 			<?php endif; ?>
@@ -117,31 +129,90 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 				<p class="mt-1 text-sm font-semibold">El trámite paso a paso</p>
 				<p class="text-sm text-muted-foreground">Examen, pago y costos <?php echo esc_html( current_time( 'Y' ) ); ?></p>
 			</a>
-			<?php if ( $ultimo ) : ?>
-			<a href="<?php echo esc_url( home_url( '/libro-de-visitas/' ) ); ?>" class="rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-primary/50">
-				<p class="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Libro de Visitas · hace <?php echo esc_html( human_time_diff( get_post_time( 'U', true, $ultimo ), time() ) ); ?></p>
-				<p class="mt-1 line-clamp-2 text-sm italic text-muted-foreground">&ldquo;<?php echo esc_html( wp_trim_words( wp_strip_all_tags( $ultimo->post_content ), 14 ) ); ?>&rdquo;</p>
-				<p class="text-xs font-semibold"><?php echo esc_html( get_post_meta( $ultimo->ID, 'nombre', true ) ?: get_the_title( $ultimo ) ); ?></p>
-			</a>
-			<?php endif; ?>
+		</div>
+		<div id="home-envivo" class="mt-3 hidden max-w-3xl flex-wrap items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3">
+			<span class="flex items-center gap-2 pr-2 text-sm font-semibold"><span class="relative flex h-2.5 w-2.5"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-75"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span></span><span id="home-envivo-txt">En vivo ahora</span></span>
+			<a id="home-envivo-yt" href="https://www.youtube.com/@radioaficionadosunidos/live" target="_blank" rel="noopener" class="hidden items-center rounded-md bg-rose-500 px-3 py-1.5 text-sm font-bold text-white hover:bg-rose-600">▶ Ver en YouTube</a>
+			<a id="home-envivo-rx" href="<?php echo esc_url( $url_repetidoras ); ?>" class="hidden items-center rounded-md border border-border bg-background/60 px-3 py-1.5 text-sm font-medium hover:bg-accent"></a>
 		</div>
 
-		<div class="mt-8 flex items-center gap-4">
-			<span class="font-mono text-lg sm:text-xl tracking-[0.35em] text-primary/80" title="RAU en código Morse">.-. .- ..-</span>
-			<svg viewBox="0 0 200 30" class="hidden h-6 w-32 text-primary/40 sm:block" aria-hidden="true">
-				<polyline points="0,15 15,15 20,5 25,25 30,15 45,15 50,10 55,20 60,15 75,15 80,3 85,27 90,15 105,15 110,12 115,18 120,15 200,15" fill="none" stroke="currentColor" stroke-width="1.5">
-					<animate attributeName="points"
-						values="0,15 15,15 20,5 25,25 30,15 45,15 50,10 55,20 60,15 75,15 80,3 85,27 90,15 105,15 110,12 115,18 120,15 200,15;
-						        0,15 15,15 20,22 25,8 30,15 45,15 50,20 55,5 60,15 75,15 80,25 85,3 90,15 105,15 110,6 115,24 120,15 200,15;
-						        0,15 15,15 20,5 25,25 30,15 45,15 50,10 55,20 60,15 75,15 80,3 85,27 90,15 105,15 110,12 115,18 120,15 200,15"
-						dur="2.4s" repeatCount="indefinite" />
-				</polyline>
-			</svg>
-		</div>
+		<p class="mt-8 flex items-center gap-3 text-muted-foreground" aria-label="RAU en código Morse">
+			<span class="font-mono text-lg tracking-[0.35em] text-primary/80" aria-hidden="true">.-. .- ..-</span>
+			<span class="font-mono text-[11px] uppercase tracking-[0.2em]">RAU en Morse</span>
+		</p>
 	</section>
 </div>
 
-<section class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
+<script>
+/* «En vivo ahora»: durante la actividad (desde su hora de inicio y por 90 minutos) o cuando el canal
+   de YouTube transmite. Se decide en el navegador para que la caché de la página no lo congele. */
+(function(){
+	var tarjeta=document.getElementById('home-proxima'), caja=document.getElementById('home-envivo'); if(!tarjeta||!caja) return;
+	var inicio=(+tarjeta.dataset.inicio||0)*1000, frec=tarjeta.dataset.frec||'', ahora=Date.now();
+	function mostrar(tarjetaTambien){ caja.classList.remove('hidden'); caja.classList.add('flex'); if(!tarjetaTambien) return; var e=tarjeta.querySelector('.home-prox-eti'); if(e){ e.textContent='🔴 En el aire ahora'; e.classList.remove('text-primary'); e.classList.add('text-rose-400'); } tarjeta.classList.add('border-rose-500/50'); }
+	if(inicio && ahora>=inicio && ahora<inicio+90*60000){
+		mostrar(true);
+		if(frec){ var rx=document.getElementById('home-envivo-rx'); rx.textContent='📻 Sintoniza '+frec; rx.classList.remove('hidden'); rx.classList.add('inline-flex'); }
+	}
+	fetch('<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>?action=rau_yt_live').then(function(r){ return r.json(); }).then(function(j){
+		if(!j||!j.success||!j.data||!j.data.live) return;
+		var yt=document.getElementById('home-envivo-yt'); if(j.data.url) yt.href=j.data.url; yt.classList.remove('hidden'); yt.classList.add('inline-flex');
+		document.getElementById('home-envivo-txt').textContent='Transmitiendo en vivo ahora';
+		mostrar();
+	}).catch(function(){});
+})();
+</script>
+
+<?php
+$quienes = trim( (string) get_theme_mod( 'rau_home_quienes', '' ) ) ?: 'RAU, Radioaficionados Unidos, es una asociación de radioaficionados de Colombia. Mantenemos una red de repetidoras, mallas semanales abiertas a cualquier colega con licencia y una red de apoyo para emergencias. Aquí aprendes, sales al aire y ayudas cuando hace falta.';
+$fotos = array();
+for ( $i = 1; $i <= 3; $i++ ) { $f = (int) get_theme_mod( 'rau_home_foto_' . $i ); if ( $f && wp_attachment_is_image( $f ) ) $fotos[] = $f; }
+?>
+<section id="que-es-rau" class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12 scroll-mt-20">
+	<div class="grid gap-8 lg:grid-cols-2 lg:gap-12">
+		<div>
+			<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Quiénes somos</p>
+			<h2 class="font-display text-3xl font-bold sm:text-4xl">Qué es RAU</h2>
+			<p class="mt-4 max-w-xl text-muted-foreground"><?php echo nl2br( esc_html( $quienes ) ); ?></p>
+			<dl class="mt-6 grid max-w-xl grid-cols-3 gap-3">
+				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Repetidoras</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['repetidoras']; ?></dd></div>
+				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Mallas por semana</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['mallas']; ?></dd></div>
+				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Colegas reportados en 30 días</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['colegas']; ?></dd></div>
+			</dl>
+		</div>
+		<div class="rounded-2xl border border-primary/30 bg-card p-6 sm:p-8">
+			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">¿Eres nuevo?</p>
+			<h3 class="font-display text-2xl font-bold">Empieza aquí</h3>
+			<ol class="mt-5 space-y-5">
+				<li class="flex gap-4">
+					<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 font-mono font-bold text-primary ring-1 ring-primary/30">1</span>
+					<div><p class="font-semibold">Saca tu licencia</p><p class="text-sm text-muted-foreground"><a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary hover:underline">El trámite paso a paso</a> y el <a href="<?php echo esc_url( home_url( '/herramientas/examen/' ) ); ?>" class="text-primary hover:underline">simulador del examen</a>.</p></div>
+				</li>
+				<li class="flex gap-4">
+					<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 font-mono font-bold text-primary ring-1 ring-primary/30">2</span>
+					<div><p class="font-semibold">Programa tu radio</p><p class="text-sm text-muted-foreground">Frecuencia, desplazamiento y tono de <a href="<?php echo esc_url( $url_repetidoras ); ?>" class="text-primary hover:underline">cada repetidora</a>.</p></div>
+				</li>
+				<li class="flex gap-4">
+					<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 font-mono font-bold text-primary ring-1 ring-primary/30">3</span>
+					<div><p class="font-semibold">Sal al aire</p><p class="text-sm text-muted-foreground"><?php if ( $proximo ) : ?>Entra a <a href="<?php echo esc_url( get_permalink( $proximo ) ); ?>" class="text-primary hover:underline"><?php echo esc_html( get_the_title( $proximo ) ); ?></a> y <?php else : ?>Entra a una malla y <?php endif; ?><a href="<?php echo esc_url( $url_checkin ); ?>" class="text-primary hover:underline">repórtate en el check-in</a>.</p></div>
+				</li>
+			</ol>
+		</div>
+	</div>
+	<?php if ( $fotos ) : ?>
+	<div class="mt-8 grid gap-3 <?php echo count( $fotos ) > 1 ? 'sm:grid-cols-' . count( $fotos ) : ''; ?>">
+		<?php foreach ( $fotos as $f ) : ?>
+		<figure class="overflow-hidden rounded-xl border border-border/70 bg-card">
+			<?php echo wp_get_attachment_image( $f, 'large', false, array( 'class' => 'aspect-[4/3] h-full w-full object-cover', 'loading' => 'lazy', 'decoding' => 'async', 'sizes' => '(min-width: 640px) 33vw, 100vw' ) ); ?>
+			<?php $cap = wp_get_attachment_caption( $f ); if ( $cap ) : ?><figcaption class="px-3 py-2 text-xs text-muted-foreground"><?php echo esc_html( $cap ); ?></figcaption><?php endif; ?>
+		</figure>
+		<?php endforeach; ?>
+	</div>
+	<?php endif; ?>
+</section>
+
+<section id="en-el-aire" class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
+	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">En el aire ahora</p>
 	<div class="grid gap-4 lg:grid-cols-2">
 		<!-- Gauge de propagación solar — medidor tipo reloj -->
 		<div class="rounded-2xl border border-border/70 bg-card">
@@ -187,6 +258,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 						<!-- Etiqueta de estado bajo el gauge -->
 						<p id="gauge-estado" class="mt-1 text-center font-display text-lg font-bold text-muted-foreground">Cargando…</p>
 						<p id="gauge-desc"   class="mt-0.5 text-center text-xs text-muted-foreground">—</p>
+						<ul id="gauge-bandas" class="mt-3 flex flex-wrap justify-center gap-1.5" aria-label="Estado de las bandas"></ul>
 					</div>
 
 					<!-- Métricas SFI y A -->
@@ -257,12 +329,10 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 
 				<p class="mb-4 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
 					<span class="uppercase tracking-wider text-muted-foreground">Decodifica:</span>
-					<span class="rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-primary">FT8/FT4</span>
-					<span class="rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-primary">SSTV</span>
-					<span class="rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-primary">WSPR</span>
+					<?php foreach ( array( 'FT8/FT4', 'CW', 'JS8', 'RTTY', 'PSK31', 'SSTV' ) as $modo_dec ) : ?><span class="rounded-full border border-border/60 bg-background/50 px-2 py-0.5 text-primary"><?php echo esc_html( $modo_dec ); ?></span><?php endforeach; ?>
 				</p>
 
-				<a href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>"
+				<a id="sdr-abrir" href="<?php echo esc_url( home_url( '/receptor/' ) ); ?>"
 					class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
 					Abrir el receptor
 				</a>
@@ -270,13 +340,16 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 				<script>
 				(function(){
 					var AJAX='<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>';
-					var badge=document.getElementById('sdr-status-badge'), users=document.getElementById('sdr-users');
+					var badge=document.getElementById('sdr-status-badge'), users=document.getElementById('sdr-users'), abrir=document.getElementById('sdr-abrir');
+					/* Si está lleno, el botón lo dice en vez de prometer un receptor que no va a abrir (19.61.0) */
+					var lleno=false, mejorHora=null;
+					function boton(){ if(!lleno) return; abrir.textContent='Lleno ahora'+(mejorHora!=null?' · suele haber cupo hacia las '+mejorHora+' h':' · inténtalo en un rato'); abrir.classList.remove('bg-primary','text-primary-foreground','hover:bg-primary/90'); abrir.classList.add('border','border-amber-500/50','bg-amber-500/10','text-amber-300'); }
 					function pinta(color, texto){ badge.innerHTML='<span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block;"></span><span style="font-family:monospace;font-size:0.75rem;color:'+color+';">'+texto+'</span>'; }
 					fetch(AJAX+'?action=rau_sdr_status', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
 						if(!j.success){ pinta('#f43f5e','Fuera de línea'); users.textContent='—'; return; }
 						var d=j.data;
 						users.textContent=d.libres==null?'—':(d.libres+' de '+d.max);
-						d.libres===0 ? pinta('#f59e0b','Muy ocupado') : pinta('#22c55e','Canal libre');
+						if(d.libres===0){ pinta('#f59e0b','Lleno'); lleno=true; boton(); } else pinta('#22c55e','Canal libre');
 					}).catch(function(e){ rauErr(e); pinta('#f59e0b','Sin datos'); users.textContent='—'; });
 					fetch(AJAX+'?action=rau_sdr_historial', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
 						if(!j.success) return;
@@ -288,7 +361,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 						var nota=document.getElementById('sdr-horas-nota');
 						if(j.data.muestras<36){ nota.textContent='Recolectando datos ('+j.data.muestras+' mediciones).'; return; }
 						var mejor=hs.filter(function(h){ return h.libres!=null; }).sort(function(a,b){ return b.libres-a.libres; })[0];
-						nota.textContent=mejor ? 'Más fácil conseguir canal hacia las '+mejor.hora+' h.' : '';
+						nota.textContent=mejor ? 'Más fácil conseguir canal hacia las '+mejor.hora+' h.' : ''; if(mejor){ mejorHora=mejor.hora; boton(); }
 					}).catch(function(e){ rauErr(e); });
 				})();
 				</script>
@@ -350,20 +423,31 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 					kval.setAttribute('fill', k<=3 ? cGreen : k===4 ? cAmber : cRed);
 				}
 
-				/* Estado */
+				/* Estado (19.61.0): el índice K solo describe el campo magnético. Antes decía «Excelente ·
+				   Condiciones óptimas» con 10 m cerrada; ahora la etiqueta habla del campo y las bandas
+				   abiertas y cerradas se listan aparte (pintarBandas). */
 				var estado = document.getElementById('gauge-estado');
 				var desc   = document.getElementById('gauge-desc');
 				if(estado && desc){
-					if(k<=1 && sfi>=100){ estado.textContent='Excelente'; estado.style.color=cGreen; desc.textContent='Condiciones óptimas · SFI='+sfi; }
-					else if(k<=3)       { estado.textContent='Buena';      estado.style.color=isLight?'#0e7490':'hsl(190 95% 55%)'; desc.textContent='Propagación normal · SFI='+sfi; }
-					else if(k===4)      { estado.textContent='Perturbada'; estado.style.color=cAmber; desc.textContent='HF degradado · Tormenta posible'; }
-					else                { estado.textContent='Tormenta';   estado.style.color=cRed;   desc.textContent='HF muy degradado · K='+k; }
+					if(k<=2)       { estado.textContent='Campo tranquilo'; estado.style.color=cGreen; desc.textContent='Bueno para HF · SFI '+sfi; }
+					else if(k===3) { estado.textContent='Campo inestable'; estado.style.color=isLight?'#0e7490':'hsl(190 95% 55%)'; desc.textContent='HF normal, algo de ruido · SFI '+sfi; }
+					else if(k===4) { estado.textContent='Perturbado';      estado.style.color=cAmber; desc.textContent='HF degradado · tormenta posible'; }
+					else           { estado.textContent='Tormenta';        estado.style.color=cRed;   desc.textContent='HF muy degradado · K '+k; }
 				}
 
 				/* Métricas */
 				var sfiEl = document.getElementById('hp-sfi'); if(sfiEl) sfiEl.textContent = sfi||'—';
 				var aEl   = document.getElementById('hp-a');   if(aEl)   aEl.textContent   = aindex||'—';
 			}
+
+			/* Bandas abiertas y cerradas según HamQSL, de día o de noche según la hora de Colombia */
+			function pintarBandas(bandas){
+				var ul=document.getElementById('gauge-bandas'); if(!ul || !Array.isArray(bandas)) return;
+				var h=new Date().toLocaleString('en-US',{timeZone:'America/Bogota',hour:'numeric',hour12:false})|0, dia=h>=6 && h<18;
+				var TXT={Good:['abierta','border-emerald-500/40 bg-emerald-500/10 text-emerald-400'],Fair:['regular','border-amber-500/40 bg-amber-500/10 text-amber-400'],Poor:['cerrada','border-rose-500/40 bg-rose-500/10 text-rose-400']};
+				ul.innerHTML=bandas.map(function(b){ var e=TXT[dia?b.day:b.night]; if(!e) return '';
+					return '<li class="rounded-full border px-2.5 py-1 font-mono text-[11px] '+e[1]+'">'+String(b.name).replace('m-','–')+' '+e[0]+'</li>'; }).join('');
+							}
 
 			fetch('<?php echo esc_js( admin_url('admin-ajax.php') ); ?>?action=rau_solar',{cache:'no-store'})
 			.then(function(r){return r.json();})
@@ -375,7 +459,7 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 				// buenas a partir de un dato que nunca llegó. Sin lectura no hay veredicto.
 				var k=parseInt(d.kindex,10), sfi=parseInt(d.sfi,10);
 				if(isNaN(k)||isNaN(sfi)) throw new Error('sin lectura solar');
-				updateGauge(k, sfi, d.aindex);
+				updateGauge(k, sfi, d.aindex); pintarBandas(d.bands);
 			})
 			.catch(function(e){ rauErr(e);
 				var e=document.getElementById('gauge-estado'); if(e) e.textContent='Sin datos';
@@ -408,368 +492,180 @@ $como_asociarse_id = rau_content_by_section( 'como_asociarse' );
 	</div>
 </section>
 
-<div class="mx-auto max-w-[96rem] px-4 sm:px-6">
-	<div id="home-concurso-widget" class="hidden mb-8 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-5 py-3">
-		<p class="font-mono text-sm"><span class="text-muted-foreground">Próximo concurso:</span> <strong id="home-concurso-nombre" class="text-foreground">—</strong></p>
-		<p class="font-mono text-sm font-bold text-primary" id="home-concurso-dias">—</p>
-	</div>
-</div>
 
+<?php
+// Próximas actividades: los eventos y los dos concursos que vienen, por fecha. Antes el concurso iba
+// en una franja suelta y, con un solo evento publicado, la sección se veía casi vacía.
+$actividades = array();
+foreach ( $events->posts as $ev ) {
+	$st = get_post_meta( $ev->ID, 'start', true );
+	$actividades[] = array( 'ev' => $ev, 'ts' => $st ? strtotime( $st ) : 0 );
+}
+foreach ( rau_portada_concursos( 2 ) as $c ) $actividades[] = array( 'concurso' => $c['nombre'], 'ts' => $c['ts'] );
+usort( $actividades, function( $a, $b ) { return $a['ts'] - $b['ts']; } );
+$actividades = array_slice( $actividades, 0, 6 );
+$ics       = home_url( '/calendario.ics' );
+$ics_gcal  = 'https://calendar.google.com/calendar/r?cid=' . rawurlencode( preg_replace( '#^https?://#', 'webcal://', $ics ) );
+?>
 <section id="eventos" class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
-	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Calendario · Mallas · Concursos · Diplomas</p>
-	<div class="mb-2 flex flex-wrap items-end justify-between gap-4"><h2 class="max-w-2xl font-display text-3xl font-bold sm:text-4xl">Próximas actividades</h2><a href="<?php echo esc_url( get_post_type_archive_link( 'evento' ) ); ?>" class="text-sm font-medium text-primary hover:underline">Ver todas →</a></div>
-	<p class="mb-8 text-sm text-muted-foreground">
-		<a href="<?php echo esc_url( home_url( '/calendario.ics' ) ); ?>" class="inline-flex items-center gap-1 font-medium text-primary hover:underline">
-			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3.5 10h17"></path></svg>
-			Suscribirse a todos los eventos en Google Calendar
-		</a> — pega ese enlace en Google Calendar → Otros calendarios → Desde URL.
-	</p>
+	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Calendario · Mallas · Concursos</p>
+	<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+		<h2 class="max-w-2xl font-display text-3xl font-bold sm:text-4xl">Próximas actividades</h2>
+		<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+			<a href="<?php echo esc_url( $ics_gcal ); ?>" target="_blank" rel="noopener" class="inline-flex h-10 items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-4 text-sm font-medium text-primary hover:bg-primary/20">
+				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3.5 10h17M12 13v5M9.5 15.5h5"></path></svg>
+				Agregar a mi calendario
+			</a>
+			<a href="<?php echo esc_url( preg_replace( '#^https?://#', 'webcal://', $ics ), array( 'webcal', 'https', 'http' ) ); ?>" class="text-xs text-muted-foreground hover:text-primary hover:underline" title="Para el calendario del iPhone, Mac u Outlook">iPhone / Outlook</a>
+			<a href="<?php echo esc_url( get_post_type_archive_link( 'evento' ) ); ?>" class="text-sm font-medium text-primary hover:underline">Ver todas →</a>
+		</div>
+	</div>
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-		<?php if ( ! $events->have_posts() ) :
-			// Con el filtro de fecha, que no haya resultados ya no significa que no haya eventos:
-			// puede que todos hayan pasado. Se distingue para no mandar a publicar lo que ya existe.
-			$hay_eventos = (int) wp_count_posts( 'evento' )->publish;
-		?>
-			<?php if ( $hay_eventos ) : ?>
-				<p class="text-sm text-muted-foreground">No hay actividades programadas por ahora. Las anteriores siguen disponibles en <a href="<?php echo esc_url( get_post_type_archive_link( 'evento' ) ); ?>" class="text-primary hover:underline">el calendario completo</a>.</p>
-			<?php else : ?>
-				<p class="text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Aún no hay eventos publicados. Agrégalos en el escritorio → Eventos.' : 'No hay actividades programadas por ahora. Síguenos en el grupo de WhatsApp para enterarte de la próxima.'; ?></p>
-			<?php endif; ?>
-		<?php else : $evt_idx = 0; while ( $events->have_posts() ) : $events->the_post(); $eid = get_the_ID();
-			$start = get_post_meta( $eid, 'start', true );
-			$ts = $start ? strtotime( $start ) : false;
-		?>
-		<div class="rau-animar flex gap-4 rounded-xl border border-border/70 bg-card p-5" style="transition-delay:<?php echo esc_attr( $evt_idx++ * 80 ); ?>ms">
+		<?php if ( ! $actividades ) : ?>
+			<p class="text-sm text-muted-foreground">No hay actividades programadas por ahora. Síguenos en el grupo de WhatsApp para enterarte de la próxima.</p>
+		<?php endif; ?>
+		<?php foreach ( $actividades as $idx => $act ) : $ts = $act['ts']; ?>
+		<?php if ( isset( $act['concurso'] ) ) : ?>
+		<a href="<?php echo esc_url( home_url( '/herramientas/concursos/' ) ); ?>" class="rau-animar flex gap-4 rounded-xl border border-border/70 bg-card p-5 transition-colors hover:border-primary/50" style="transition-delay:<?php echo esc_attr( $idx * 80 ); ?>ms">
+			<div class="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20">
+				<span class="font-display text-2xl font-bold leading-none"><?php echo esc_html( gmdate( 'j', $ts ) ); ?></span>
+				<span class="font-mono text-[10px] uppercase"><?php echo esc_html( date_i18n( 'M', $ts ) ); ?></span>
+			</div>
+			<div class="min-w-0 flex-1">
+				<span class="font-mono text-[10px] uppercase tracking-wider text-amber-400">Concurso · fin de semana</span>
+				<h3 class="font-semibold"><?php echo esc_html( $act['concurso'] ); ?></h3>
+				<p class="home-faltan font-mono text-xs text-muted-foreground" data-ts="<?php echo esc_attr( $ts ); ?>"></p>
+			</div>
+		</a>
+		<?php else : $eid = $act['ev']->ID; $start = get_post_meta( $eid, 'start', true ); ?>
+		<div class="rau-animar flex gap-4 rounded-xl border border-border/70 bg-card p-5" style="transition-delay:<?php echo esc_attr( $idx * 80 ); ?>ms">
 			<div class="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
 				<span class="font-display text-2xl font-bold leading-none"><?php echo $ts ? esc_html( date_i18n( 'j', $ts ) ) : '—'; ?></span>
 				<span class="font-mono text-[10px] uppercase"><?php echo $ts ? esc_html( date_i18n( 'M', $ts ) ) : ''; ?></span>
 			</div>
 			<div class="min-w-0 flex-1">
-				<span class="font-mono text-[10px] uppercase tracking-wider text-accent"><?php echo esc_html( get_post_meta( $eid, 'type', true ) ); ?></span>
-				<h3 class="truncate font-semibold"><?php the_title(); ?></h3>
+				<span class="font-mono text-[10px] uppercase tracking-wider text-primary"><?php echo esc_html( get_post_meta( $eid, 'type', true ) ); ?><?php echo 'semanal' === get_post_meta( $eid, 'recurrencia', true ) ? ' · cada semana' : ''; ?></span>
+				<h3 class="font-semibold"><a href="<?php echo esc_url( get_permalink( $eid ) ); ?>" class="hover:text-primary"><?php echo esc_html( get_the_title( $eid ) ); ?></a></h3>
 				<?php $freq = get_post_meta( $eid, 'frequency', true ); if ( $freq ) : ?><p class="font-mono text-xs text-muted-foreground"><?php echo esc_html( $freq ); ?></p><?php endif; ?>
-				<?php $loc = get_post_meta( $eid, 'location', true ); if ( $loc ) : ?><p class="flex items-center gap-1 text-xs text-muted-foreground"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1116 0z"></path></svg><?php echo esc_html( $loc ); ?></p><?php endif; ?>
+				<?php $loc = get_post_meta( $eid, 'location', true ); if ( $loc ) : ?><p class="flex items-center gap-1 text-xs text-muted-foreground"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1116 0z"></path></svg><?php echo esc_html( $loc ); ?></p><?php endif; ?>
 				<?php if ( $start ) : ?>
-					<a href="<?php echo esc_url( rau_google_calendar_link( $eid ) ); ?>" target="_blank" rel="noreferrer" class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">+ Google Calendar</a>
+					<a href="<?php echo esc_url( rau_google_calendar_link( $eid ) ); ?>" target="_blank" rel="noreferrer" class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">+ Agregar este</a>
 				<?php endif; ?>
 			</div>
 		</div>
-		<?php endwhile; wp_reset_postdata(); endif; ?>
+		<?php endif; ?>
+		<?php endforeach; ?>
 	</div>
+	<script>
+	(function(){ document.querySelectorAll('.home-faltan').forEach(function(p){ var d=Math.ceil((p.dataset.ts*1000-Date.now())/86400000); p.textContent=d<=0?'¡Es este fin de semana!':d===1?'Empieza mañana':'Faltan '+d+' días'; }); })();
+	</script>
 </section>
 
+<?php if ( $novedades->have_posts() ) : ?>
+<section id="novedades" class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
+	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Del club</p>
+	<div class="mb-6 flex flex-wrap items-end justify-between gap-4"><h2 class="font-display text-3xl font-bold sm:text-4xl">Novedades</h2><?php $blog = get_option( 'page_for_posts' ); if ( $blog ) : ?><a href="<?php echo esc_url( get_permalink( $blog ) ); ?>" class="text-sm font-medium text-primary hover:underline">Ver todas →</a><?php endif; ?></div>
+	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+		<?php while ( $novedades->have_posts() ) : $novedades->the_post(); ?>
+		<a href="<?php the_permalink(); ?>" class="group overflow-hidden rounded-xl border border-border/70 bg-card transition-colors hover:border-primary/50">
+			<?php if ( has_post_thumbnail() ) : ?><?php the_post_thumbnail( 'medium_large', array( 'class' => 'aspect-[16/9] w-full object-cover', 'loading' => 'lazy', 'decoding' => 'async', 'alt' => '' ) ); ?><?php endif; ?>
+			<div class="p-5">
+				<p class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground"><?php echo esc_html( get_the_date() ); ?></p>
+				<h3 class="mt-1 font-semibold group-hover:text-primary"><?php the_title(); ?></h3>
+				<p class="mt-2 line-clamp-3 text-sm text-muted-foreground"><?php echo esc_html( wp_trim_words( get_the_excerpt(), 24 ) ); ?></p>
+			</div>
+		</a>
+		<?php endwhile; wp_reset_postdata(); ?>
+	</div>
+</section>
+<?php endif; ?>
 
 <div style="background: hsl(var(--card) / 0.35);">
-<section id="comunidad" class="mx-auto max-w-[96rem] px-4 sm:px-6 pt-12 pb-6">
-	<?php $codigo_etica_id = rau_content_by_section( 'codigo_etica' ); if ( $codigo_etica_id ) : ?>
-	<a href="<?php echo esc_url( get_permalink( $codigo_etica_id ) ); ?>" class="group flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/70 bg-card p-6 transition-colors hover:border-primary/50">
-		<div>
-			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Para quienes llegan a RAU</p>
-			<h2 class="font-display text-2xl font-bold group-hover:text-primary sm:text-3xl"><?php echo esc_html( get_the_title( $codigo_etica_id ) ); ?></h2>
-			<?php $ce_summary = get_post_meta( $codigo_etica_id, 'summary', true ); if ( $ce_summary ) : ?><p class="mt-2 max-w-2xl text-muted-foreground"><?php echo esc_html( $ce_summary ); ?></p><?php endif; ?>
+<section id="comunidad" class="mx-auto max-w-[96rem] px-4 sm:px-6 py-12">
+	<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Comunidad</p>
+	<h2 class="mb-6 font-display text-3xl font-bold sm:text-4xl">La gente de RAU</h2>
+
+	<?php // Quiénes se reportaron hoy: se pide al cargar (la caché de la página lo dejaría viejo) ?>
+	<div id="home-hoy" class="mb-6 hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 bg-card px-5 py-4">
+		<p class="text-sm"><strong id="home-hoy-n" class="text-primary"></strong></p>
+		<ul id="home-hoy-lista" class="flex flex-wrap gap-1.5"></ul>
+		<a href="<?php echo esc_url( $url_checkin ); ?>" class="ml-auto text-sm font-medium text-primary hover:underline">Repórtate tú también →</a>
+	</div>
+	<script>
+	(function(){
+		var caja=document.getElementById('home-hoy'); if(!caja) return;
+		fetch('<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>?action=rau_checkin_hoy').then(function(r){ return r.json(); }).then(function(j){
+			if(!j||!j.success) return; var d=j.data;
+			function esc(t){ return String(t||'').replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+			document.getElementById('home-hoy-n').textContent = d.total ? (d.total===1?'Hoy se reportó 1 colega:':'Hoy se reportaron '+d.total+' colegas:') : 'Nadie se ha reportado hoy todavía. ¿Eres el primero?';
+			document.getElementById('home-hoy-lista').innerHTML=d.lista.map(function(x){ return '<li class="rounded-full border border-border/60 bg-background/60 px-2.5 py-1 font-mono text-xs"'+(x.c?' title="'+esc(x.c)+'"':'')+'>'+esc(x.i)+'</li>'; }).join('')+(d.total>d.lista.length?'<li class="px-1 py-1 font-mono text-xs text-muted-foreground">+'+(d.total-d.lista.length)+'</li>':'');
+			caja.classList.remove('hidden'); caja.classList.add('flex');
+		}).catch(function(){});
+	})();
+	</script>
+
+	<?php // Con una sola historia la sección parecía abandonada; vuelve a aparecer con dos o más.
+	if ( $historias->post_count >= 2 ) : ?>
+	<div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+		<?php $his_idx = 0; while ( $historias->have_posts() ) : $historias->the_post(); $autor = get_post_meta( get_the_ID(), 'autor', true ) ?: get_the_title(); ?>
+		<div class="rau-animar rounded-xl border border-border/70 bg-card p-5" style="transition-delay:<?php echo esc_attr( $his_idx++ * 80 ); ?>ms">
+			<p class="text-sm italic text-muted-foreground">&ldquo;<?php echo wp_kses_post( get_the_content() ); ?>&rdquo;</p>
+			<div class="mt-4 flex items-center gap-3 border-t border-border/50 pt-3">
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-bold text-primary ring-1 ring-primary/20"><?php echo esc_html( rau_initials( preg_replace( '/,.*/', '', $autor ) ) ); ?></div>
+				<div><p class="text-sm font-semibold"><?php echo esc_html( $autor ); ?></p><p class="text-xs text-muted-foreground"><?php echo esc_html( get_post_meta( get_the_ID(), 'rol', true ) ); ?></p></div>
+			</div>
 		</div>
-		<span class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium shadow-sm transition-colors group-hover:bg-accent group-hover:text-accent-foreground">Leer <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span>
-	</a>
+		<?php endwhile; wp_reset_postdata(); ?>
+	</div>
 	<?php endif; ?>
 
-	<?php // Con una sola historia la sección parecía abandonada; el Libro de Visitas, justo debajo, ya
-	// muestra lo que dice la comunidad. Vuelve a aparecer en cuanto haya dos o más.
-	if ( $historias->post_count >= 2 || current_user_can( 'edit_posts' ) ) : ?>
-	<div class="mt-12">
-		<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Historias de la Comunidad</p>
-		<div class="mb-6 flex flex-wrap items-end justify-between gap-4"><h3 class="font-display text-2xl font-bold">Lo que dicen quienes ya son parte de RAU</h3><a href="<?php echo esc_url( get_post_type_archive_link( 'historia' ) ); ?>" class="text-sm font-medium text-primary hover:underline">Ver todas →</a></div>
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<?php if ( $historias->have_posts() ) : $his_idx = 0; while ( $historias->have_posts() ) : $historias->the_post();
-				$autor = get_post_meta( get_the_ID(), 'autor', true ) ?: get_the_title();
-			?>
-			<div class="rau-animar rounded-xl border border-border/70 bg-card p-5" style="transition-delay:<?php echo esc_attr( $his_idx++ * 80 ); ?>ms">
-				<p class="text-sm italic text-muted-foreground">&ldquo;<?php echo wp_kses_post( get_the_content() ); ?>&rdquo;</p>
-				<div class="mt-4 flex items-center gap-3 border-t border-border/50 pt-3">
-					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-bold text-primary ring-1 ring-primary/20"><?php echo esc_html( rau_initials( preg_replace('/,.*/', '', $autor) ) ); ?></div>
-					<div><p class="text-sm font-semibold"><?php echo esc_html( $autor ); ?></p><p class="text-xs text-muted-foreground"><?php echo esc_html( get_post_meta( get_the_ID(), 'rol', true ) ); ?></p></div>
+	<div class="grid gap-6 lg:grid-cols-2">
+		<div class="rounded-2xl border border-border/70 bg-card p-6 sm:p-8">
+			<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+				<div>
+					<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Deja tu huella</p>
+					<h3 class="font-display text-2xl font-bold">Libro de Visitas</h3>
+					<p class="mt-1 text-sm text-muted-foreground"><?php echo esc_html( $libro_total ); ?> mensaje<?php echo 1 === $libro_total ? '' : 's'; ?> de la comunidad.</p>
 				</div>
+				<a href="<?php echo esc_url( home_url( '/libro-de-visitas/' ) ); ?>" class="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-primary px-5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">✍️ Firmar el libro</a>
 			</div>
-			<?php endwhile; wp_reset_postdata(); else : ?>
-				<p class="text-sm text-muted-foreground"><?php echo current_user_can( 'edit_posts' ) ? 'Aún no hay historias publicadas. Agrégalas en el escritorio → Historias de la Comunidad.' : 'Pronto compartiremos aquí historias de la comunidad.'; ?></p>
+			<?php if ( $libro_preview->have_posts() ) : ?>
+			<div class="space-y-3">
+				<?php while ( $libro_preview->have_posts() ) : $libro_preview->the_post();
+					$lv_indicativo = get_post_meta( get_the_ID(), 'indicativo', true );
+					$lv_nombre     = get_post_meta( get_the_ID(), 'nombre', true ) ?: get_the_title();
+				?>
+				<div class="rounded-xl border border-border/70 bg-background p-4">
+					<p class="text-sm italic text-muted-foreground">&ldquo;<?php echo esc_html( wp_trim_words( get_the_content(), 22 ) ); ?>&rdquo;</p>
+					<div class="mt-3 flex items-center gap-3">
+						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[11px] font-bold text-primary ring-1 ring-primary/20"><?php echo esc_html( rau_initials( $lv_indicativo ?: $lv_nombre ) ); ?></div>
+						<p class="text-sm"><span class="font-semibold"><?php echo esc_html( $lv_nombre ); ?></span><?php if ( $lv_indicativo ) : ?> <span class="font-mono text-xs text-primary"><?php echo esc_html( $lv_indicativo ); ?></span><?php endif; ?> <span class="text-xs text-muted-foreground">· hace <?php echo esc_html( human_time_diff( get_post_time( 'U', true ), time() ) ); ?></span></p>
+					</div>
+				</div>
+				<?php endwhile; wp_reset_postdata(); ?>
+			</div>
+			<?php else : ?>
+				<p class="text-sm text-muted-foreground">Todavía nadie ha firmado. ¡Sé el primero!</p>
 			<?php endif; ?>
 		</div>
-	</div>
-	<?php endif; ?>
 
-	<div class="mt-12 rounded-2xl border border-primary/30 bg-card p-6 sm:p-8">
-		<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-			<div>
-				<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Deja tu huella</p>
-				<h3 class="font-display text-2xl font-bold">Libro de Visitas</h3>
-				<p class="mt-1 text-sm text-muted-foreground"><?php echo esc_html( $libro_total ); ?> mensaje<?php echo $libro_total === 1 ? '' : 's'; ?> de la comunidad — permanentes, para siempre.</p>
-			</div>
-			<a href="<?php echo esc_url( home_url( '/libro-de-visitas/' ) ); ?>" class="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-primary px-5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">
-				✍️ Firmar el libro
+		<div class="overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-6 sm:p-8">
+			<p class="mb-1 font-mono text-xs uppercase tracking-[0.25em] text-primary">Cómo asociarse</p>
+			<h3 class="font-display text-2xl font-bold">Únete a RAU</h3>
+			<?php if ( $como_asociarse_id ) : ?><div class="mt-3 text-sm text-muted-foreground"><?php echo apply_filters( 'the_content', get_post_field( 'post_content', $como_asociarse_id ) ); ?></div><?php endif; ?>
+			<p class="mt-4 text-sm font-medium">¿Tienes licencia activa, la tienes vencida o quieres sacarla por primera vez?</p>
+			<ul class="mt-3 space-y-2 text-sm">
+				<li><a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary hover:underline">🪪 Cómo sacar la licencia, paso a paso</a></li>
+				<li><a href="<?php echo esc_url( home_url( '/herramientas/examen/' ) ); ?>" class="text-primary hover:underline">📝 Practica con el simulador de examen</a></li>
+				<li><a href="<?php echo esc_url( home_url( '/herramientas/licencia/' ) ); ?>" class="text-primary hover:underline">📅 Recordatorio de vencimiento de la licencia</a></li>
+				<?php if ( $codigo_etica_id ) : ?><li><a href="<?php echo esc_url( get_permalink( $codigo_etica_id ) ); ?>" class="text-primary hover:underline">📜 <?php echo esc_html( get_the_title( $codigo_etica_id ) ); ?></a></li><?php endif; ?>
+			</ul>
+			<a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" class="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-bold text-primary-foreground shadow transition-colors hover:bg-primary/90">
+				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"></path></svg> Escríbenos por WhatsApp
 			</a>
-		</div>
-
-		<?php if ( $libro_preview->have_posts() ) : ?>
-		<div class="grid gap-4 sm:grid-cols-3">
-			<?php while ( $libro_preview->have_posts() ) : $libro_preview->the_post();
-				$m_lv          = get_post_meta( get_the_ID() );
-				$lv_indicativo = $m_lv['indicativo'][0] ?? '';
-				$lv_nombre     = $m_lv['nombre'][0] ?? get_the_title();
-			?>
-			<div class="rounded-xl border border-border/70 bg-background p-5">
-				<p class="text-sm italic text-muted-foreground">&ldquo;<?php echo esc_html( wp_trim_words( get_the_content(), 18 ) ); ?>&rdquo;</p>
-				<div class="mt-4 flex items-center gap-3 border-t border-border/50 pt-3">
-					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-bold text-primary ring-1 ring-primary/20"><?php echo esc_html( rau_initials( $lv_indicativo ?: $lv_nombre ) ); ?></div>
-					<div><p class="text-sm font-semibold"><?php echo esc_html( $lv_nombre ); ?></p><?php if ( $lv_indicativo ) : ?><p class="font-mono text-xs text-primary"><?php echo esc_html( $lv_indicativo ); ?></p><?php endif; ?></div>
-				</div>
-			</div>
-			<?php endwhile; wp_reset_postdata(); ?>
-		</div>
-		<?php else : ?>
-			<p class="text-sm text-muted-foreground">Todavía nadie ha firmado. ¡Sé el primero!</p>
-		<?php endif; ?>
-	</div>
-
-	<div class="mt-12 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 sm:p-12">
-		<div class="max-w-2xl">
-			<p class="mb-3 font-mono text-xs uppercase tracking-[0.25em] text-primary">Cómo Asociarse</p>
-			<h3 class="font-display text-3xl font-bold"><?php echo $como_asociarse_id ? esc_html( get_the_title( $como_asociarse_id ) ) : 'Únete a la RAU'; ?></h3>
-			<?php if ( $como_asociarse_id ) : ?><div class="mt-3 text-muted-foreground"><?php echo apply_filters( 'the_content', get_post_field( 'post_content', $como_asociarse_id ) ); ?></div><?php endif; ?>
-			<div class="mt-6">
-				<p class="mb-3 text-sm font-medium text-foreground">¿Tienes licencia activa, la tienes vencida, o quieres sacarla por primera vez?</p>
-				<div class="mb-4 flex flex-wrap gap-3 text-sm">
-					<a href="<?php echo esc_url( home_url( '/como-sacar-la-licencia/' ) ); ?>" class="text-primary hover:underline">🪪 Cómo sacar la licencia, paso a paso</a>
-					<span class="text-muted-foreground">·</span>
-					<a href="<?php echo esc_url( home_url( '/herramientas/examen/' ) ); ?>" class="text-primary hover:underline">📝 Practica con el Simulador de Examen RABCA</a>
-					<span class="text-muted-foreground">·</span>
-					<a href="<?php echo esc_url( home_url( '/herramientas/licencia/' ) ); ?>" class="text-primary hover:underline">📅 Configura el Recordatorio de Vencimiento</a>
-				</div>
-				<a href="<?php echo esc_url( rau_whatsapp_url() ); ?>" target="_blank" rel="noreferrer" class="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
-					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"></path></svg> Escríbenos por WhatsApp
-				</a>
-			</div>
 		</div>
 	</div>
 </section>
 </div>
-
-<section class="mx-auto max-w-[96rem] px-4 sm:px-6 pb-10">
-	<div class="rounded-2xl border-2 border-primary/30 bg-card p-5 sm:p-6">
-		<div class="mb-4 flex items-center justify-between">
-			<div>
-				<p class="font-mono text-[11px] uppercase tracking-[0.25em] text-primary">Solo por diversión</p>
-				<h2 class="font-display text-lg font-bold sm:text-xl">🎛 Radio RAU</h2>
-			</div>
-			<p class="hidden font-mono text-xs text-muted-foreground sm:block">Gira el dial y busca una estación…</p>
-		</div>
-
-		<div class="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
-			<div>
-				<div class="mb-3 flex items-end justify-between">
-					<div>
-						<p id="radio-freq" class="font-mono text-3xl font-bold tabular-nums text-primary sm:text-4xl">14.250</p>
-						<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">MHz</p>
-					</div>
-					<button id="radio-power" type="button" aria-pressed="false" class="inline-flex items-center gap-1.5 rounded-full border-2 border-border bg-background px-3 py-1.5 font-mono text-xs font-bold text-muted-foreground">
-						<span id="radio-power-dot" class="h-2 w-2 rounded-full bg-muted-foreground"></span> OFF
-					</button>
-				</div>
-
-				<input type="range" id="radio-dial" min="0" max="1000" value="500" class="w-full accent-primary" aria-label="Sintonizar frecuencia">
-
-				<div class="mt-3 flex items-center gap-3">
-					<span class="font-mono text-[10px] uppercase text-muted-foreground">Señal</span>
-					<div class="h-2 flex-1 overflow-hidden rounded-full bg-background">
-						<div id="radio-smeter" class="h-full w-0 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-rose-400 transition-all duration-150"></div>
-					</div>
-					<span class="font-mono text-[10px] uppercase text-muted-foreground">Volumen</span>
-					<input type="range" id="radio-vol" aria-label="Volumen del reproductor" min="0" max="100" value="40" class="w-20 accent-primary">
-				</div>
-				<p id="radio-status" class="mt-2 font-mono text-xs text-muted-foreground">Apagada — dale al botón para encenderla.</p>
-			</div>
-
-			<div class="hidden h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border/60 sm:flex">
-				<svg id="radio-icon" class="h-9 w-9 text-muted-foreground transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l3 3M20 4l-3 3"></path><circle cx="12" cy="14" r="7"></circle><path d="M12 14v-4"></path><path d="M9 21h6"></path></svg>
-			</div>
-		</div>
-	</div>
-</section>
-
-<script>
-(function(){
-	var powerBtn=document.getElementById('radio-power');
-	if(!powerBtn) return;
-
-	var powerDot=document.getElementById('radio-power-dot');
-	var dial=document.getElementById('radio-dial');
-	var volSlider=document.getElementById('radio-vol');
-	var freqEl=document.getElementById('radio-freq');
-	var smeter=document.getElementById('radio-smeter');
-	var statusEl=document.getElementById('radio-status');
-	var iconEl=document.getElementById('radio-icon');
-
-	var ctx=null, noiseSource=null, noiseGain=null, filterNode=null, encendida=false;
-	var morseTimer=null, morseOsc=null, morseGain=null;
-
-	// "CQ CQ DE HK4RAU" en Morse — el huequito escondido del dial
-	var MORSE={'C':'-.-.','Q':'--.-',' ':' ','D':'-..','E':'.','H':'....','K':'-.-','4':'....-','R':'.-.','A':'.-','U':'..-'};
-	var MENSAJE='CQ CQ DE HK4RAU';
-	var FREQ_SECRETA=145; // punto exacto del dial (0-1000) donde aparece la señal
-
-	function freqFromDial(v){
-		// Mapea 0-1000 del slider a un rango de frecuencia HF "de mentiras" (3.5 a 29.7 MHz)
-		return (3.5 + (v/1000)*(29.7-3.5)).toFixed(3);
-	}
-
-	function crearRuidoBlanco(){
-		var bufferSize=2*ctx.sampleRate;
-		var buffer=ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-		var data=buffer.getChannelData(0);
-		for(var i=0;i<bufferSize;i++){ data[i]=Math.random()*2-1; }
-		var src=ctx.createBufferSource();
-		src.buffer=buffer;
-		src.loop=true;
-		return src;
-	}
-
-	function encender(){
-		if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
-		noiseSource=crearRuidoBlanco();
-		filterNode=ctx.createBiquadFilter();
-		filterNode.type='bandpass';
-		filterNode.frequency.value=1200;
-		noiseGain=ctx.createGain();
-		noiseGain.gain.value=(volSlider.value/100)*0.15;
-		noiseSource.connect(filterNode).connect(noiseGain).connect(ctx.destination);
-		noiseSource.start();
-		encendida=true;
-		powerBtn.setAttribute('aria-pressed','true');
-		powerBtn.innerHTML='<span class="h-2 w-2 rounded-full bg-emerald-400"></span> ON';
-		powerBtn.classList.add('border-emerald-400/50','text-emerald-400');
-		iconEl.classList.remove('text-muted-foreground');
-		iconEl.classList.add('text-primary');
-		actualizarDial();
-	}
-
-	function apagar(){
-		if(morseTimer){ clearTimeout(morseTimer); morseTimer=null; }
-		if(morseOsc){ try{morseOsc.stop();}catch(e){} morseOsc=null; }
-		if(noiseSource){ try{noiseSource.stop();}catch(e){} noiseSource=null; }
-		encendida=false;
-		powerBtn.setAttribute('aria-pressed','false');
-		powerBtn.innerHTML='<span id="radio-power-dot" class="h-2 w-2 rounded-full bg-muted-foreground"></span> OFF';
-		powerBtn.classList.remove('border-emerald-400/50','text-emerald-400');
-		iconEl.classList.add('text-muted-foreground');
-		iconEl.classList.remove('text-primary');
-		smeter.style.width='0%';
-		statusEl.textContent='Apagada — dale al botón para encenderla.';
-	}
-
-	function pitarMorse(){
-		if(!encendida) return;
-		if(morseOsc){ try{morseOsc.stop();}catch(e){} morseOsc=null; }
-		var punto=90, letras=MENSAJE.split(''), i=0;
-		function siguiente(){
-			if(!encendida) return;
-			if(i>=letras.length){ morseTimer=setTimeout(siguiente, punto*6); i=0; return; }
-			var letra=letras[i++];
-			if(letra===' '){ morseTimer=setTimeout(siguiente, punto*4); return; }
-			var codigo=MORSE[letra]||'';
-			var j=0;
-			function pip(){
-				if(j>=codigo.length){ morseTimer=setTimeout(siguiente, punto*2); return; }
-				var simbolo=codigo[j++];
-				var dur = simbolo==='-' ? punto*3 : punto;
-				morseOsc=ctx.createOscillator();
-				var g=ctx.createGain();
-				g.gain.value=(volSlider.value/100)*0.2;
-				morseOsc.frequency.value=600;
-				morseOsc.connect(g).connect(ctx.destination);
-				morseOsc.start();
-				morseOsc.stop(ctx.currentTime+dur/1000);
-				morseTimer=setTimeout(pip, dur+punto);
-			}
-			pip();
-		}
-		siguiente();
-	}
-
-	function actualizarDial(){
-		var v=parseInt(dial.value);
-		freqEl.textContent=freqFromDial(v);
-		var cercaDeSecreta=Math.abs(v-FREQ_SECRETA)<15;
-
-		if(!encendida) return;
-
-		if(cercaDeSecreta){
-			if(noiseGain) noiseGain.gain.value=(volSlider.value/100)*0.02;
-			smeter.style.width='95%';
-			statusEl.textContent='📡 ¡Señal fuerte! CQ CQ DE HK4RAU…';
-			if(!morseTimer) pitarMorse();
-		} else {
-			if(morseTimer){ clearTimeout(morseTimer); morseTimer=null; }
-			if(morseOsc){ try{morseOsc.stop();}catch(e){} morseOsc=null; }
-			if(noiseGain) noiseGain.gain.value=(volSlider.value/100)*0.15;
-			if(filterNode) filterNode.frequency.value=400+Math.random()*2000;
-			var senal=Math.round(10+Math.random()*20);
-			smeter.style.width=senal+'%';
-			statusEl.textContent='Solo estática por aquí… sigue buscando.';
-		}
-	}
-
-	powerBtn.addEventListener('click', function(){ encendida ? apagar() : encender(); });
-	dial.addEventListener('input', actualizarDial);
-	volSlider.addEventListener('input', function(){
-		if(noiseGain) noiseGain.gain.value=(volSlider.value/100)*0.15;
-	});
-})();
-</script>
-
-<script>
-(function(){
-	var widget=document.getElementById('home-concurso-widget');
-	if(!widget) return;
-
-	function finesDeSemanaCompletos(year, month){
-		var lastDay=new Date(Date.UTC(year, month+1, 0)).getUTCDate();
-		var out=[];
-		for(var d=1; d<=lastDay; d++){
-			var dt=new Date(Date.UTC(year, month, d));
-			if(dt.getUTCDay()===6 && d+1<=lastDay) out.push(dt);
-		}
-		return out;
-	}
-	function nEsimoFinDeSemana(year, month, n){
-		var ws=finesDeSemanaCompletos(year, month);
-		return n<0 ? ws[ws.length+n] : ws[n-1];
-	}
-	function proximo(month, n){
-		var ahora=new Date();
-		var candidato=nEsimoFinDeSemana(ahora.getUTCFullYear(), month, n);
-		if(!candidato || (candidato.getTime()+2*86400000) < ahora.getTime()){
-			candidato=nEsimoFinDeSemana(ahora.getUTCFullYear()+1, month, n);
-		}
-		return candidato;
-	}
-	function diasFaltantes(dt){
-		return Math.ceil((dt.getTime()-new Date().getTime())/86400000);
-	}
-
-	// Lista compartida con Herramientas → Calendario de Concursos (rau_get_concursos()
-	// en functions.php). Antes estaba escrita por duplicado en los dos sitios.
-	var CONCURSOS=<?php echo wp_json_encode( rau_get_concursos() ); ?>;
-
-	var proximos = CONCURSOS.map(function(c){
-		var dt=proximo(c.mes, c.n_semana);
-		return {nombre:c.n, fecha:dt, faltan:diasFaltantes(dt)};
-	}).sort(function(a,b){ return a.fecha-b.fecha; });
-
-	var siguiente = proximos[0];
-	if(siguiente){
-		document.getElementById('home-concurso-nombre').textContent = siguiente.nombre;
-		document.getElementById('home-concurso-dias').textContent = siguiente.faltan<=0 ? '¡Es este fin de semana!' : siguiente.faltan===1 ? 'Empieza mañana' : 'Faltan '+siguiente.faltan+' días';
-		widget.classList.remove('hidden');
-	}
-})();
-</script>
 
 <?php get_footer(); ?>

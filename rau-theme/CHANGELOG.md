@@ -264,6 +264,37 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.61.0 — Portada nueva
+
+Orden nuevo, pensado para quien llega por primera vez: portada → Qué es RAU → En el aire ahora →
+Repetidoras → Próximas actividades → Novedades → Comunidad.
+
+- **Qué es RAU** (nuevo): quiénes somos, tres cifras reales (repetidoras, mallas por semana, colegas
+  reportados en 30 días) y «¿Eres nuevo? Empieza aquí» en tres pasos. El texto y hasta tres fotos se
+  cambian en Apariencia → Personalizar → «Portada: Qué es RAU»; sin fotos, la franja no aparece.
+- **En vivo**: la tarjeta de la próxima actividad pasa a «En el aire ahora» durante la actividad (90 min
+  desde su inicio) con la frecuencia, y aparece «Ver en YouTube» cuando el canal transmite. Se decide en
+  el navegador para que la caché de la página no lo congele.
+- **Franja de emergencia**: solo con una operación real, abierta, pública, de una organización y con el
+  tablero público publicado. Un simulacro o una operación de prueba no la activan.
+- **Propagación**: la etiqueta ya no dice «Excelente · condiciones óptimas» con 10 m cerrada. Habla del
+  campo magnético (índice K) y lista cada banda abierta, regular o cerrada, de día o de noche según la
+  hora de Colombia.
+- **Receptor**: cuando está lleno, el botón dice «Lleno ahora · suele haber cupo hacia las X h». Los
+  modos que decodifica ahora incluyen CW, JS8, RTTY y PSK31.
+- **Próximas actividades**: incluye los dos concursos que vienen (la franja suelta desaparece), botón
+  «Agregar a mi calendario» (Google) y enlace para iPhone/Outlook, en vez de instrucciones.
+- **Novedades**: últimas 3 entradas del blog de los últimos 60 días; sin entradas, no aparece.
+- **Comunidad**: «Hoy se reportaron N colegas» con sus indicativos (sin hora ni ubicación), Libro de
+  Visitas y «Únete a RAU» lado a lado; el Código de Ética pasa a ser un enlace dentro de este bloque.
+- **Se quitó**: Radio RAU, la tarjeta repetida del Libro de Visitas en la portada.
+- La franja de anuncios ya no es roja (el rojo queda para la emergencia). La imagen de fondo se sirve
+  desde el tema (38–94 KB, antes 206 KB desde Pexels). Portada más baja en el celular. Burbuja del
+  chat más pequeña en el celular. «RAU en Morse» rotulado.
+- Pruebas: `tests/sitio/portada.php` (14) y una prueba de navegador en `sitio.e2e.mjs`.
+
+---
+
 ## 19.60.0 — Cada herramienta carga solo lo suyo
 
 **Velocidad.** Antes, abrir cualquier herramienta descargaba también la consola completa y las otras 60: en el sitio en vivo, la carta de Smith pesaba 2,25 MB con 50 peticiones. Ahora:

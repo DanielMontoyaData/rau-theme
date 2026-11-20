@@ -137,4 +137,36 @@ test('19.60: DX propio con escuchar y anotar; tablas como tarjetas y botones de 
 	assert.equal(await p.inputValue('#bm-buscar'), '732', 'Colombia es el TG 732');
 	await c.close();
 });
+test('19.61: portada nueva — qué es RAU, bandas, receptor lleno, actividades con concursos y sin Radio RAU', async () => {
+	nav = nav || await chromium.launch({ args: ['--no-proxy-server'] });
+	const p = await nav.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errores.push(e.message));
+	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+	await p.route(/action=rau_solar(&|$)/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: { sfi: '107', aindex: '14', kindex: '1', bands: [{ name: '80m-40m', day: 'Good', night: 'Good' }, { name: '12m-10m', day: 'Poor', night: 'Poor' }] } }) }));
+	await p.route(/action=rau_sdr_status/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: { libres: 0, max: 7 } }) }));
+	await p.route(/action=rau_sdr_historial/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: { muestras: 100, horas: Array.from({ length: 24 }, (_, h) => ({ hora: h, libres: h === 5 ? 6 : 1 })) } }) }));
+	await p.route(/action=rau_yt_live/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: { live: false } }) }));
+	await p.goto(BASE + '/'); await p.waitForSelector('#gauge-bandas li');
+	assert.equal(await p.$('#radio-power'), null, 'sin Radio RAU');
+	assert.equal(await p.$('#home-concurso-widget'), null, 'sin la franja suelta del concurso');
+	assert.ok(await p.$('#que-es-rau ol li:nth-child(3)'), '«Empieza aquí» con tres pasos');
+	assert.match(await p.innerText('#gauge-bandas'), /80–40m abierta[\s\S]*12–10m cerrada/);
+	assert.doesNotMatch(await p.innerText('#gauge-estado'), /Excelente/, 'el índice K ya no promete «condiciones óptimas»');
+	await p.waitForFunction(() => /Lleno ahora · suele haber cupo hacia las 5 h/.test(document.getElementById('sdr-abrir').textContent));
+	assert.ok((await p.$$('#eventos .grid > *')).length >= 2, 'actividades con al menos un concurso');
+	assert.match(await p.innerText('#eventos'), /Concurso · fin de semana/i);
+	assert.match(await p.getAttribute('#eventos a[href*="calendar.google.com"]', 'href'), /cid=webcal/);
+	await p.waitForSelector('#home-hoy:not(.hidden)');
+	assert.equal(await p.$$eval('#home-envivo:not(.hidden)', l => l.length), 0, 'sin «en vivo» fuera de hora');
+	// Durante la actividad: la tarjeta pasa a «En el aire ahora» y ofrece la frecuencia
+	const inicio = +(await p.getAttribute('#home-proxima', 'data-inicio'));
+	await p.close();
+	if (inicio) {
+		const q = await nav.newPage(); q.on('pageerror', e => errores.push(e.message));
+		await q.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+		await q.clock.install({ time: new Date(inicio * 1000 + 10 * 60000) });
+		await q.goto(BASE + '/'); await q.waitForSelector('#home-envivo:not(.hidden)');
+		assert.match(await q.innerText('#home-proxima'), /En el aire ahora/i);
+		await q.close();
+	}
+});
 test('sin errores de JavaScript', () => { assert.deepEqual(errores, []); });

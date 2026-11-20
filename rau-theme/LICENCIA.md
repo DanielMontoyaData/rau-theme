@@ -20,5 +20,6 @@ ya era «v2 o posterior», el cambio es compatible.
 | `assets/vendor/qrcode/` | QR Code Generator (Kazuhiko Arase) | MIT, ver su `LICENSE` |
 | `assets/fonts/SpaceGrotesk-*` | Space Grotesk | SIL OFL 1.1, ver `SpaceGrotesk-OFL.txt` |
 | `assets/fonts/DSEG7Classic-*` | DSEG | SIL OFL 1.1, ver `DSEG-LICENSE.txt` |
+| `assets/images/hero-torre-*.webp` | Foto 15491339 de Pexels | Licencia de Pexels (uso libre, sin atribución obligatoria) |
 
 Quien redistribuya el tema (o una versión modificada) debe entregar también su código fuente bajo GPLv3.
