@@ -175,9 +175,9 @@ for ( $i = 1; $i <= 3; $i++ ) { $f = (int) get_theme_mod( 'rau_home_foto_' . $i 
 			<h2 class="font-display text-3xl font-bold sm:text-4xl">Qué es RAU</h2>
 			<p class="mt-4 max-w-xl text-muted-foreground"><?php echo nl2br( esc_html( $quienes ) ); ?></p>
 			<dl class="mt-6 grid max-w-xl grid-cols-3 gap-3">
-				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Repetidoras</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['repetidoras']; ?></dd></div>
-				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Mallas por semana</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['mallas']; ?></dd></div>
-				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Colegas reportados en 30 días</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['colegas']; ?></dd></div>
+				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Repetidoras</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['repetidoras']; ?></dd><dd class="text-[11px] text-muted-foreground">en la red</dd></div>
+				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Mallas</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['mallas']; ?></dd><dd class="text-[11px] text-muted-foreground">cada semana</dd></div>
+				<div class="rounded-xl border border-border/70 bg-card p-4"><dt class="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Colegas activos</dt><dd class="mt-1 font-display text-3xl font-bold text-primary"><?php echo (int) $datos['colegas']; ?></dd><dd class="text-[11px] text-muted-foreground">en los últimos 30 días</dd></div>
 			</dl>
 		</div>
 		<div class="rounded-2xl border border-primary/30 bg-card p-6 sm:p-8">
@@ -252,7 +252,7 @@ for ( $i = 1; $i <= 3; $i++ ) { $f = (int) get_theme_mod( 'rau_home_foto_' . $i 
 
 							<!-- Valor K central -->
 							<text id="gauge-k-val" x="120" y="98" font-size="28" font-weight="700" fill="#1e3a5f" font-family="'Space Grotesk',sans-serif" text-anchor="middle">—</text>
-							<text x="120" y="113" font-size="9" fill="#64748b" font-family="monospace" text-anchor="middle">ÍNDICE K</text>
+							<text x="120" y="66" font-size="9" fill="#64748b" font-family="monospace" text-anchor="middle">ÍNDICE K</text>
 						</svg>
 
 						<!-- Etiqueta de estado bajo el gauge -->
@@ -336,14 +336,15 @@ for ( $i = 1; $i <= 3; $i++ ) { $f = (int) get_theme_mod( 'rau_home_foto_' . $i 
 					class="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
 					Abrir el receptor
 				</a>
+				<p id="sdr-lleno-nota" class="mt-2 hidden text-center text-xs text-amber-300"></p>
 
 				<script>
 				(function(){
 					var AJAX='<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>';
 					var badge=document.getElementById('sdr-status-badge'), users=document.getElementById('sdr-users'), abrir=document.getElementById('sdr-abrir');
-					/* Si está lleno, el botón lo dice en vez de prometer un receptor que no va a abrir (19.61.0) */
+					/* Si está lleno se avisa con una nota, pero el botón sigue: aunque esté lleno se puede entrar */
 					var lleno=false, mejorHora=null;
-					function boton(){ if(!lleno) return; abrir.textContent='Lleno ahora'+(mejorHora!=null?' · suele haber cupo hacia las '+mejorHora+' h':' · inténtalo en un rato'); abrir.classList.remove('bg-primary','text-primary-foreground','hover:bg-primary/90'); abrir.classList.add('border','border-amber-500/50','bg-amber-500/10','text-amber-300'); }
+					function boton(){ if(!lleno) return; var n=document.getElementById('sdr-lleno-nota'); n.textContent='Está lleno, pero igual puedes entrar.'+(mejorHora!=null?' Suele haber más cupo hacia las '+mejorHora+' h.':''); n.classList.remove('hidden'); }
 					function pinta(color, texto){ badge.innerHTML='<span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block;"></span><span style="font-family:monospace;font-size:0.75rem;color:'+color+';">'+texto+'</span>'; }
 					fetch(AJAX+'?action=rau_sdr_status', {cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
 						if(!j.success){ pinta('#f43f5e','Fuera de línea'); users.textContent='—'; return; }

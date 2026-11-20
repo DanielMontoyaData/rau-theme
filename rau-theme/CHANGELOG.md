@@ -264,6 +264,17 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.61.1 — Ajustes de la portada tras revisarla en computador, tableta, celular y modo claro
+
+- Receptor: aunque esté lleno se puede entrar. El botón sigue diciendo «Abrir el receptor» y debajo una
+  nota avisa que está lleno, que igual se puede entrar y a qué hora suele haber más cupo.
+- Se quitó el espacio vacío grande entre la portada y «Qué es RAU» en computador.
+- Las tres cifras de «Qué es RAU» con rótulos cortos («Repetidoras · en la red», «Mallas · cada semana»,
+  «Colegas activos · en los últimos 30 días»): en el celular ya no quedan de alturas distintas.
+- Medidor de propagación: el rótulo «ÍNDICE K» pasa arriba del número; la aguja lo tapaba.
+
+---
+
 ## 19.61.0 — Portada nueva
 
 Orden nuevo, pensado para quien llega por primera vez: portada → Qué es RAU → En el aire ahora →
@@ -280,7 +291,8 @@ Repetidoras → Próximas actividades → Novedades → Comunidad.
 - **Propagación**: la etiqueta ya no dice «Excelente · condiciones óptimas» con 10 m cerrada. Habla del
   campo magnético (índice K) y lista cada banda abierta, regular o cerrada, de día o de noche según la
   hora de Colombia.
-- **Receptor**: cuando está lleno, el botón dice «Lleno ahora · suele haber cupo hacia las X h». Los
+- **Receptor**: cuando está lleno, una nota dice «Está lleno, pero igual puedes entrar» y a qué hora suele
+  haber más cupo; el botón sigue igual. Los
   modos que decodifica ahora incluyen CW, JS8, RTTY y PSK31.
 - **Próximas actividades**: incluye los dos concursos que vienen (la franja suelta desaparece), botón
   «Agregar a mi calendario» (Google) y enlace para iPhone/Outlook, en vez de instrucciones.

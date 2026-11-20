@@ -151,7 +151,8 @@ test('19.61: portada nueva — qué es RAU, bandas, receptor lleno, actividades 
 	assert.ok(await p.$('#que-es-rau ol li:nth-child(3)'), '«Empieza aquí» con tres pasos');
 	assert.match(await p.innerText('#gauge-bandas'), /80–40m abierta[\s\S]*12–10m cerrada/);
 	assert.doesNotMatch(await p.innerText('#gauge-estado'), /Excelente/, 'el índice K ya no promete «condiciones óptimas»');
-	await p.waitForFunction(() => /Lleno ahora · suele haber cupo hacia las 5 h/.test(document.getElementById('sdr-abrir').textContent));
+	await p.waitForFunction(() => /igual puedes entrar[\s\S]*hacia las 5 h/.test(document.getElementById('sdr-lleno-nota').textContent));
+	assert.equal((await p.textContent('#sdr-abrir')).trim(), 'Abrir el receptor', 'aunque esté lleno se puede entrar');
 	assert.ok((await p.$$('#eventos .grid > *')).length >= 2, 'actividades con al menos un concurso');
 	assert.match(await p.innerText('#eventos'), /Concurso · fin de semana/i);
 	assert.match(await p.getAttribute('#eventos a[href*="calendar.google.com"]', 'href'), /cid=webcal/);
