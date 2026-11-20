@@ -238,6 +238,23 @@ E.VIVO.salaPeriodo = function(){
 	if(!pa) return '<p class="em-nota">Sin período operacional vigente. El período fija los objetivos, el responsable y la hora del próximo relevo.</p>';
 	return '<p><b>Período '+esc(pa.n)+'</b> · '+core.horaZ(pa.inicio)+' → '+core.horaZ(pa.fin)+(pa.resp?' · '+esc(pa.resp):'')+'</p><p class="em-pre">'+esc(pa.objetivos)+'</p>'+(pa.seguridad?'<p><small>Seguridad: '+esc(pa.seguridad)+'</small></p>':'');
 };
+/* Condiciones (19.63.0): el semáforo de /condiciones/ para el punto que el operador tenga elegido ahí (o Medellín),
+   dentro de la sala. Se pide cada 10 minutos; si no hay internet se queda el último. */
+var condHtml='<p class="em-nota">Consultando condiciones…</p>', condT=0;
+function condPunto(){ try{ var p=JSON.parse(localStorage.getItem('rau_cond_punto')||'null'); if(p&&isFinite(p.lat)&&isFinite(p.lon)) return p; }catch(e){} return {lat:6.24,lon:-75.58,nombre:'Medellín'}; }
+function condPedir(){
+	if(Date.now()-condT<10*60000) return; condT=Date.now();
+	var p=condPunto(), url=String((window.RAU_EM||{}).rest||'').replace(/rau-em\/v1\/?$/,'rau/v1/condiciones'), sep=url.indexOf('?')>=0?'&':'?';
+	if(!url) return;
+	fetch(url+sep+'lat='+(+p.lat).toFixed(1)+'&lon='+(+p.lon).toFixed(1)).then(function(r){ return r.json(); }).then(function(d){
+		var nom={tormenta:'Tormenta',viento:'Viento',hf:'HF',sol:'Sol',geomag:'Geomagnético',seis:'6 m'}, col=['ok','aviso','peligro'], s=d.semaforo||{};
+		condHtml='<div class="em-cond">'+Object.keys(nom).filter(function(k){ return s[k]; }).map(function(k){ return '<div class="em-cond-f n-'+col[s[k].nivel]+'" title="'+esc(s[k].texto)+'"><b>'+nom[k]+'</b><span>'+esc(s[k].texto)+'</span></div>'; }).join('')+'</div>'
+			+'<p class="em-nota">'+esc(p.nombre||'Punto elegido')+' · '+new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+' · <a href="'+esc(((window.RAU_EM||{}).sitio||'/')+'condiciones/?lat='+(+p.lat).toFixed(2)+'&lon='+(+p.lon).toFixed(2))+'" target="_blank" rel="noopener">condiciones completas →</a></p>';
+		$$('[data-vivo="salaCond"]').forEach(function(el){ el.innerHTML=condHtml; });
+	}).catch(function(){ condT=0; });
+}
+E.VIVO.salaCond = function(){ condPedir(); return condHtml; };
+setInterval(function(){ if(document.querySelector('[data-vivo="salaCond"]')) condPedir(); }, 60000);
 var VIVOS_RELOJ=['salaEstado','salaRed','salaAlarmas','salaTrafico','salaInc','redTabla','redEstado'];
 function refrescarSala(){ if(!E.op) return; $$('[data-vivo]').forEach(function(el){ if(VIVOS_RELOJ.indexOf(el.dataset.vivo)>=0 && !el.contains(document.activeElement)){ var f=E.VIVO[el.dataset.vivo]; if(f) el.innerHTML=f(el); } }); }
 
@@ -256,6 +273,7 @@ E.registrarVista('sala', {nombre:'Sala de mando', icono:'◎', fn:function(){
 		+panel('em-p-trafico', 'Cola de tráfico', 'salaTrafico', '<button type="button" class="em-link" data-ir="comunicaciones">mensajes →</button>')
 		+panel('em-p-inc', 'Incidentes activos', 'salaInc', puedeOperar()?'<button type="button" class="em-link" id="sl-inc">+ nuevo</button>':'')
 		+panel('em-p-log', 'Registro en vivo', 'salaLog', '<button type="button" class="em-link" data-ir="bitacora">bitácora →</button>')
+		+panel('em-p-cond', 'Condiciones para operar', 'salaCond', '')
 		+panel('em-p-periodo', 'Período operacional', 'salaPeriodo', coord?'<button type="button" class="em-link" id="sl-per">'+(core.periodoActual(E.S, Date.now())?'nuevo período':'definir')+'</button>':'')
 		+'</div>'
 		+'<div class="em-acciones em-sala-acc"><button type="button" class="em-btn" id="sl-pant" aria-pressed="false">⛶ Pantalla de sala</button><button type="button" class="em-btn" id="sl-rel">Relevo de turno</button>'

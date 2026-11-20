@@ -35,6 +35,11 @@ jobs:
           chk "Centro de mando" "$BASE/emergencias/" "em-app"
           chk "Módem sin datos" "$BASE/modem/" "modem"
           chk "API de propagación" "$BASE/wp-json/rau/v1/propagacion" '"actualizado"'
+          chk "Condiciones" "$BASE/condiciones/" "cnd-sem"
+          chk "API de condiciones" "$BASE/wp-json/rau/v1/condiciones" '"semaforo"'
+          # Cada fuente de Condiciones: avisa si alguna lleva fallando (rojo) en la revisión del sitio
+          fallan=$(curl -s --max-time 30 "$BASE/wp-json/rau/v1/condiciones/salud" | python3 -c 'import sys,json; print(", ".join(x["fuente"] for x in json.load(sys.stdin) if x.get("estado")=="falla" and x.get("fuente")!="MET Norway"))' 2>/dev/null || echo "")
+          [ -z "$fallan" ] || malos="$malos\n- Condiciones: estas fuentes no responden: $fallan"
           # Los datos en vivo deben ser de las últimas 2 horas (si no, el cron del sitio está quieto)
           act=$(curl -s --max-time 30 "$BASE/wp-json/rau/v1/propagacion" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("actualizado") or 0)' 2>/dev/null || echo 0)
           [ $(( $(date +%s) - act )) -lt 7200 ] || malos="$malos\n- Propagación: el último dato tiene más de 2 horas (¿se detuvieron las tareas programadas?)"

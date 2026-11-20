@@ -44,7 +44,7 @@ add_filter( 'pre_http_request', function( $pre, $args, $url ) use ( &$om, &$open
 	if ( false !== strpos( $url, 'alerts.json' ) ) return $r( array( array( 'issue_datetime' => gmdate( 'Y-m-d H:i:s', time() - 3600 ), 'message' => "Space Weather Message Code: ALTK04\r\nALERT: Geomagnetic K-index of 4\nmore" ) ) );
 	if ( false !== strpos( $url, 'drap_global' ) ) return $r( $drap );
 	if ( false !== strpos( $url, 'hamqsl.com' ) ) return $r( '<?xml version="1.0"?><solar><solardata><solarflux>140</solarflux><sunspots>90</sunspots><aindex>8</aindex><kindex>1</kindex><xray>B2</xray><calculatedconditions><band name="80m-40m" time="day">Good</band><band name="80m-40m" time="night">Good</band><band name="12m-10m" time="day">Poor</band><band name="12m-10m" time="night">Poor</band></calculatedconditions></solardata></solar>' );
-	if ( false !== strpos( $url, 'prop.kc2g.com' ) ) return $r( array( array( 'fof2' => 8.6, 'mufd' => 27.0, 'cs' => 75, 'time' => gmdate( 'Y-m-d\TH:i:s', time() - 1200 ), 'station' => array( 'name' => 'Boa Vista, Brazil', 'latitude' => '2.8', 'longitude' => '299.3' ) ) ) );
+	if ( false !== strpos( $url, 'prop.kc2g.com' ) ) return $r( array( array( 'fof2' => 8.6, 'mufd' => 27.0, 'cs' => 75, 'time' => gmdate( 'Y-m-d\TH:i:s', time() - 1200 ), 'station' => array( 'name' => 'Boa Vista, Brazil', 'code' => 'BVJ03', 'latitude' => '2.8', 'longitude' => '299.3' ) ) ) );
 	if ( false !== strpos( $url, 'earthquake.usgs.gov' ) ) return $r( array( 'features' => array(
 		array( 'properties' => array( 'mag' => 4.1, 'place' => 'Antioquia', 'time' => ( time() - 7200 ) * 1000, 'url' => 'u' ), 'geometry' => array( 'coordinates' => array( -75.9, 6.9, 30 ) ) ),
 		array( 'properties' => array( 'mag' => 6.0, 'place' => 'Japón', 'time' => ( time() - 3600 ) * 1000, 'url' => 'u' ), 'geometry' => array( 'coordinates' => array( 140, 35, 10 ) ) ) ) ) );
@@ -118,6 +118,49 @@ rest_do_request( $q ); ok( ! get_option( 'rau_cond_avisos' ), 'quitar avisos bor
 /* 6 m en el cluster */
 $s6 = rau_cond_seis( array( array( 'freq' => '50.313', 'dx' => 'PY2XX', 'sp' => 'HK4A' ), array( 'freq' => '14.074', 'dx' => 'K1A', 'sp' => 'HK3' ), array( 'freq' => '50.125', 'dx' => 'LU1X', 'sp' => 'HK1' ) ) );
 ok( 2 === $s6['n'] && false !== strpos( $s6['ejemplos'][0], 'PY2XX' ), '6 m: solo los spots entre 50 y 54 MHz' );
+
+/* ── 19.63.0: centro de mando ── */
+// Tormenta en la hora actual: «en curso», no «prevista hacia las …»
+$limpiar(); $om['hourly']['weather_code'] = $col( 3 ); $om['hourly']['weather_code'][2] = 95;
+$c4 = rau_condiciones( 5.07, -75.51 );
+ok( ! empty( $c4['semaforo']['tormenta']['en_curso'] ) && false !== strpos( $c4['semaforo']['tormenta']['texto'], 'en curso' ), 'tormenta en la hora actual: «en curso», no una hora que ya pasó' );
+ok( ! empty( $c4['eventos'] ) && preg_grep( '/Tormenta eléctrica prevista/', wp_list_pluck( $c4['eventos'], 'texto' ) ), 'registro de eventos con la tormenta prevista' );
+ok( isset( $c4['tend']['kp'], $c4['salud'], $c4['drap_mapa'] ), 'la respuesta trae tendencias, salud de fuentes y capa D-RAP' );
+ok( 'Advertencia: se espera un índice K geomagnético de 4' === rau_cond_traducir( 'WARNING: Geomagnetic K-index of 4 expected' ) && false !== strpos( rau_cond_traducir( 'ALERT: X-ray Flux exceeded M5' ), 'llamarada' ), 'avisos de NOAA en español' );
+// Salud: Open-Meteo y NOAA respondieron
+$salud = array(); foreach ( rau_cond_salud() as $x ) $salud[ $x['fuente'] ] = $x['estado'];
+ok( 'bien' === ( $salud['Open-Meteo'] ?? '' ) && 'bien' === ( $salud['NOAA SWPC'] ?? '' ), 'salud de las fuentes: Open-Meteo y NOAA al día' );
+// D-RAP en el mapa: solo celdas con pérdida, de las Américas
+$dm = rau_cond_drap_mapa(); ok( 2 === count( $dm ) && 12.5 === $dm[0][2] && -74 === $dm[0][1], 'D-RAP para el mapa: las 2 celdas con pérdida' );
+// Historial de ionosondas y matriz por persistencia
+delete_option( 'rau_cond_ionoh' ); $base = (int) floor( time() / 3600 ) * 3600; $hist = array();
+for ( $k = 0; $k < 26; $k++ ) $hist[] = array( $base - DAY_IN_SECONDS + $k * 3600, 6 + ( $k % 6 ), 20 + $k % 6 );
+update_option( 'rau_cond_ionoh', array( 'BVJ03' => $hist ), false );
+$m = rau_cond_matriz( 'BVJ03', -18000 );
+ok( 24 === count( $m['horas'] ) && $m['completa'] && 6.0 == $m['horas'][0]['fof2'] && 20.0 == $m['horas'][0]['mufd'], 'matriz de 24 h con lo medido ayer a la misma hora' );
+ok( (int) gmdate( 'G', $base - 18000 ) === $m['horas'][0]['h'], 'las horas de la matriz en la hora local del punto' );
+delete_option( 'rau_cond_ionoh' );
+ok( 1 === rau_cond_iono_grabar() && 1 === count( get_option( 'rau_cond_ionoh' )['BVJ03'] ?? array() ), 'graba la ionosonda de la región (no hay historial público)' );
+ok( 0 === rau_cond_iono_grabar(), 'no duplica la misma medición' );
+// Sitios RAU
+delete_transient( 'rau_cond_sitios' ); $si = rau_cond_sitios();
+ok( is_array( $si ) && ( ! $si || isset( $si[0]['tormenta'], $si[0]['viento'], $si[0]['temp'] ) ), 'sitios RAU: tiempo, tormenta y viento por repetidora' );
+// Avisos: varios puntos, umbral de viento, prueba
+delete_option( 'rau_cond_avisos' );
+$r1 = $post( array( 'sub' => $sub, 'lat' => 6.24, 'lon' => -75.58, 'temas' => array( 'viento' ), 'nombre' => 'Casa', 'umbral' => 40 ) );
+$r2 = $post( array( 'sub' => $sub, 'lat' => 4.71, 'lon' => -74.07, 'temas' => array( 'viento' ), 'nombre' => 'Repetidora', 'umbral' => 70 ) );
+$mios = rest_do_request( ( function() use ( $sub ) { $q = new WP_REST_Request( 'POST', '/rau/v1/condiciones/avisos/mios' ); $q->set_header( 'Content-Type', 'application/json' ); $q->set_body( wp_json_encode( array( 'endpoint' => $sub['endpoint'] ) ) ); return $q; } )() )->get_data();
+ok( 200 === $r1->get_status() && 200 === $r2->get_status() && 2 === count( $mios ), 'dos puntos con avisos en el mismo celular' );
+ok( 40 === $r1->get_data()['umbral'] && in_array( 'Casa', wp_list_pluck( $mios, 'nombre' ), true ), 'cada punto con su nombre y su umbral' );
+for ( $i = 0; $i < 3; $i++ ) $post( array( 'sub' => $sub, 'lat' => 1 + $i, 'lon' => -70, 'temas' => array( 'viento' ) ) );
+ok( 400 === $post( array( 'sub' => $sub, 'lat' => 9, 'lon' => -70, 'temas' => array( 'viento' ) ) )->get_status(), 'máximo 5 puntos por celular' );
+$limpiar(); $om['hourly']['weather_code'] = $col( 3 ); $om['hourly']['wind_gusts_10m'] = $col( 45 );
+$enviados = array(); rau_cond_avisos_revisar( $falso );
+ok( 1 === count( preg_grep( '/Casa/', $enviados ) ) && ! preg_grep( '/Repetidora/', $enviados ), 'ráfagas de 45 km/h: avisa al punto con umbral 40, no al de 70' );
+$q = new WP_REST_Request( 'DELETE', '/rau/v1/condiciones/avisos' ); $q->set_header( 'Content-Type', 'application/json' ); $q->set_body( wp_json_encode( array( 'endpoint' => $sub['endpoint'], 'id' => $r1->get_data()['id'] ) ) );
+rest_do_request( $q ); ok( 4 === count( get_option( 'rau_cond_avisos' ) ), 'quitar un punto deja los demás' );
+$q = new WP_REST_Request( 'POST', '/rau/v1/condiciones/avisos/prueba' ); $q->set_header( 'Content-Type', 'application/json' ); $q->set_body( wp_json_encode( array( 'endpoint' => 'https://fcm.googleapis.com/fcm/send/otro' ) ) );
+ok( 404 === rest_do_request( $q )->get_status(), 'la prueba solo va a un celular que tenga avisos' );
 
 $limpiar(); delete_option( 'rau_cond_avisos' );
 echo "\n$n comprobaciones, $fallos fallas\n"; exit( $fallos ? 1 : 0 );

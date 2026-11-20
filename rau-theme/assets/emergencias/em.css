@@ -423,9 +423,9 @@ body.em-con-modal { overflow: hidden; }
 	.em-p-mapa { grid-column: 1 / -1; }
 }
 @media (min-width: 1250px) {
-	.em-sala-g { grid-template-columns: minmax(17rem, 1fr) minmax(0, 2fr) minmax(19rem, 1.15fr); grid-template-areas: "red mapa alarmas" "red mapa trafico" "inc log periodo"; }
+	.em-sala-g { grid-template-columns: minmax(17rem, 1fr) minmax(0, 2fr) minmax(19rem, 1.15fr); grid-template-areas: "red mapa alarmas" "red mapa trafico" "inc log periodo" "cond cond cond"; }
 	.em-p-red { grid-area: red; } .em-p-mapa { grid-area: mapa; grid-column: auto; } .em-p-alarmas { grid-area: alarmas; } .em-p-trafico { grid-area: trafico; }
-	.em-p-inc { grid-area: inc; } .em-p-log { grid-area: log; } .em-p-periodo { grid-area: periodo; }
+	.em-p-inc { grid-area: inc; } .em-p-log { grid-area: log; } .em-p-periodo { grid-area: periodo; } .em-p-cond { grid-area: cond; }
 }
 .em-panel { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--borde); border-radius: 10px; background: var(--tarjeta); overflow: hidden; }
 .em-panel > header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .45rem .75rem; border-bottom: 1px solid var(--borde); background: color-mix(in srgb, var(--fondo) 55%, var(--tarjeta)); }
@@ -521,3 +521,11 @@ body.em-modo-sala .em-sala-acc > :not(#sl-pant) { display: none; }
 .em-real { border-color: var(--primario); }
 .em-dos > .em-form { align-self: start; align-content: start; }
 .em-dos > .em-form h3 { margin-top: 0; }
+
+/* Condiciones para operar dentro de la sala (19.63.0) */
+.em-cond { display: grid; gap: .4rem; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); padding: .6rem .75rem 0; }
+.em-cond-f { display: flex; flex-direction: column; gap: .15rem; padding: .4rem .55rem; border-radius: 8px; border: 1px solid var(--borde); border-left: 4px solid var(--borde); font-size: .82rem; }
+.em-cond-f b { font: 700 .7rem var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.em-cond-f span { color: var(--tenue); line-height: 1.3; }
+.em-cond-f.n-ok { border-left-color: #16a34a; } .em-cond-f.n-aviso { border-left-color: #f59e0b; } .em-cond-f.n-peligro { border-left-color: #e11d48; background: color-mix(in srgb, #e11d48 8%, transparent); }
+.em-p-cond .em-nota { padding: .3rem .75rem .6rem; margin: 0; }

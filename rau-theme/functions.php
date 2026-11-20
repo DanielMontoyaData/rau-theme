@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.62.0' );
+define( 'RAU_THEME_VERSION', '19.63.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -2720,6 +2720,17 @@ function rau_digest_html_body() {
 			<?php endforeach; ?>
 		</table>
 		<?php endif; ?>
+
+		<?php // 19.63.0: el semáforo de Condiciones para Medellín, con enlace a la página para su propio punto
+		if ( function_exists( 'rau_condiciones' ) ) : $cn = rau_condiciones( RAU_COND_PUNTO[0], RAU_COND_PUNTO[1] ); $col = array( '#16a34a', '#d97706', '#dc2626' ); $nom = array( 'tormenta' => 'Tormenta', 'viento' => 'Viento', 'hf' => 'HF', 'sol' => 'Sol', 'geomag' => 'Campo magnético' ); if ( ! empty( $cn['semaforo'] ) ) : ?>
+		<h2 style="font-size:15px;color:#1fd5f9;margin:0 0 10px;">🚦 Condiciones para operar hoy (Medellín)</h2>
+		<table style="width:100%;border-collapse:collapse;margin-bottom:8px;font-size:13px;">
+		<?php foreach ( $nom as $k => $n ) : if ( empty( $cn['semaforo'][ $k ] ) ) continue; $s = $cn['semaforo'][ $k ]; ?>
+			<tr><td style="padding:4px 8px 4px 0;white-space:nowrap;vertical-align:top;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:<?php echo esc_attr( $col[ (int) $s['nivel'] ] ?? '#888' ); ?>;"></span> <b><?php echo esc_html( $n ); ?></b></td><td style="padding:4px 0;color:#cbd5e1;"><?php echo esc_html( $s['texto'] ); ?></td></tr>
+		<?php endforeach; ?>
+		</table>
+		<p style="margin:0 0 20px;font-size:12px;"><a href="<?php echo esc_url( home_url( '/condiciones/' ) ); ?>" style="color:#1fd5f9;">Ver las condiciones para tu propia ubicación →</a></p>
+		<?php endif; endif; ?>
 
 		<?php
 		$eventos = new WP_Query( array(

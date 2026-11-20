@@ -264,6 +264,53 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.63.0 — Condiciones como centro de mando
+
+Rediseño completo de `/condiciones/` y lo que lo alimenta.
+
+**Arreglos de lo visto en vivo**
+- La próxima actividad sin hora guardada ya no sale «12:00 am»: se muestra solo la fecha.
+- Tormenta en la hora actual: «en curso o a punto de empezar», no «prevista hacia las 16:00» a las 16:22.
+- Todas las horas en la hora local del PUNTO consultado (con su UTC−5 y UTC en la barra), no en la del navegador.
+- Cada tarjeta del semáforo dice NORMAL, ATENCIÓN o ALERTA en texto, no solo con color.
+- En el celular, el semáforo va en dos columnas compactas, las gráficas usan el ancho real (texto legible) y la tabla de sitios esconde lo secundario.
+
+**Aspecto de centro de mando**
+- Barra de mando fija: estado general («ALERTA · Tormenta eléctrica»), relojes local y UTC con segundos, cuenta regresiva de la actualización, salud de cada fuente (verde, ámbar, rojo; el detalle al pasar el cursor) y botones.
+- Íconos SVG propios en lugar de emojis; cifras monoespaciadas; rejilla pareja; antigüedad del dato en cada panel.
+- **Modo sala** (botón o `?sala=1`): pantalla completa sin el resto del sitio, para el televisor de la sala; el mapa alterna radar y Windy cada minuto y el radar se anima solo.
+- **Registro de eventos**: llamaradas, avisos de NOAA, subidas del Kp, sismos de 24 h, y lo previsto (tormentas, pasadas de satélites, línea gris).
+- **Imprimir o guardar en PDF** la hoja de condiciones (con encabezado de lugar, hora local y UTC).
+
+**Gráficas de tendencia** (con cursor que muestra hora y valores)
+- Kp de 24 h y pronóstico de 3 días; rayos X de 6 h en escala logarítmica con las clases A–X; viento solar y Bz de 6 h; llamaradas C, M y X de 7 días.
+- **Matriz de bandas por hora**: de 160 a 10 m, las próximas 24 h, DX, NVIS, absorbida de día o cerrada, por persistencia (lo que la ionosonda midió ayer a la misma hora). No hay API pública de historial de ionosondas: el sitio guarda las mediciones de la región cada 10 minutos (50 h); la matriz se llena sola en el primer día.
+- MUF y foF2 de las últimas 24 h; pronóstico del tiempo de 48 h con temperatura, ráfagas, probabilidad de lluvia, franjas de tormenta, noche y «ahora».
+
+**Mapa**
+- Leyenda; botón «centrar en mí»; cobertura estimada de cada repetidora (horizonte de radio); capa de absorción D-RAP cuando hay llamaradas; los sitios RAU se colorean por su estado del tiempo. El radar usa el pronóstico de RainViewer si lo publica (hoy no lo publica).
+
+**Datos nuevos**
+- **Sitios RAU**: tiempo, lluvia, tormenta y viento en cada repetidora, en una tabla.
+- 6 m con PSK Reporter (enlaces desde Colombia en la última hora) además del cluster.
+- Avisos de NOAA traducidos al español.
+- Satélites: frecuencias de subida y bajada (AMSAT) de ISS, SO-50, AO-91, PO-101, AO-27, RS-44, AO-7 e IO-117, cuenta regresiva a la próxima pasada y su trayectoria en el cielo.
+- Botones a las fuentes oficiales: IDEAM, FEWS (ríos), UNGRD y SGC.
+- No se incluyen (verificado): rayos en tiempo real (Blitzortung no permite usar sus datos en otros sitios), alertas del IDEAM (su visor no tiene una API documentada) ni sismos del SGC (su servicio rechaza consultas automáticas, HTTP 403).
+
+**Operación**
+- **Centro de Mando de Emergencias**: panel «Condiciones para operar» en la sala de mando, con el punto elegido en Condiciones.
+- **Correo diario**: el semáforo de Medellín con enlace a la página.
+- **Avisos al celular**: hasta 5 puntos por celular con nombre, umbral de viento a elegir (40 a 80 km/h), lista para quitarlos uno por uno y botón «enviarme una prueba».
+
+**Confiabilidad**
+- Precarga cada 10 minutos de Medellín, Bogotá, Cali, Barranquilla, Bucaramanga y los sitios RAU.
+- Salud de fuentes en `/wp-json/rau/v1/condiciones/salud`; el monitoreo programado revisa la página, la API y avisa si una fuente deja de responder.
+- Las respuestas por punto ya no se respaldan una a una en la base de datos (solo las globales).
+- Pruebas: 48 en `tests/sitio/condiciones.php` y la prueba de navegador ampliada.
+
+---
+
 ## 19.62.0 — Condiciones: todo lo que afecta salir al aire, para tu ubicación
 
 Página nueva en `/condiciones/` (en el menú, después de Herramientas; si la ponen a mano en otro lugar, se

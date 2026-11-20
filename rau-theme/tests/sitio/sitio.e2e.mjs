@@ -170,7 +170,7 @@ test('19.61: portada nueva — qué es RAU, bandas, receptor lleno, actividades 
 		await q.close();
 	}
 });
-test('19.62: Condiciones — semáforo, mapa con radar y capas, Windy, buscar por locator y menú', async () => {
+test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con radar y capas, Windy, matriz, sitios, sala, buscar y menú', async () => {
 	nav = nav || await chromium.launch({ args: ['--no-proxy-server'] });
 	const p = await nav.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errores.push(e.message));
 	const horas = Array.from({ length: 48 }, (_, i) => ({ t: '2026-11-20T' + String((10 + i) % 24).padStart(2, '0') + ':00', temp: 20 + (i % 6), hr: 70, pp: i === 1 ? 90 : 20, mm: 0, cod: i === 1 ? 95 : 3, viento: 8, rafaga: 20, cape: 900, li: 1, vis: 20000, dia: 1 }));
@@ -187,15 +187,30 @@ test('19.62: Condiciones — semáforo, mapa con radar y capas, Windy, buscar po
 	const pedidos = [];
 	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
 	await p.route(/wp-json\/rau\/v1\/condiciones\?/, r => { pedidos.push(r.request().url()); r.fulfill({ contentType: 'application/json', body: JSON.stringify(datos) }); });
+	await p.route(/wp-json\/rau\/v1\/condiciones\/sitios/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ n: 'Repetidora Medellín — Monte Alvernia', f: '146.675', lat: 6.25, lon: -75.6, url: '/x', temp: 18, cod: 95, lluvia: 90, tormenta: { nivel: 2, texto: 'Tormenta' }, viento: { nivel: 0, kmh: 12 } }]) }));
 	await p.route(/api\.rainviewer\.com/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ host: 'https://tilecache.rainviewer.com', radar: { past: [{ time: 1795200000, path: '/v2/radar/a' }, { time: 1795200600, path: '/v2/radar/b' }], nowcast: [] } }) }));
 	await p.goto(BASE + '/condiciones/?lat=6.24&lon=-75.58');
 	await p.waitForSelector('#cnd-luz-tormenta[data-n="2"]');
 	assert.match(await p.innerText('#cnd-luz-tormenta'), /Desconecta las antenas/);
-	assert.match(await p.innerText('#cnd-clima'), /22°[\s\S]*Inestabilidad/i);
+	assert.match(await p.innerText('#cnd-ahora'), /22°[\s\S]*CAPE/i);
 	assert.match(await p.innerText('#cnd-hf'), /Boa Vista[\s\S]*NVIS/i);
 	assert.match(await p.innerText('#cnd-esp'), /R0[\s\S]*Kp ahora/i);
 	assert.match(await p.innerText('#cnd-sis'), /M4,1 Antioquia/);
 	assert.ok(pedidos.every(u => /lat=6\.2&lon=-75\.6/.test(u)), 'al servidor solo va el punto redondeado: ' + pedidos[0]);
+	// 19.63: barra de mando, estados con texto, relojes, matriz de bandas, gráficas y sitios
+	assert.match(await p.innerText('#cnd-estado'), /ALERTA · Tormenta/i, 'estado general en la barra');
+	assert.equal((await p.innerText('#cnd-luz-tormenta .cnd-palabra')).trim(), 'ALERTA', 'el estado se dice en texto, no solo con color');
+	assert.match(await p.innerText('#cnd-reloj-utc'), /^\d\d:\d\d:\d\d$/);
+	assert.match(await p.innerText('#cnd-reloj-local-et'), /UTC−5/i, 'hora local del punto');
+	assert.equal(await p.$$eval('#cnd-matriz .c', l => l.length), 240, 'matriz de 10 bandas × 24 horas');
+	assert.ok(await p.$('#cnd-clima .cnd-graf svg'), 'gráfica de 48 horas');
+	await p.waitForSelector('#cnd-sitios table');
+	assert.match(await p.innerText('#cnd-sitios'), /Medellín[\s\S]*ALERTA/i, 'sitios RAU con su estado');
+	await p.click('#cnd-sala');
+	assert.ok(await p.evaluate(() => document.body.classList.contains('cnd-sala') && getComputedStyle(document.querySelector('.cnd-pie')).display === 'none'), 'modo sala');
+	await p.click('#cnd-sala');
+	assert.ok(await p.evaluate(() => !document.body.classList.contains('cnd-sala')));
+	assert.ok(await p.$('#cnd-imprimir'), 'botón de imprimir o PDF');
 	await p.waitForSelector('#cnd-mapa .leaflet-marker-icon');
 	await p.waitForFunction(() => !document.getElementById('cnd-linea').hidden, null, { timeout: 15000 });
 	assert.equal(await p.inputValue('#cnd-cuadro'), '1', 'el radar arranca en el cuadro más reciente');
