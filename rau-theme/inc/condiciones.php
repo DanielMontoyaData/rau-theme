@@ -380,7 +380,8 @@ function rau_cond_semaforo( $clima, $esp, $drap ) {
 		$s['hf'] = array( 'nivel' => $nivel, 'texto' => $txt );
 	}
 	$seis = rau_cond_seis_todo();
-	if ( $seis ) $s['seis'] = $seis['n'] >= 3 ? array( 'nivel' => 2, 'texto' => $seis['texto'], 'abierta' => true ) : array( 'nivel' => $seis['n'] ? 1 : 0, 'texto' => $seis['texto'] );
+	// 6 m abierta es una oportunidad, no un peligro: 'op' => true para que nadie la cuente como alerta
+	if ( $seis ) $s['seis'] = $seis['n'] >= 3 ? array( 'nivel' => 2, 'texto' => $seis['texto'], 'abierta' => true, 'op' => true ) : array( 'nivel' => $seis['n'] ? 1 : 0, 'texto' => $seis['texto'], 'op' => true );
 	return $s;
 }
 
@@ -403,6 +404,8 @@ function rau_condiciones( $lat, $lon ) {
 	);
 	if ( $clima ) $out['clima']['texto_actual'] = rau_cond_wmo( $clima['actual']['cod'] );
 	if ( $out['iono'] && ! empty( $out['iono']['codigo'] ) ) $out['iono']['matriz'] = rau_cond_matriz( $out['iono']['codigo'], $clima ? $clima['offset'] : -18000 );
+	// 19.66.0: MUF(3000) en el punto según el mapa de KC2G (sirve aunque no haya ionosonda cerca)
+	if ( function_exists( 'rau_cond_muf_en' ) ) { if ( ! is_array( $out['iono'] ) ) $out['iono'] = array(); $out['iono']['muf_punto'] = rau_cond_muf_en( $lat, $lon ); }
 	if ( ! empty( $esp['alertas'] ) ) foreach ( $out['espacio']['alertas'] as &$al ) $al['es'] = rau_cond_traducir( $al['tipo'] . ': ' . $al['texto'] );
 	unset( $al );
 	$out['eventos'] = rau_cond_eventos( $out );

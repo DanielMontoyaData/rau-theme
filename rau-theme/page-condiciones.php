@@ -86,6 +86,7 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 	<p class="cnd-offline" id="cnd-offline" role="status" hidden></p>
 
 	<div class="cnd-sismo" id="cnd-sismo" role="alert" hidden></div>
+	<div class="cnd-sismo" id="cnd-siata-al" role="status" hidden></div>
 	<section aria-label="Resumen para operar ahora" class="cnd-sem" id="cnd-sem">
 		<?php foreach ( array( 'tormenta' => 'Tormenta', 'viento' => 'Viento', 'hf' => 'HF', 'sol' => 'Sol', 'geomag' => 'Campo magnético', 'seis' => '6 m / VHF', 'sat' => 'Satélites' ) as $id => $t ) : ?>
 		<div class="cnd-luz" id="cnd-luz-<?php echo esc_attr( $id ); ?>" data-n="-1">
@@ -150,67 +151,91 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 		</div>
 	</div>
 
+	<nav class="cnd-secnav cnd-sala-oculto" aria-label="Secciones de la página">
+		<a href="#cnd-s-tiempo"><?php echo rau_cnd_ic( 'nube' ); ?>Tiempo y seguridad</a>
+		<a href="#cnd-s-radio"><?php echo rau_cnd_ic( 'hf' ); ?>Radio</a>
+		<a href="#cnd-s-sol"><?php echo rau_cnd_ic( 'sol' ); ?>Sol y espacio</a>
+		<a href="#cnd-s-rau"><?php echo rau_cnd_ic( 'radio' ); ?>Historial y RAU</a>
+	</nav>
 	<div class="cnd-rej">
-		<?php $caja( 'cnd-clima', 'nube', 'Pronóstico 48 horas', 'cnd-ancho2' ); ?>
-		<?php $caja( 'cnd-sitios', 'tabla', 'Sitios RAU' ); ?>
-		<?php $caja( 'cnd-siata', 'agua', 'Valle de Aburrá · SIATA', 'cnd-ancho' ); ?>
-		<?php $caja( 'cnd-hf', 'hf', 'HF desde aquí', 'cnd-ancho2' ); ?>
-		<?php $caja( 'cnd-enlace', 'enlace', '¿Llego a…? Predicción de enlace', 'cnd-ancho2' ); ?>
-		<?php $caja( 'cnd-alcance', 'antena', 'Alcance real · WSPR última hora' ); ?>
-		<?php $caja( 'cnd-esp', 'sol', 'Clima espacial' ); ?>
-		<?php $caja( 'cnd-solar', 'cme', 'Tormentas solares', 'cnd-ancho' ); ?>
-		<?php $caja( 'cnd-tend', 'sol', 'Tendencias del sol', 'cnd-ancho2' ); ?>
-		<?php $caja( 'cnd-cielo', 'sat', 'Satélites, sol y luna' ); ?>
-		<?php $caja( 'cnd-vhf', 'seis', '6 m, meteoros y VHF' ); ?>
-		<?php $caja( 'cnd-pota', 'arbol', 'Activaciones POTA' ); ?>
-		<?php $caja( 'cnd-semana', 'registro', 'Resumen de la semana', 'cnd-ancho2' ); ?>
-		<?php $caja( 'cnd-archivo', 'archivo', 'Archivo de eventos' ); ?>
-		<section class="cnd-caja" id="cnd-rau" aria-labelledby="cnd-rau-t">
-			<div class="cnd-caja-cab"><h2 id="cnd-rau-t"><?php echo rau_cnd_ic( 'radio' ); ?>RAU cerca de ti</h2></div>
-			<div id="cnd-rau-cont" class="cnd-vacio">Consultando…</div>
-			<?php if ( $malla ) : $st = trim( (string) get_post_meta( $malla->ID, 'start', true ) ); $ts = strtotime( $st ); $con_hora = $ts && ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $st ) && '00:00' !== date( 'H:i', $ts ); ?>
-			<p class="cnd-chico" style="margin:0">Próxima actividad: <a href="<?php echo esc_url( get_permalink( $malla ) ); ?>"><?php echo esc_html( get_the_title( $malla ) ); ?></a> · <?php echo esc_html( date_i18n( $con_hora ? 'l j \d\e F, H:i' : 'l j \d\e F', $ts ) ); ?><?php $fq = get_post_meta( $malla->ID, 'frequency', true ); if ( $fq ) : ?> · <span class="cnd-mono"><?php echo esc_html( $fq ); ?></span><?php endif; ?></p>
-			<?php endif; ?>
-			<div>
-				<p class="cnd-mini cnd-mut" style="margin:.2rem 0 .35rem">Para compartir y transmitir:</p>
-				<div class="cnd-oficial" style="margin-bottom:.6rem">
-					<button type="button" class="cnd-btn" id="cnd-tarjeta"><?php echo rau_cnd_ic( 'compartir' ); ?>Imagen para WhatsApp</button>
-					<a class="cnd-btn" id="cnd-franja" href="<?php echo esc_url( home_url( '/condiciones/franja/' ) ); ?>" target="_blank" rel="noopener" title="Para OBS: fuente de navegador de 1280×90, con ?transparente para fondo transparente"><?php echo rau_cnd_ic( 'sala' ); ?>Franja para la transmisión</a>
+		<details class="cnd-sec" id="cnd-s-tiempo" open>
+			<summary class="cnd-sec-t"><?php echo rau_cnd_ic( 'nube' ); ?>Tiempo y seguridad</summary>
+			<?php $caja( 'cnd-siata', 'agua', 'Valle de Aburrá · SIATA' ); ?>
+			<div class="cnd-sec-cols">
+				<div class="cnd-col"><?php $caja( 'cnd-clima', 'nube', 'Pronóstico 48 horas' ); ?></div>
+				<div class="cnd-col"><?php $caja( 'cnd-sitios', 'tabla', 'Sitios RAU' ); ?></div>
+			</div>
+		</details>
+		<details class="cnd-sec" id="cnd-s-radio" open>
+			<summary class="cnd-sec-t"><?php echo rau_cnd_ic( 'hf' ); ?>Radio</summary>
+			<div class="cnd-sec-cols">
+				<div class="cnd-col"><?php $caja( 'cnd-hf', 'hf', 'HF desde aquí' ); ?><?php $caja( 'cnd-vhf', 'seis', '6 m, meteoros y VHF' ); ?></div>
+				<div class="cnd-col"><?php $caja( 'cnd-enlace', 'enlace', '¿Llego a…? Bandas por región' ); ?><?php $caja( 'cnd-alcance', 'antena', 'Alcance real · WSPR última hora' ); ?><?php $caja( 'cnd-pota', 'arbol', 'Activaciones POTA' ); ?></div>
+			</div>
+		</details>
+		<details class="cnd-sec" id="cnd-s-sol" open>
+			<summary class="cnd-sec-t"><?php echo rau_cnd_ic( 'sol' ); ?>Sol y espacio</summary>
+			<?php $caja( 'cnd-solar', 'cme', 'Tormentas solares' ); ?>
+			<div class="cnd-sec-cols">
+				<div class="cnd-col"><?php $caja( 'cnd-tend', 'sol', 'Tendencias del sol' ); ?></div>
+				<div class="cnd-col"><?php $caja( 'cnd-esp', 'sol', 'Clima espacial' ); ?><?php $caja( 'cnd-cielo', 'sat', 'Satélites, sol y luna' ); ?></div>
+			</div>
+		</details>
+		<details class="cnd-sec" id="cnd-s-rau" open>
+			<summary class="cnd-sec-t"><?php echo rau_cnd_ic( 'radio' ); ?>Historial y RAU</summary>
+			<div class="cnd-sec-cols">
+				<div class="cnd-col"><?php $caja( 'cnd-semana', 'registro', 'Resumen de la semana' ); ?>
+				<section class="cnd-caja" id="cnd-rau" aria-labelledby="cnd-rau-t">
+					<div class="cnd-caja-cab"><h2 id="cnd-rau-t"><?php echo rau_cnd_ic( 'radio' ); ?>RAU cerca de ti</h2></div>
+					<div id="cnd-rau-cont" class="cnd-vacio">Consultando…</div>
+					<?php if ( $malla ) : $st = trim( (string) get_post_meta( $malla->ID, 'start', true ) ); $ts = strtotime( $st ); $con_hora = $ts && ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $st ) && '00:00' !== date( 'H:i', $ts ); ?>
+					<p class="cnd-chico" style="margin:0">Próxima actividad: <a href="<?php echo esc_url( get_permalink( $malla ) ); ?>"><?php echo esc_html( get_the_title( $malla ) ); ?></a> · <?php echo esc_html( date_i18n( $con_hora ? 'l j \d\e F, H:i' : 'l j \d\e F', $ts ) ); ?><?php $fq = get_post_meta( $malla->ID, 'frequency', true ); if ( $fq ) : ?> · <span class="cnd-mono"><?php echo esc_html( $fq ); ?></span><?php endif; ?></p>
+					<?php endif; ?>
+					<div>
+						<p class="cnd-mini cnd-mut" style="margin:.2rem 0 .35rem">Para compartir y transmitir:</p>
+						<div class="cnd-oficial" style="margin-bottom:.6rem">
+							<button type="button" class="cnd-btn" id="cnd-tarjeta"><?php echo rau_cnd_ic( 'compartir' ); ?>Imagen para WhatsApp</button>
+							<a class="cnd-btn" id="cnd-franja" href="<?php echo esc_url( home_url( '/condiciones/franja/' ) ); ?>" target="_blank" rel="noopener" title="Para OBS: fuente de navegador de 1280×90, con ?transparente para fondo transparente"><?php echo rau_cnd_ic( 'sala' ); ?>Franja para la transmisión</a>
+						</div>
+						<p class="cnd-mini cnd-mut" style="margin:.2rem 0 .35rem">Fuentes oficiales para alertas y emergencias:</p>
+						<div class="cnd-oficial">
+							<a class="cnd-btn" href="http://www.pronosticosyalertas.gov.co/" target="_blank" rel="noopener">IDEAM alertas</a>
+							<a class="cnd-btn" href="https://fews.ideam.gov.co/visorfews/nacional" target="_blank" rel="noopener">IDEAM ríos</a>
+							<a class="cnd-btn" href="https://portal.gestiondelriesgo.gov.co/" target="_blank" rel="noopener">UNGRD</a>
+							<a class="cnd-btn" href="https://www.sgc.gov.co/sismos" target="_blank" rel="noopener">SGC sismos</a>
+						</div>
+					</div>
+				</section>
 				</div>
-				<p class="cnd-mini cnd-mut" style="margin:.2rem 0 .35rem">Fuentes oficiales para alertas y emergencias:</p>
-				<div class="cnd-oficial">
-					<a class="cnd-btn" href="http://www.pronosticosyalertas.gov.co/" target="_blank" rel="noopener">IDEAM alertas</a>
-					<a class="cnd-btn" href="https://fews.ideam.gov.co/visorfews/nacional" target="_blank" rel="noopener">IDEAM ríos</a>
-					<a class="cnd-btn" href="https://portal.gestiondelriesgo.gov.co/" target="_blank" rel="noopener">UNGRD</a>
-					<a class="cnd-btn" href="https://www.sgc.gov.co/sismos" target="_blank" rel="noopener">SGC sismos</a>
+				<div class="cnd-col"><?php $caja( 'cnd-archivo', 'archivo', 'Archivo de eventos' ); ?>
+				<section class="cnd-caja cnd-avisos cnd-sala-oculto" id="cnd-av" aria-labelledby="cnd-av-t">
+					<div class="cnd-caja-cab"><h2 id="cnd-av-t"><?php echo rau_cnd_ic( 'campana' ); ?>Avisos al celular</h2></div>
+					<p class="cnd-mut cnd-chico" style="margin:0">Llegan aunque tengas la página cerrada. Hasta 5 puntos por celular (casa, repetidora, finca…), como mucho un aviso por tema cada pocas horas.</p>
+					<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+						<input type="text" id="cnd-av-nombre" placeholder="Nombre del punto (p. ej. Casa)" maxlength="60" aria-label="Nombre del punto" style="flex:1 1 10rem">
+						<label style="padding:0" class="cnd-chico">Viento desde <select id="cnd-av-umbral" aria-label="Avisar viento desde"><option>40</option><option>50</option><option selected>60</option><option>70</option><option>80</option></select> km/h</label>
+					</div>
+					<div>
+						<label><input type="checkbox" value="tormenta" checked> Tormenta eléctrica en la zona</label>
+						<label><input type="checkbox" value="viento" checked> Viento fuerte</label>
+						<label><input type="checkbox" value="sol"> Llamarada solar fuerte (apagón de HF)</label>
+						<label><input type="checkbox" value="geomag"> Tormenta geomagnética</label>
+						<label><input type="checkbox" value="seis"> 6 metros abierta</label>
+						<label><input type="checkbox" value="llamarada"> Cada llamarada desde clase <select id="cnd-av-clase" aria-label="Clase mínima de llamarada"><option value="M">M</option><option value="X">X</option></select></label>
+						<label><input type="checkbox" value="protones"> Tormenta de protones (S1 o más)</label>
+						<label><input type="checkbox" value="hss"> Corriente rápida de viento solar</label>
+						<label><input type="checkbox" value="sismo"> Sismo fuerte cerca (M4,5+ a 200 km o M6+ a 500 km)</label>
+					</div>
+					<div style="display:flex;gap:.4rem;flex-wrap:wrap">
+						<button type="button" class="cnd-btn pri" id="cnd-av-on"><?php echo rau_cnd_ic( 'campana' ); ?>Avisarme en este punto</button>
+						<button type="button" class="cnd-btn" id="cnd-av-prueba" hidden>Enviarme una prueba</button>
+					</div>
+					<p class="cnd-chico cnd-mut" id="cnd-av-est" aria-live="polite" style="margin:0"></p>
+					<ul class="cnd-lista" id="cnd-av-lista"></ul>
+				</section>
 				</div>
 			</div>
-		</section>
-		<section class="cnd-caja cnd-avisos cnd-sala-oculto" id="cnd-av" aria-labelledby="cnd-av-t">
-			<div class="cnd-caja-cab"><h2 id="cnd-av-t"><?php echo rau_cnd_ic( 'campana' ); ?>Avisos al celular</h2></div>
-			<p class="cnd-mut cnd-chico" style="margin:0">Llegan aunque tengas la página cerrada. Hasta 5 puntos por celular (casa, repetidora, finca…), como mucho un aviso por tema cada pocas horas.</p>
-			<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
-				<input type="text" id="cnd-av-nombre" placeholder="Nombre del punto (p. ej. Casa)" maxlength="60" aria-label="Nombre del punto" style="flex:1 1 10rem">
-				<label style="padding:0" class="cnd-chico">Viento desde <select id="cnd-av-umbral" aria-label="Avisar viento desde"><option>40</option><option>50</option><option selected>60</option><option>70</option><option>80</option></select> km/h</label>
-			</div>
-			<div>
-				<label><input type="checkbox" value="tormenta" checked> Tormenta eléctrica en la zona</label>
-				<label><input type="checkbox" value="viento" checked> Viento fuerte</label>
-				<label><input type="checkbox" value="sol"> Llamarada solar fuerte (apagón de HF)</label>
-				<label><input type="checkbox" value="geomag"> Tormenta geomagnética</label>
-				<label><input type="checkbox" value="seis"> 6 metros abierta</label>
-				<label><input type="checkbox" value="llamarada"> Cada llamarada desde clase <select id="cnd-av-clase" aria-label="Clase mínima de llamarada"><option value="M">M</option><option value="X">X</option></select></label>
-				<label><input type="checkbox" value="protones"> Tormenta de protones (S1 o más)</label>
-				<label><input type="checkbox" value="hss"> Corriente rápida de viento solar</label>
-				<label><input type="checkbox" value="sismo"> Sismo fuerte cerca (M4,5+ a 200 km o M6+ a 500 km)</label>
-			</div>
-			<div style="display:flex;gap:.4rem;flex-wrap:wrap">
-				<button type="button" class="cnd-btn pri" id="cnd-av-on"><?php echo rau_cnd_ic( 'campana' ); ?>Avisarme en este punto</button>
-				<button type="button" class="cnd-btn" id="cnd-av-prueba" hidden>Enviarme una prueba</button>
-			</div>
-			<p class="cnd-chico cnd-mut" id="cnd-av-est" aria-live="polite" style="margin:0"></p>
-			<ul class="cnd-lista" id="cnd-av-lista"></ul>
-		</section>
+		</details>
 	</div>
 
 	<p class="cnd-pie">

@@ -248,7 +248,7 @@ function condPedir(){
 	if(!url) return;
 	fetch(url+sep+'lat='+(+p.lat).toFixed(1)+'&lon='+(+p.lon).toFixed(1)).then(function(r){ return r.json(); }).then(function(d){
 		var nom={tormenta:'Tormenta',viento:'Viento',hf:'HF',sol:'Sol',geomag:'Geomagnético',seis:'6 m'}, col=['ok','aviso','peligro'], s=d.semaforo||{};
-		condHtml='<div class="em-cond">'+Object.keys(nom).filter(function(k){ return s[k]; }).map(function(k){ return '<div class="em-cond-f n-'+col[s[k].nivel]+'" title="'+esc(s[k].texto)+'"><b>'+nom[k]+'</b><span>'+esc(s[k].texto)+'</span></div>'; }).join('')+'</div>'
+		condHtml='<div class="em-cond">'+Object.keys(nom).filter(function(k){ return s[k]; }).map(function(k){ return '<div class="em-cond-f n-'+(s[k].op?'ok':col[s[k].nivel])+'" title="'+esc(s[k].texto)+'"><b>'+nom[k]+'</b><span>'+esc(s[k].texto)+'</span></div>'; }).join('')+'</div>'
 			+'<p class="em-nota">'+esc(p.nombre||'Punto elegido')+' · '+new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+' · <a href="'+esc(((window.RAU_EM||{}).sitio||'/')+'condiciones/?lat='+(+p.lat).toFixed(2)+'&lon='+(+p.lon).toFixed(2))+'" target="_blank" rel="noopener">condiciones completas →</a></p>';
 		$$('[data-vivo="salaCond"]').forEach(function(el){ el.innerHTML=condHtml; });
 	}).catch(function(){ condT=0; });

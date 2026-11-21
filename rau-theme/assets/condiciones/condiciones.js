@@ -32,7 +32,9 @@ function cuerpo(id,html){ var s=$(id); if(!s) return; var c=s.querySelector('.cn
 function edad(id,txt,viejo){ var e=$(id)&&$(id).querySelector('[data-edad]'); if(!e) return; e.textContent=txt||''; if(viejo) e.setAttribute('data-viejo',''); else e.removeAttribute('data-viejo'); }
 function haceTxt(seg){ if(seg==null) return ''; var m=Math.round(seg/60); return m<1?'ahora':m<60?'hace '+m+' min':'hace '+Math.round(m/60)+' h'; }
 var PALABRA=['NORMAL','ATENCIÓN','ALERTA'];
-function luz(id,nivel,texto){ var el=$('cnd-luz-'+id); if(!el) return; el.dataset.n=nivel; el.querySelector('p').textContent=texto; el.querySelector('.cnd-palabra').textContent=nivel>=0?PALABRA[nivel]:'SIN DATOS'; estadoGeneral(); }
+// 6 m es una oportunidad: su escala es «cerrada / algo / abierta» y no cuenta para el estado de alerta
+var OPORT={seis:['CERRADA','ALGO','ABIERTA']};
+function luz(id,nivel,texto){ var el=$('cnd-luz-'+id); if(!el) return; el.dataset.n=nivel; if(OPORT[id]) el.dataset.op='1'; el.querySelector('p').textContent=texto; el.querySelector('.cnd-palabra').textContent=nivel>=0?(OPORT[id]||PALABRA)[nivel]:'SIN DATOS'; estadoGeneral(); }
 
 /* ── sol y luna (NOAA, precisión de un minuto) ── */
 function diaJuliano(d){ return d.getTime()/86400000+2440587.5; }
@@ -118,8 +120,9 @@ function iniciarMapa(){
 		L.DomEvent.on(a,'click',function(ev){ L.DomEvent.preventDefault(ev); L.DomEvent.stopPropagation(ev); usarGPS(); }); return a; }});
 	mapa.addControl(new Yo());
 	var Ley=L.Control.extend({options:{position:'bottomleft'},onAdd:function(){ var d=L.DomUtil.create('div','cnd-leyenda-m');
-		d.innerHTML='<div><i style="background:#0ea5e9"></i>Punto consultado</div><div><i style="background:#16a34a"></i>Sitio RAU normal</div><div><i style="background:#f59e0b"></i>Sitio en atención</div><div><i style="background:#e11d48"></i>Sitio en alerta</div><div><i style="background:#f97316"></i>Sismo</div><div><i style="background:#7c3aed;border-radius:2px"></i>Ionosonda (MUF)</div><div><i style="background:#fbbf24;border-radius:0;height:3px;border:0"></i>Línea gris</div>'; return d; }});
+		leyDiv=d; pintarLeyenda(); return d; }});
 	mapa.addControl(new Ley());
+	var tLey=null; mapa.on('layeradd layerremove',function(){ clearTimeout(tLey); tLey=setTimeout(pintarLeyenda,80); });
 	pintarRepetidoras(); pintarNoche(); setInterval(pintarNoche,60000); cargarRadar(); setInterval(cargarRadar,10*60000);
 }
 function ponerFondo(k){ if(fondo) mapa.removeLayer(fondo); var f=FONDOS[k]; fondo=L.tileLayer(f[0],{attribution:f[1],maxZoom:k==='relieve'?17:19,subdomains:'abc',className:f[2]||''}).addTo(mapa); fondo.bringToBack(); }
@@ -197,11 +200,11 @@ function cambiarVista(v){
 var NOMBRES={tormenta:'Tormenta eléctrica',viento:'Viento',hf:'HF',sol:'Llamarada solar',geomag:'Campo magnético',seis:'6 m abierta',sat:'Satélites'};
 function estadoGeneral(){
 	if(!datos) return;
-	var al=[], at=[]; document.querySelectorAll('.cnd-luz').forEach(function(l){ var k=l.id.replace('cnd-luz-',''); if(l.dataset.n==='2') al.push(NOMBRES[k]); else if(l.dataset.n==='1') at.push(NOMBRES[k]); });
-	var e=$('cnd-estado');
-	if(al.length){ e.dataset.n=2; e.innerHTML=ic('tormenta')+' ALERTA · '+esc(al.join(', ')); }
-	else if(at.length){ e.dataset.n=1; e.innerHTML=ic('campana')+' ATENCIÓN · '+esc(at.join(', ')); }
-	else { e.dataset.n=0; e.innerHTML=ic('escudo')+' NORMAL · sin alertas'; }
+	var al=[], at=[]; document.querySelectorAll('.cnd-luz').forEach(function(l){ var k=l.id.replace('cnd-luz-',''); if(l.dataset.op) return; if(l.dataset.n==='2') al.push(NOMBRES[k]); else if(l.dataset.n==='1') at.push(NOMBRES[k]); });
+	var e=$('cnd-estado'), op=$('cnd-luz-seis')&&$('cnd-luz-seis').dataset.n==='2'?'<span class="cnd-estado-op">· 6 m abierta</span>':'';
+	if(al.length){ e.dataset.n=2; e.innerHTML=ic('tormenta')+' ALERTA · '+esc(al.join(', '))+op; }
+	else if(at.length){ e.dataset.n=1; e.innerHTML=ic('campana')+' ATENCIÓN · '+esc(at.join(', '))+op; }
+	else { e.dataset.n=0; e.innerHTML=ic('escudo')+' NORMAL'+(op||' · sin alertas'); }
 	document.title=(al.length?'⚠ ':'')+'Condiciones · '+(punto.nombre||locator(punto.lat,punto.lon))+' — RAU';
 }
 function tic(){
@@ -276,22 +279,29 @@ function pintarHF(){
 	if(io&&io.iono){ var i=io.iono;
 		h+='<div class="cnd-kpis"><div class="cnd-kpi"><span>foF2 · NVIS</span><b>'+n(i.fof2,1)+'</b><small>MHz · '+(io.nvis&&io.nvis.banda?'NVIS en '+esc(io.nvis.banda):'sin NVIS')+'</small></div><div class="cnd-kpi"><span>MUF 3000 km</span><b>'+n(i.mufd,1)+'</b><small>MHz · DX: '+esc((io.dx||[]).slice(0,4).join(', ')||'—')+'</small></div>'
 			+'<div class="cnd-kpi"><span>Absorción D-RAP</span><b>'+(d?(d.mhz>=1?n(d.mhz)+' MHz':'0'):'—')+'</b><small>'+(d&&d.mhz>=1?'se pierde por debajo':'sin pérdida extra')+'</small></div><div class="cnd-kpi"><span>Ionosonda</span><b style="font-size:1rem">'+esc(i.nombre.split(',')[0])+'</b><small>a '+n(i.km)+' km · '+haceTxt(i.hace*60)+'</small></div></div>';
+	} else if(io&&io.muf_punto!=null){ var mp=io.muf_punto, dxl=BANDAS.filter(function(b){ return b[1]<=.85*mp&&(b[1]>=7||!dia); }).map(function(b){ return b[0]; });
+		h+='<div class="cnd-kpis"><div class="cnd-kpi"><span>MUF 3000 km aquí</span><b>'+n(mp,1)+'</b><small>MHz · mapa KC2G</small></div><div class="cnd-kpi"><span>DX ahora</span><b style="font-size:1rem">'+esc(dxl.slice(-4).join(', ')||'—')+'</b><small>hasta '+n(.85*mp,1)+' MHz</small></div>'
+			+'<div class="cnd-kpi"><span>Absorción D-RAP</span><b>'+(d?(d.mhz>=1?n(d.mhz)+' MHz':'0'):'—')+'</b><small>'+(d&&d.mhz>=1?'se pierde por debajo':'sin pérdida extra')+'</small></div></div><p class="cnd-mini cnd-mut" style="margin:0">Ninguna ionosonda cercana midió en las últimas 3 horas: la MUF sale del mapa mundial de KC2G en tu punto.</p>';
 	} else h+='<p class="cnd-chico cnd-mut" style="margin:0">Ninguna ionosonda cercana tiene una medición de las últimas 3 horas.</p>';
-	var m=io&&io.matriz;
-	h+='<div class="cnd-graf-tit"><span>Bandas por hora · próximas 24 h ('+zona()+')</span><span>'+(m&&m.completa?'por persistencia: lo medido ayer a la misma hora':'recolectando mediciones ('+(m?m.con_dato:0)+' de 24 h)')+'</span></div><div class="cnd-tabla-caja"><div class="cnd-matriz" id="cnd-matriz"></div></div>'
+	var m=io&&io.matriz, conDato=m?(m.con_dato||0):0, verMatriz=(m&&m.completa)||conDato>=12;
+	var mufAhora=io&&io.iono?io.iono.mufd:(io?io.muf_punto:null), fofAhora=io&&io.iono?io.iono.fof2:null, hAhora=enPunto(Date.now()).getUTCHours();
+	if(!verMatriz){ var NOM0={dx:['ok','DX'],nvis:['ok','NVIS'],ambas:['ok','DX y NVIS'],abs:['at','absorbida'],cerrada:['al','cerrada'],nada:['','sin dato']};
+		h+='<div class="cnd-graf-tit"><span>Bandas ahora en tu punto</span><span>la tabla por hora aparece con 12 h de mediciones (lleva '+conDato+')</span></div><div class="cnd-chips">'+BANDAS.map(function(b){ var e3=NOM0[celda(b[1],fofAhora,mufAhora,hAhora)]; return '<span class="cnd-chip '+e3[0]+'">'+b[0]+' '+e3[1]+'</span>'; }).join('')+'</div>';
+	}
+	if(verMatriz) h+='<div class="cnd-graf-tit"><span>Bandas por hora · próximas 24 h ('+zona()+')</span><span>'+(m&&m.completa?'por persistencia: lo medido ayer a la misma hora':'con '+conDato+' de 24 h medidas')+'</span></div><div class="cnd-tabla-caja"><div class="cnd-matriz" id="cnd-matriz"></div></div>'
 		+'<div class="cnd-leyenda-g"><span><i style="background:hsl(var(--ok))"></i>DX</span><span><i style="background:hsl(var(--nv))"></i>NVIS (0–400 km)</span><span><i style="background:linear-gradient(135deg,hsl(var(--ok)) 50%,hsl(var(--nv)) 50%)"></i>DX y NVIS</span><span><i style="background:hsl(var(--at) / .7)"></i>Absorbida de día</span><span><i style="background:hsl(var(--muted-foreground) / .2)"></i>Cerrada</span></div>';
 	if(io&&io.medido&&io.medido.texto) h+='<p class="cnd-chico" style="margin:0">'+ic('antena')+' '+esc(io.medido.texto)+'</p>';
 	var sp=salidaPuesta(punto.lat,punto.lon,-.833), cv=salidaPuesta(punto.lat,punto.lon,-6);
 	if(sp&&cv) h+='<p class="cnd-chico" style="margin:0"><b>Línea gris hoy ('+zona()+'):</b> '+fh(cv[0])+'–'+fh(sp[0]+18e5)+' y '+fh(sp[1]-18e5)+'–'+fh(cv[1])+'. En esos ratos las bandas bajas llegan más lejos.</p>';
 	h+='<div id="cnd-balizas"></div><div id="cnd-muf-g"></div><p class="cnd-chico" style="margin:0"><a href="'+esc(C.herramientas)+'prop/">Condiciones HF completas →</a> · <a href="'+esc(C.receptor)+'">Escuchar en el receptor del club →</a></p>';
 	cuerpo('cnd-hf',h); pintarBalizas(); clearInterval(balTimer); balTimer=setInterval(pintarBalizas,2000);
-	var mz=$('cnd-matriz'), horas=((m&&m.horas)||[]).slice(), s='<div></div>';
+	var mz=$('cnd-matriz'), horas=((m&&m.horas)||[]).slice(), s='<div></div>'; if(mz){
 	if(!horas.length){ var hh=enPunto(Date.now()).getUTCHours(); for(var k=0;k<24;k++) horas.push({h:(hh+k)%24,fof2:null,mufd:null}); }
 	if(io&&io.iono) horas[0]={h:horas[0].h,fof2:io.iono.fof2,mufd:io.iono.mufd};
 	horas.forEach(function(x){ s+='<div class="h">'+(x.h%3===0?pad(x.h):'')+'</div>'; });
 	var NOM={dx:'DX',nvis:'NVIS',ambas:'DX y NVIS',abs:'absorbida de día',cerrada:'cerrada',nada:'sin dato'};
 	BANDAS.slice().reverse().forEach(function(b){ s+='<div class="r">'+b[0]+'</div>'; horas.forEach(function(x,i){ var e2=celda(b[1],x.fof2,x.mufd,x.h); s+='<div class="c'+(i===0?' ahora':'')+'" data-e="'+e2+'" title="'+b[0]+' a las '+pad(x.h)+':00: '+NOM[e2]+'"></div>'; }); });
-	mz.innerHTML=s;
+	mz.innerHTML=s; }
 	var serie=(m&&m.serie)||[];
 	if(serie.length>=3) grafica($('cnd-muf-g'),{titulo:'MUF y foF2 de las últimas 24 horas',W:900,H:140,x0:Date.now()-864e5,x1:Date.now(),izq:{min:0,max:Math.max(30,Math.ceil(Math.max.apply(null,serie.map(function(x){ return x[2]||0; }))/5)*5),ticks:[0,10,20,30]},tolerancia:36e5,
 		series:[{tipo:'linea',datos:serie.map(function(x){ return [x[0]*1000,x[2]]; }),color:'hsl(var(--ok))',nombre:'MUF 3000 km',unidad:'MHz',corte:2*36e5},{tipo:'linea',datos:serie.map(function(x){ return [x[0]*1000,x[1]]; }),color:'hsl(var(--nv))',nombre:'foF2',unidad:'MHz',corte:2*36e5}],
@@ -421,7 +431,7 @@ function pasadas(){
 }
 function pintarRegistro(){
 	var e=((datos&&datos.eventos)||[]).map(function(x){ return {t:x.t*1000,n:x.nivel,txt:x.texto,fut:!!x.futuro}; });
-	pasadasLista.slice(0,2).forEach(function(p){ e.push({t:p.aos,n:0,txt:'Pasada de '+p.n+' ('+Math.round(p.max)+'°)',fut:true}); });
+	pasadasLista.filter(function(p){ return p.max>=40; }).slice(0,1).forEach(function(p){ e.push({t:p.aos,n:0,txt:'Pasada de '+p.n+' ('+Math.round(p.max)+'°)',fut:true}); });
 	var sp=salidaPuesta(punto.lat,punto.lon,-.833); if(sp) [[sp[0],'Amanecer: línea gris'],[sp[1],'Atardecer: línea gris']].forEach(function(x){ if(x[0]>Date.now()) e.push({t:x[0],n:0,txt:x[1],fut:true}); });
 	var ah=Date.now(), fut=e.filter(function(x){ return x.fut&&x.t>ah; }).sort(function(a,b){ return a.t-b.t; }), pas=e.filter(function(x){ return !(x.fut&&x.t>ah); }).sort(function(a,b){ return b.t-a.t; });
 	var fila=function(x){ return '<li data-n="'+x.n+'"'+(x.fut?' data-fut':'')+'><time>'+(fdia(x.t)==='hoy'?'':'<span class="cnd-mini">'+esc(fdia(x.t))+'</span><br>')+fh(x.t)+'</time><span>'+esc(x.txt)+'</span></li>'; };
@@ -460,7 +470,7 @@ function pintarSolar(){
 		+'<p class="cnd-mini cnd-mut" style="margin:0">Una eyección (CME) tarda de 1 a 4 días en llegar. Si llega con el campo hacia el sur (Bz negativo), provoca tormenta geomagnética: HF inestable y bandas altas cerradas.</p>';
 	var c3='<div class="cnd-graf-tit"><span>Protones ≥10 MeV · 24 h</span><span>S1 = 10 pfu</span></div><div id="cnd-g-pr"></div><div class="cnd-graf-tit"><span>Índice Dst · 3 días</span><span>negativo = tormenta</span></div><div id="cnd-g-dst"></div>'
 		+'<div class="cnd-graf-tit"><span>Pronóstico de 27 días (NOAA)</span><span>para planear concursos</span></div><div id="cnd-g-27"></div><div class="cnd-graf-tit"><span>Ciclo solar 25 · manchas por mes</span></div><div id="cnd-g-ciclo"></div>';
-	cuerpo('cnd-solar','<div class="cnd-solar-rej"><div style="display:flex;flex-direction:column;gap:.6rem">'+c1+'</div><div style="display:flex;flex-direction:column;gap:.6rem">'+c2+'</div><div style="display:flex;flex-direction:column;gap:.3rem">'+c3+'</div></div>');
+	cuerpo('cnd-solar','<div class="cnd-solar-rej"><div style="display:flex;flex-direction:column;gap:.6rem">'+c1+'</div><div style="display:flex;flex-direction:column;gap:.6rem">'+c2+'</div><div style="display:flex;flex-direction:column;gap:.3rem">'+c3+'</div></div><button type="button" class="cnd-btn cnd-solo-movil cnd-sol-mas" aria-expanded="'+$('cnd-solar').classList.contains('mas')+'">'+($('cnd-solar').classList.contains('mas')?'Ver menos':'Ver imágenes del sol, regiones y gráficas')+'</button>');
 	var pr=(so.protones||[]).map(function(x){ return [x[0]*1000,x[1]]; });
 	if(pr.length) grafica($('cnd-g-pr'),{titulo:'Protones de 10 MeV o más',H:110,x0:Date.now()-864e5,x1:Date.now(),izq:{min:.01,max:1e4,log:true,ticks:[.1,1,10,100,1000],fmt:function(v){ return v>=1?String(v):v; }},hlineas:[{v:10,color:'hsl(var(--at) / .8)',et:'S1'},{v:100,color:'hsl(var(--al) / .8)',et:'S2'}],tolerancia:18e5,
 		series:[{tipo:'area',datos:pr,color:'hsl(var(--nv))',nombre:'Protones ≥10 MeV',unidad:'pfu',fmt:function(v){ return v<1?v.toFixed(2):n(v,1); }}]});
@@ -499,6 +509,23 @@ function capaPerezosa(k){
 	if(k==='muf') cargarMuf(); else if(k==='wspr'){ if(wsprDat) pintarCapaWspr(); else cargarAlcance(); } else if(k==='pota'){ if(potaDat) pintarCapaPota(); else cargarPota(); }
 	else if(k==='sats') satsEnVivo(); else if(k==='balizas') pintarCapaBalizas(); else if(k==='siata'&&siataDat) pintarCapaSiata();
 }
+/* 19.66.0: la leyenda del mapa muestra solo las capas encendidas */
+var leyDiv; // sin valor inicial: el mapa puede crearse antes de que se ejecute esta línea
+function pintarLeyenda(){
+	if(!leyDiv||!mapa) return; var on=function(k){ return capas[k]&&mapa.hasLayer(capas[k]); }, f=function(c,t,x){ return '<div><i style="background:'+c+(x||'')+'"></i>'+t+'</div>'; }, h=f('#0ea5e9','Punto consultado');
+	if(on('repetidoras')) h+=f('#16a34a','Sitio RAU normal')+f('#f59e0b','Sitio en atención')+f('#e11d48','Sitio en alerta');
+	if(on('sismos')) h+=f('#f97316','Sismo');
+	if(on('iono')) h+=f('#7c3aed','Ionosonda (MUF)',';border-radius:2px');
+	if(on('noche')) h+=f('#fbbf24','Línea gris',';border-radius:0;height:3px;border:0');
+	if(on('muf')) h+=f('linear-gradient(90deg,#3b82f6,#22c55e,#eab308,#ef4444)','MUF 3000 km (MHz)',';border-radius:0;height:3px;border:0;width:1rem');
+	if(on('wspr')) h+=f('linear-gradient(90deg,#818cf8,#38bdf8,#34d399,#facc15,#f87171)','Enlace WSPR (color = banda)',';border-radius:0;height:3px;border:0;width:1rem');
+	if(on('pota')) h+=f('#15803d','Activación POTA');
+	if(on('sats')) h+=f('#a21caf','Satélite · traza de la ISS');
+	if(on('balizas')) h+=f('#f59e0b','Baliza NCDXF transmitiendo')+f('#64748b','Baliza en silencio');
+	if(on('siata')&&enAburra()) h+=f('#16a34a','Quebrada normal')+f('#f97316','Quebrada en precaución')+f('#e11d48','Quebrada en alerta')+f('#38bdf8','Lluvia (SIATA)');
+	if(on('enlace')&&capas.enlace.getLayers().length) h+=f('#38bdf8','Ruta del enlace',';border-radius:0;height:3px;border:0;width:1rem');
+	leyDiv.innerHTML=h;
+}
 /* MUF en vivo: isolíneas de KC2G */
 function cargarMuf(){
 	if(mufDat){ pintarCapaMuf(); return; }
@@ -512,10 +539,22 @@ function pintarCapaMuf(){
 }
 /* «¿Llego a…?» */
 var DESTINOS=[['Madrid',40.42,-3.7],['Miami',25.77,-80.19],['Nueva York',40.71,-74.0],['Buenos Aires',-34.6,-58.38],['Tokio',35.68,139.69],['Sídney',-33.87,151.21],['Johannesburgo',-26.2,28.05],['Alaska',61.22,-149.9]];
+function cargarRegiones(){
+	var el=$('cnd-enl-reg'); if(!el) return;
+	fetch(C.api+'/regiones?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ return r.json(); }).then(function(l){
+		if(!Array.isArray(l)||!l.length){ el.innerHTML=''; return; }
+		var bs=['80 m','40 m','30 m','20 m','17 m','15 m','12 m','10 m'], cl={buena:'ok',marginal:'at',absorbida:'ab',cerrada:'no'}, tx={buena:'abierta',marginal:'al límite',absorbida:'absorbida',cerrada:'cerrada'};
+		el.innerHTML='<div class="cnd-graf-tit"><span>Bandas por región · ahora</span><span>toca una región para el detalle</span></div><div class="cnd-tabla-caja"><table class="cnd-tabla cnd-regtab"><thead><tr><th>Región</th>'+bs.map(function(b){ return '<th>'+b.replace(' m','')+'</th>'; }).join('')+'</tr></thead><tbody>'
+			+l.map(function(x){ return '<tr data-lat="'+x.lat+'" data-lon="'+x.lon+'" data-n="'+esc(x.n)+'" tabindex="0"><td><b>'+esc(x.n)+'</b><br><span class="cnd-mini cnd-mut">'+n(x.km)+' km · '+x.sp+'°</span></td>'+bs.map(function(b){ var e=x.bandas[b]||'cerrada'; return '<td class="cnd-rc '+cl[e]+'" title="'+b+' a '+esc(x.n)+': '+tx[e]+'"><span class="cnd-sr">'+tx[e]+'</span></td>'; }).join('')+'</tr>'; }).join('')+'</tbody></table></div>'
+			+'<div class="cnd-leyenda-g"><span><i class="cnd-rc ok"></i>abierta</span><span><i class="cnd-rc at"></i>al límite</span><span><i class="cnd-rc ab"></i>absorbida</span><span><i class="cnd-rc no"></i>cerrada</span></div>';
+	}).catch(function(){ el.innerHTML=''; });
+}
+document.addEventListener('click',function(e){ var tr=e.target.closest('.cnd-regtab tbody tr'); if(tr) destino({lat:+tr.dataset.lat,lon:+tr.dataset.lon,nombre:tr.dataset.n}); });
+document.addEventListener('keydown',function(e){ var tr=e.target.closest&&e.target.closest('.cnd-regtab tbody tr'); if(tr&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); tr.click(); } });
 function pintarEnlace(){
-	if($('cnd-enl-dest')) return; // ya está armado
+	if($('cnd-enl-dest')){ cargarRegiones(); return; } // ya está armado: solo se actualizan las regiones
 	cuerpo('cnd-enlace','<div class="cnd-enl-form"><div class="cnd-buscar" style="max-width:none;flex:1 1 14rem;display:block"><input id="cnd-enl-dest" type="search" autocomplete="off" placeholder="Destino: ciudad, país o locator (IO91)" aria-label="Destino del enlace"><div class="cnd-sug" id="cnd-enl-sug" hidden></div></div><button type="button" class="cnd-btn" id="cnd-enl-mapa">'+ic('mapa')+'Elegir en el mapa</button></div>'
-		+'<div class="cnd-chips">'+DESTINOS.map(function(d){ return '<button type="button" class="cnd-chip cnd-enl-rap" data-lat="'+d[1]+'" data-lon="'+d[2]+'" data-n="'+esc(d[0])+'">'+esc(d[0])+'</button>'; }).join('')+'</div><div id="cnd-enl-res"><p class="cnd-mini cnd-mut" style="margin:0">Elige un destino para ver la distancia, el rumbo de la antena y qué bandas sirven ahora para llegar.</p></div>');
+		+'<div id="cnd-enl-reg"></div><div class="cnd-chips">'+DESTINOS.map(function(d){ return '<button type="button" class="cnd-chip cnd-enl-rap" data-lat="'+d[1]+'" data-lon="'+d[2]+'" data-n="'+esc(d[0])+'">'+esc(d[0])+'</button>'; }).join('')+'</div><div id="cnd-enl-res"><p class="cnd-mini cnd-mut" style="margin:0">O elige un destino exacto para ver la distancia, el rumbo de la antena y los puntos del camino.</p></div>');
 	var inp=$('cnd-enl-dest'), sg=$('cnd-enl-sug'), tt=null;
 	inp.addEventListener('input',function(){ var q=this.value.trim(); clearTimeout(tt); var l=deLocator(q);
 		if(l){ sg.hidden=false; sg.innerHTML='<button type="button" data-lat="'+l[0]+'" data-lon="'+l[1]+'" data-n="'+esc(q.toUpperCase())+'">Locator '+esc(q.toUpperCase())+'</button>'; return; }
@@ -525,6 +564,7 @@ function pintarEnlace(){
 	$('cnd-enlace').addEventListener('click',function(e){ var b=e.target.closest('.cnd-enl-rap'); if(b) destino({lat:+b.dataset.lat,lon:+b.dataset.lon,nombre:b.dataset.n}); });
 	$('cnd-enl-mapa').addEventListener('click',function(){ eligiendoDestino=true; cambiarVista('radar'); $('cnd-mapa').style.cursor='crosshair'; $('cnd-mapa').scrollIntoView({behavior:'smooth',block:'center'}); });
 	edad('cnd-enlace','MUF de KC2G · ahora');
+	cargarRegiones();
 }
 function gc(a,b,nPts){ var R0=Math.PI/180, f1=a[0]*R0, l1=a[1]*R0, f2=b[0]*R0, l2=b[1]*R0, d=2*Math.asin(Math.sqrt(Math.pow(Math.sin((f2-f1)/2),2)+Math.cos(f1)*Math.cos(f2)*Math.pow(Math.sin((l2-l1)/2),2))), o=[];
 	for(var i=0;i<=nPts;i++){ var fr=i/nPts, A=Math.sin((1-fr)*d)/Math.sin(d), B=Math.sin(fr*d)/Math.sin(d), x=A*Math.cos(f1)*Math.cos(l1)+B*Math.cos(f2)*Math.cos(l2), y=A*Math.cos(f1)*Math.sin(l1)+B*Math.cos(f2)*Math.sin(l2), z=A*Math.sin(f1)+B*Math.sin(f2); o.push([Math.atan2(z,Math.sqrt(x*x+y*y))/R0, Math.atan2(y,x)/R0]); }
@@ -577,15 +617,17 @@ function pintarCapaPota(){ if(!mapa||!potaDat) return; capas.pota.clearLayers();
 /* Valle de Aburrá (SIATA) */
 function enAburra(){ return km2([punto.lat,punto.lon],[6.25,-75.57])<=60; }
 function cargarSiata(){
-	var sec=$('cnd-siata'); if(!enAburra()){ if(sec) sec.hidden=true; if(capas.siata) capas.siata.clearLayers(); return; } if(sec) sec.hidden=false;
+	var sec=$('cnd-siata'); if(!enAburra()){ if(sec) sec.hidden=true; if($('cnd-siata-al')) $('cnd-siata-al').hidden=true; if(capas.siata) capas.siata.clearLayers(); return; } if(sec) sec.hidden=false;
 	fetch(C.api+'/siata').then(function(r){ return r.json(); }).then(function(d){ siataDat=d; pintarSiata(); if(mapa&&mapa.hasLayer(capas.siata)) pintarCapaSiata(); }).catch(function(){ cuerpo('cnd-siata','<p class="cnd-vacio">SIATA no respondió.</p>'); });
 }
 var SNIV=['Normal','Vigilancia','Precaución','Alerta'], SCOL=['#16a34a','#eab308','#f97316','#e11d48'];
 function pintarSiata(){
 	var d=siataDat; if(!d||!d.ok){ cuerpo('cnd-siata','<p class="cnd-vacio">SIATA no respondió.</p>'); return; }
-	var r=d.resumen, alto=(d.niveles||[]).filter(function(x){ return x.e>=1; }).sort(function(a,b){ return b.e-a.e||(b.pct||0)-(a.pct||0); }), llueve=(d.lluvia||[]).filter(function(x){ return x.llueve; }).sort(function(a,b){ return b.mm-a.mm; });
+	var fr=$('cnd-siata-al'), conf=(d.niveles||[]).filter(function(x){ return x.e>=2&&!x.dudoso&&!x.sin_confirmar; }).sort(function(a,b){ return b.e-a.e; });
+	if(fr){ fr.hidden=!conf.length; if(conf.length){ fr.className='cnd-sismo'+(conf[0].e>=3?' al':''); fr.innerHTML=ic('agua')+'<div><b>SIATA: '+conf.length+' quebrada'+(conf.length>1?'s':'')+' en '+(conf[0].e>=3?'alerta':'precaución')+'</b> · '+conf.slice(0,3).map(function(x){ return esc(x.n)+' ('+esc(x.mun)+')'; }).join(', ')+(conf.length>3?' y '+(conf.length-3)+' más':'')+'<br><span class="cnd-mini">Fuente: SIATA – Área Metropolitana del Valle de Aburrá. <a href="#cnd-siata">Ver el detalle</a> · sigue a SIATA y al DAGRD.</span></div>'; } }
+	var r=d.resumen, alto=(d.niveles||[]).filter(function(x){ return x.e>=1; }).sort(function(a,b){ var fa=a.dudoso||a.sin_confirmar?1:0, fb=b.dudoso||b.sin_confirmar?1:0; return fa-fb||b.e-a.e||(b.pct||0)-(a.pct||0); }), llueve=(d.lluvia||[]).filter(function(x){ return x.llueve; }).sort(function(a,b){ return b.mm-a.mm; });
 	cuerpo('cnd-siata','<div class="cnd-kpis"><div class="cnd-kpi"><span>Llueve ahora</span><b>'+r.llueve+'</b><small>de '+r.pluvios+' pluviómetros · máx. '+n(r.max_mm,1)+' mm/15 min</small></div><div class="cnd-kpi"><span>Quebradas en alerta</span><b style="color:'+(r.alerta?SCOL[Math.max(2,r.peor)]:'inherit')+'">'+r.alerta+'</b><small>de '+r.niveles+' sensores (precaución o más)</small></div></div>'
-		+'<div class="cnd-solar-rej" style="grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))"><div><div class="cnd-graf-tit"><span>Sensores de nivel por encima de lo normal</span></div>'+(alto.length?'<ul class="cnd-lista cnd-scroll" style="max-height:14rem">'+alto.map(function(x){ return '<li><span><span class="cnd-punto-b" style="background:'+SCOL[x.e]+'"></span><b>'+esc(x.n)+'</b><br><span class="cnd-mini cnd-mut">'+esc(x.mun)+' · '+n(x.cm)+' cm'+(x.pre?' · precaución '+n(x.pre)+' cm':'')+(x.dudoso?' · <b>dato dudoso</b> (sensor posiblemente en falla)':'')+'</span></span><span class="der cnd-chico" style="color:'+SCOL[x.e]+'">'+SNIV[x.e]+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Todas las quebradas en nivel normal.</p>')+'</div>'
+		+'<div class="cnd-solar-rej" style="grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))"><div><div class="cnd-graf-tit"><span>Sensores de nivel por encima de lo normal</span></div>'+(alto.length?'<ul class="cnd-lista cnd-scroll" style="max-height:14rem">'+alto.map(function(x){ return '<li><span><span class="cnd-punto-b" style="background:'+SCOL[x.e]+'"></span><b>'+esc(x.n)+'</b><br><span class="cnd-mini cnd-mut">'+esc(x.mun)+' · '+n(x.cm)+' cm'+(x.pre?' · precaución '+n(x.pre)+' cm':'')+(x.dudoso?' · <b>dato dudoso</b> (sensor posiblemente en falla)':'')+(x.sin_confirmar?' · <b>sin confirmar</b>: sin lluvia fuerte cerca y sin cotas para compararlo':'')+'</span></span><span class="der cnd-chico" style="color:'+(x.dudoso||x.sin_confirmar?'hsl(var(--muted-foreground))':SCOL[x.e])+'">'+SNIV[x.e]+(x.dudoso||x.sin_confirmar?'?':'')+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Todas las quebradas en nivel normal.</p>')+'</div>'
 		+'<div><div class="cnd-graf-tit"><span>Dónde llueve ahora</span></div>'+(llueve.length?'<ul class="cnd-lista cnd-scroll" style="max-height:14rem">'+llueve.slice(0,12).map(function(x){ return '<li><span>'+esc(x.n)+' <span class="cnd-mini cnd-mut">'+esc(x.mun)+'</span></span><span class="der cnd-mono">'+n(x.mm,1)+' mm</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">No llueve en ningún pluviómetro.</p>')+'</div></div>'
 		+'<p class="cnd-mini cnd-mut" style="margin:0">Fuente: SIATA – Área Metropolitana del Valle de Aburrá. El estado de cada quebrada es el que publica SIATA. Para alertas oficiales sigue a SIATA y al DAGRD.</p>');
 	edad('cnd-siata','SIATA · cada 5 min');
@@ -593,7 +635,7 @@ function pintarSiata(){
 function pintarCapaSiata(){
 	if(!mapa||!siataDat||!enAburra()) return; capas.siata.clearLayers();
 	(siataDat.lluvia||[]).forEach(function(x){ if(!x.llueve) return; L.circleMarker([x.lat,x.lon],{radius:4+Math.min(10,x.mm*3),color:'#0284c7',fillColor:'#38bdf8',fillOpacity:.6,weight:1}).bindTooltip(esc(x.n)+': '+n(x.mm,1)+' mm en 15 min').addTo(capas.siata); });
-	(siataDat.niveles||[]).forEach(function(x){ if(x.e<0) return; L.circleMarker([x.lat,x.lon],{radius:x.e?7:4,color:'#fff',weight:x.e?2:1,fillColor:SCOL[x.e],fillOpacity:x.e?1:.7}).bindPopup('<b>'+esc(x.n)+'</b><br>'+n(x.cm)+' cm · '+SNIV[x.e]+(x.dudoso?' (dato dudoso)':'')+'<br>Fuente: SIATA').addTo(capas.siata); });
+	(siataDat.niveles||[]).forEach(function(x){ if(x.e<0) return; L.circleMarker([x.lat,x.lon],{radius:x.e?7:4,color:'#fff',weight:x.e?2:1,fillColor:SCOL[x.e],fillOpacity:x.e?1:.7}).bindPopup('<b>'+esc(x.n)+'</b><br>'+n(x.cm)+' cm · '+SNIV[x.e]+(x.dudoso?' (dato dudoso)':x.sin_confirmar?' (sin confirmar)':'')+'<br>Fuente: SIATA').addTo(capas.siata); });
 }
 /* Satélites en vivo y balizas NCDXF */
 function satsEnVivo(){
@@ -634,12 +676,12 @@ $('cnd-lugares').addEventListener('click',function(e){ var b=e.target.closest('[
 /* Resumen de la semana y archivo */
 function cargarSemana(){ fetch(C.api+'/semana?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ return r.json(); }).then(function(w){
 	cuerpo('cnd-semana','<p class="cnd-chico" style="margin:0">'+esc(w.texto)+'</p><div class="cnd-tabla-caja"><table class="cnd-tabla"><thead><tr><th>Día</th><th class="num">Lluvia</th><th class="num">Ráfagas</th><th>Tormenta</th><th class="num">Kp máx.</th><th class="num">Llamarada</th></tr></thead><tbody>'
-		+(w.dias||[]).slice().reverse().map(function(d){ return '<tr><td>'+new Date(d.dia+'T12:00:00Z').toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'})+'</td><td class="num">'+(d.mm!=null?n(d.mm,1)+' mm':'—')+'</td><td class="num">'+(d.rafaga!=null?n(d.rafaga)+' km/h':'—')+'</td><td>'+(d.tormenta?'<span class="cnd-chip al">sí</span>':'—')+'</td><td class="num">'+(d.kp!=null?'<span style="color:'+colKp(d.kp)+'">'+n(d.kp,1)+'</span>':'—')+'</td><td class="num">'+esc(d.fl||'—')+'</td></tr>'; }).join('')+'</tbody></table></div><p class="cnd-mini cnd-mut" style="margin:0">El tiempo es del punto consultado (Open-Meteo). El Kp y las llamaradas salen del archivo del sitio, que se llena desde la versión 19.65.</p>');
+		+(w.dias||[]).slice().reverse().map(function(d){ return '<tr><td>'+new Date(d.dia+'T12:00:00Z').toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'})+'</td><td class="num">'+(d.mm!=null?n(d.mm,1)+' mm':'—')+'</td><td class="num">'+(d.rafaga!=null?n(d.rafaga)+' km/h':'—')+'</td><td>'+(d.tormenta?'<span class="cnd-chip al">sí</span>':'—')+'</td><td class="num">'+(d.kp!=null?'<span style="color:'+colKp(d.kp)+'">'+n(d.kp,1)+'</span>':'—')+'</td><td class="num">'+esc(d.fl||'—')+'</td></tr>'; }).join('')+'</tbody></table></div><p class="cnd-mini cnd-mut" style="margin:0">El tiempo es del punto consultado (Open-Meteo). El Kp y las llamaradas son de NOAA (7 días) y del archivo del sitio.</p>');
 	edad('cnd-semana','7 días · '+zona()); }).catch(function(){}); }
 var archDia=null;
 function cargarArchivo(dia){ fetch(C.api+'/archivo'+(dia?'?dia='+dia:'')).then(function(r){ return r.json(); }).then(function(a){ archDia=a.dia;
 	var sel='<label class="cnd-chico">Día: <select id="cnd-arch-dia" aria-label="Día del archivo">'+(a.dias||[]).map(function(d){ return '<option value="'+d.dia+'"'+(d.dia===a.dia?' selected':'')+'>'+d.dia+' · Kp '+(d.kp!=null?n(d.kp,1):'—')+(d.fl?' · '+esc(d.fl):'')+' ('+d.n+')</option>'; }).join('')+'</select></label>';
-	cuerpo('cnd-archivo',((a.dias||[]).length?sel:'')+((a.eventos||[]).length?'<ul class="cnd-lista cnd-reg cnd-scroll">'+a.eventos.map(function(x){ return '<li data-n="'+x.n+'"><time>'+fh(x.t*1000)+'</time><span>'+esc(x.x)+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Sin eventos guardados para ese día. El archivo se llena cada 10 minutos desde la versión 19.65.</p>'));
+	cuerpo('cnd-archivo',((a.dias||[]).length?sel:'')+((a.eventos||[]).length?'<ul class="cnd-lista cnd-reg cnd-scroll">'+a.eventos.map(function(x){ return '<li data-n="'+x.n+'"><time>'+fh(x.t*1000)+'</time><span>'+esc(x.x)+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Sin eventos para ese día.</p>'));
 	var s2=$('cnd-arch-dia'); if(s2) s2.addEventListener('change',function(){ cargarArchivo(this.value); });
 	edad('cnd-archivo','90 días'); }).catch(function(){}); }
 /* Tarjeta para WhatsApp */
@@ -647,6 +689,20 @@ $('cnd-tarjeta').addEventListener('click',function(){ var b=this, u=location.ori
 	b.disabled=true; fetch(u).then(function(r){ if(!r.ok) throw new Error(); return r.blob(); }).then(function(bl){ var f=new File([bl],'condiciones-rau.png',{type:'image/png'});
 		if(navigator.canShare&&navigator.canShare({files:[f]})) return navigator.share({files:[f],title:'Condiciones para operar',text:pag});
 		window.open(u,'_blank'); }).catch(function(){ window.open('https://wa.me/?text='+encodeURIComponent('Condiciones para operar: '+pag),'_blank'); }).then(function(){ b.disabled=false; }); });
+
+/* 19.66.0: secciones plegables (cerradas en el celular salvo las dos primeras) y panel solar compacto */
+(function(){
+	var REPINTA=function(){ [pintarClima,pintarHF,pintarTendencias,pintarSolar].forEach(function(f){ try{ if(datos) f(); }catch(e){} }); };
+	var movil=window.matchMedia('(max-width:639px)').matches, hash=location.hash.slice(1);
+	document.querySelectorAll('details.cnd-sec').forEach(function(d){
+		var guardado=null; try{ guardado=localStorage.getItem('rau_cond_sec_'+d.id); }catch(e){}
+		if(guardado!==null) d.open=guardado==='1'; else if(movil&&(d.id==='cnd-s-sol'||d.id==='cnd-s-rau')) d.open=false;
+		if(hash&&(hash===d.id||d.querySelector('#'+CSS.escape(hash)))) d.open=true;
+		d.addEventListener('toggle',function(){ try{ localStorage.setItem('rau_cond_sec_'+d.id,d.open?'1':'0'); }catch(e){} if(d.open) setTimeout(REPINTA,30); });
+	});
+	document.querySelectorAll('.cnd-secnav a').forEach(function(a){ a.addEventListener('click',function(){ var d=$(a.getAttribute('href').slice(1)); if(d) d.open=true; }); });
+	document.addEventListener('click',function(e){ var b=e.target.closest('.cnd-sol-mas'); if(!b) return; $('cnd-solar').classList.toggle('mas'); pintarSolar(); });
+})();
 
 /* ── ubicación y carga ── */
 function textoLugar(){ var fr=$('cnd-franja'); if(fr) fr.href=location.origin+'/condiciones/franja/?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1); $('cnd-lugar-txt').textContent=punto.nombre||(datos&&datos.punto&&datos.punto.cerca?'cerca de '+datos.punto.cerca.nombre:punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)); $('cnd-loc').textContent=locator(punto.lat,punto.lon); $('cnd-reloj-local-et').textContent='Hora local · '+zona(); }

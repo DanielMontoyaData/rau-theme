@@ -181,12 +181,13 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 		aire: { pm25: 12, pm10: 20, aqi: 55, uv: 4 },
 		espacio: { kp: { valor: 1.3 }, kp_pron: 3.7, rayosx: { actual: 'B2.0', max: 'B5.0' }, escalas: { R: 0, S: 0, G: 0, prob_r: 10, prob_rx: 5 }, viento: { vel: 420, dens: 3.2, bz: -4.2, bt: 6 }, alertas: [], sfi: 140, ssn: 90, bandas: [{ name: '80m-40m', day: 'Good', night: 'Good' }, { name: '12m-10m', day: 'Poor', night: 'Poor' }] },
 		drap: { mhz: 0, mensaje: 'Normal' },
-		iono: { iono: { nombre: 'Boa Vista, Brazil', km: 1694, fof2: 8.6, mufd: 27, hace: 20 }, nvis: { banda: '40 m', texto: 'foF2 8,6 MHz.' }, dx: ['40 m', '20 m'], estaciones: [{ n: 'Boa Vista, Brazil', lat: 2.8, lon: -60.7, mufd: 27, fof2: 8.6, hace: 20 }] },
+		iono: { matriz: { completa: true, con_dato: 24, horas: Array.from({ length: 24 }, (_, i) => ({ h: (21 + i) % 24, fof2: 6 + (i % 4), mufd: 18 + (i % 6) })), serie: [] }, muf_punto: 19.1, iono: { nombre: 'Boa Vista, Brazil', km: 1694, fof2: 8.6, mufd: 27, hace: 20 }, nvis: { banda: '40 m', texto: 'foF2 8,6 MHz.' }, dx: ['40 m', '20 m'], estaciones: [{ n: 'Boa Vista, Brazil', lat: 2.8, lon: -60.7, mufd: 27, fof2: 8.6, hace: 20 }] },
 		sismos: [{ mag: 4.8, lugar: 'Antioquia', t: Math.floor(Date.now() / 1000) - 3600, km: 80, prof: 30, lat: 6.9, lon: -75.9, url: '' }, { mag: 3.1, lugar: 'Los Santos', t: Math.floor(Date.now() / 1000) - 7200, km: 300, prof: 150, lat: 6.8, lon: -73.1, url: '' }],
 		tend: { kp: [[Math.floor(Date.now() / 1000) - 3 * 3600, 2]], kp7: [[Math.floor(Date.now() / 1000) - 3 * 86400, 3], [Math.floor(Date.now() / 1000) - 3 * 3600, 2]], kp_pron: [], rayosx: [], rayosx7: [], viento: [], viento24: [], llamaradas: [] },
 		repetidoras: [{ name: 'Repetidora Medellín', freq: '146.675', offset: '-600 kHz', tone: '100.0', km: 11 }],
 		semaforo: { tormenta: { nivel: 2, texto: 'Tormenta eléctrica prevista hacia las 11:00. Desconecta las antenas.' }, viento: { nivel: 0, texto: 'Viento tranquilo.' }, hf: { nivel: 0, texto: 'Abiertas: 80–40m.' }, sol: { nivel: 0, texto: 'Sol tranquilo.' }, geomag: { nivel: 0, texto: 'Campo tranquilo.' } },
 		generado: 1795200000 };
+	const ionoOrig = JSON.parse(JSON.stringify(datos.iono));
 	const pedidos = [];
 	await p.route(/^https?:\/\/(?!localhost)/, r => r.abort());
 	await p.route(/wp-json\/rau\/v1\/condiciones\?/, r => { pedidos.push(r.request().url()); r.fulfill({ contentType: 'application/json', body: JSON.stringify(datos) }); });
@@ -206,6 +207,8 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	await j(/condiciones\/pota/, [{ act: 'HK4P', f: '14280', modo: 'SSB', ref: 'CO-0001', parque: 'Parque Arví', lugar: 'CO-ANT', lat: 6.28, lon: -75.5, t: 0 }]);
 	await j(/condiciones\/semana/, { dias: [{ dia: '2026-11-20', mm: 5, rafaga: 40, tormenta: true, kp: 3.3, fl: 'M2.4' }], texto: 'En los últimos 7 días: 5 mm de lluvia, 1 día con tormenta eléctrica.' });
 	await j(/condiciones\/archivo/, { dia: '2026-11-20', dias: [{ dia: '2026-11-20', kp: 3.3, fl: 'M2.4', n: 1 }], eventos: [{ t: 1795200000, tipo: 'sol', n: 1, x: 'Llamarada M2.4' }] });
+	await j(/condiciones\/regiones/, [{ n: 'Caribe', lat: 18.5, lon: -66.1, km: 1712, sp: 36, muf: 22, bandas: { '80 m': 'buena', '40 m': 'buena', '30 m': 'buena', '20 m': 'marginal', '17 m': 'cerrada', '15 m': 'cerrada', '12 m': 'cerrada', '10 m': 'cerrada' } },
+		{ n: 'Europa', lat: 48.9, lon: 2.35, km: 8609, sp: 41, muf: 16, bandas: { '80 m': 'buena', '40 m': 'buena', '30 m': 'buena', '20 m': 'cerrada', '17 m': 'cerrada', '15 m': 'cerrada', '12 m': 'cerrada', '10 m': 'cerrada' } }]);
 	await j(/condiciones\/muf/, [{ v: 20, c: '#00ff00', p: [[-80, 0], [-70, 0]] }]);
 	await j(/condiciones\/enlace/, { km: 8032, sp: 49, lp: 229, saltos: 3, puntos: [{ lat: 20, lon: -60, muf: 18, sol: -10, drap: null }, { lat: 35, lon: -20, muf: 15, sol: -20, drap: null }], muf: 16.5, fot: 14, luf: 3, dia: false,
 		bandas: [{ b: '40 m', f: 7.1, e: 'buena' }, { b: '20 m', f: 14.2, e: 'marginal' }, { b: '10 m', f: 28.5, e: 'cerrada' }] });
@@ -244,6 +247,14 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.equal(await p.getAttribute('#cnd-fav', 'aria-pressed'), 'true');
 	assert.match(await p.getAttribute('#cnd-franja', 'href'), /\/condiciones\/franja\/\?lat=6\.2&lon=-75\.6/, 'franja para OBS con el punto');
 	assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'sin desborde horizontal');
+	// 19.66: regiones × bandas, secciones, 6 m como oportunidad
+	await p.waitForSelector('.cnd-regtab tbody tr');
+	assert.equal(await p.$$eval('.cnd-regtab tbody tr', l => l.length), 2, 'tabla de bandas por región');
+	assert.equal(await p.$$eval('.cnd-regtab tbody tr:first-child td.cnd-rc.ok', l => l.length), 3, 'Caribe: 80, 40 y 30 m abiertas');
+	assert.equal(await p.$$eval('details.cnd-sec', l => l.length), 4, 'cuatro secciones');
+	assert.equal(await p.$$eval('.cnd-secnav a', l => l.length), 4, 'navegación por secciones');
+	await p.evaluate(() => { const l = document.getElementById('cnd-luz-seis'); l.dataset.op = '1'; });
+	assert.doesNotMatch(await p.innerText('#cnd-estado'), /6 m abierta.*ALERTA|ALERTA · 6 m/i, '6 m abierta no pone la página en alerta');
 	assert.ok(pedidos.every(u => /lat=6\.2&lon=-75\.6/.test(u)), 'al servidor solo va el punto redondeado: ' + pedidos[0]);
 	// 19.63: barra de mando, estados con texto, relojes, matriz de bandas, gráficas y sitios
 	assert.match(await p.innerText('#cnd-estado'), /ALERTA · Tormenta/i, 'estado general en la barra');
@@ -251,6 +262,10 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.match(await p.innerText('#cnd-reloj-utc'), /^\d\d:\d\d:\d\d$/);
 	assert.match(await p.innerText('#cnd-reloj-local-et'), /UTC−5/i, 'hora local del punto');
 	assert.equal(await p.$$eval('#cnd-matriz .c', l => l.length), 240, 'matriz de 10 bandas × 24 horas');
+	datos.iono.matriz = { completa: false, con_dato: 3, horas: [] }; datos.iono.iono = null;
+	await p.click('#cnd-recargar'); await p.waitForFunction(() => !document.getElementById('cnd-matriz'));
+	assert.match(await p.innerText('#cnd-hf'), /MUF 3000 km aquí[\s\S]*19,1[\s\S]*Bandas ahora en tu punto/i, 'sin ionosonda ni 12 h de datos: MUF de KC2G en el punto y bandas de ahora');
+	datos.iono = JSON.parse(JSON.stringify(ionoOrig)); await p.click('#cnd-recargar'); await p.waitForSelector('#cnd-matriz .c');
 	assert.ok(await p.$('#cnd-clima .cnd-graf svg'), 'gráfica de 48 horas');
 	await p.waitForSelector('#cnd-sitios table');
 	assert.match(await p.innerText('#cnd-sitios'), /Medellín[\s\S]*ALERTA/i, 'sitios RAU con su estado');

@@ -264,6 +264,31 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.66.0 — Condiciones: arreglos de la revisión en vivo y página reorganizada
+
+**Errores**
+- «6 m abierta» ya no pone la página en ALERTA roja: es una oportunidad (cian, «cerrada / algo / abierta») y no cuenta para el estado general, que ahora dice p. ej. «ATENCIÓN · Campo magnético · 6 m abierta». Igual en la tarjeta para WhatsApp, la vista previa, el resumen diario por correo y la sala de emergencias.
+- SIATA: el servicio a veces publica las cotas de cada quebrada y a veces no. Ahora el sitio las recuerda por estación y las usa cuando faltan; acepta también los nombres con guion bajo. Un nivel alto sin cotas y sin lluvia de verdad (≥1 mm en 15 min a menos de 5 km) queda «sin confirmar» y no cuenta como alerta (caso real: «Av. La Paralela» con 1.764 cm). La respuesta trae un diagnóstico (`diag`) con cuántas estaciones tienen cotas.
+- Archivo de eventos vacío en el sitio: el cron de WordPress casi no corre detrás de la caché de página, así que el archivo se pone al día al consultarlo (si tiene más de 30 min), se rellena con 7 días de Kp de NOAA y abre en el último día con eventos.
+
+**Diseño**
+- La página se organiza en cuatro secciones con accesos directos: Tiempo y seguridad · Radio · Sol y espacio · Historial y RAU.
+- Columnas que no se estiran: se acabaron los huecos vacíos al lado de los paneles cortos.
+- En el celular, «Sol y espacio» e «Historial y RAU» arrancan plegadas (se recuerda lo que abras): la página pasa de unos 14.500 px a 9.100 px. El panel solar muestra lo esencial y deja imágenes, regiones y gráficas en «Ver más».
+- Texto mínimo de 12 px en etiquetas y leyendas.
+
+**Contenido**
+- «HF desde aquí»: sin ionosonda cercana, muestra la MUF del mapa de KC2G en el punto y las bandas para DX. La tabla de 24 horas aparece cuando hay 12 h de mediciones; antes, una fila con las bandas de ahora.
+- «¿Llego a…?» abre con una tabla de bandas por región (Caribe, EE. UU. este y oeste, Suramérica sur, Europa, África, Japón, Oceanía) calculada con la MUF real del camino; al tocar una región se ve el detalle.
+- «Resumen de la semana» con Kp y llamaradas desde el primer día.
+- La leyenda del mapa muestra solo las capas encendidas.
+- El registro ya no se llena de pasadas de la ISS (solo las de 40° o más).
+- Franja de SIATA arriba cuando hay quebradas en precaución o alerta confirmadas; en la sala, estado general más grande y franjas compactas.
+
+**Pruebas**: 6 comprobaciones nuevas en `tests/sitio/condiciones.php` (96 en total) y en la prueba de navegador (regiones, secciones, MUF en el punto sin ionosonda).
+
+---
+
 ## 19.65.0 — Condiciones: radio, Valle de Aburrá y lo que traen los sitios de referencia
 
 Comparado con HamClock, SpaceWeatherLive, KC2G, SIATA y Windy. Todo verificado con datos reales antes de publicarlo.

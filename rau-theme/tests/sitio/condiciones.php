@@ -269,5 +269,32 @@ ok( 'X' === $av[0]['clase'] && array( 'llamarada', 'hss', 'sismo' ) === $av[0]['
 $enviados = array(); rau_cond_avisos_revisar( $falso ); rau_cond_avisos_revisar( $falso );
 ok( 1 === count( preg_grep( '/Corriente rápida/', $enviados ) ) && ! preg_grep( '/Llamarada/', $enviados ) && ! preg_grep( '/Sismo/', $enviados ), 'corriente rápida avisada una vez; sin llamarada X ni sismo fuerte no se avisa' );
 
+/* ── 19.66.0 ── */
+// 6 m abierta es oportunidad, no alerta
+$s66 = rau_cond_semaforo( null, rau_cond_espacio(), null );
+ok( ! isset( $s66['seis'] ) || ! empty( $s66['seis']['op'] ), 'el semáforo de 6 m va marcado como oportunidad' );
+// SIATA: recuerda las cotas y no confirma un nivel alto sin cotas ni lluvia de verdad cerca
+delete_option( 'rau_cond_siata_cotas' ); delete_transient( 'rau_cond_siata' ); rau_cond_siata();
+$cot = get_option( 'rau_cond_siata_cotas' ); ok( is_array( $cot ) && 4 === count( $cot ) && array( 100.0, 150.0, 200.0 ) === reset( $cot ), 'SIATA: guarda las cotas de cada estación cuando llegan' );
+$sin_cotas = true;
+add_filter( 'pre_http_request', function( $pre, $args, $url ) use ( &$sin_cotas ) {
+	if ( ! $sin_cotas || false === strpos( $url, 'geodataJson/2/niveles' ) ) return $pre;
+	$f = function( $cod, $n, $act, $col, $lon ) { return array( 'geometry' => array( 'coordinates' => array( $lon, 6.25 ) ), 'properties' => array( 'codigo' => $cod, 'nombreEstacion' => $n, 'municipio' => 'Medellín', 'nivelActual' => $act, 'color' => $col ) ); };
+	return array( 'headers' => array(), 'response' => array( 'code' => 200, 'message' => '' ), 'cookies' => array(), 'body' => wp_json_encode( array( 'features' => array( $f( 'X1', 'Q. Crecida', 160, '#F29436', -75.57 ), $f( 'X9', 'Av. Sin cotas', 1764, '#FC3A3A', -75.0 ) ) ) ) );
+}, 30, 3 );
+delete_transient( 'rau_cond_siata' ); delete_transient( 'rau_cond_' . md5( 'https://geoportal.siata.gov.co/fastgeoapi/geodata/geodataJson/2/niveles' ) ); $limpiar();
+$si2 = rau_cond_siata(); $p2 = array(); foreach ( $si2['niveles'] as $x ) $p2[ $x['n'] ] = $x;
+ok( isset( $p2['Av. Sin cotas'] ) && $p2['Av. Sin cotas']['sin_confirmar'] && 0 === $si2['resumen']['alerta'], 'SIATA: nivel rojo sin cotas y sin lluvia fuerte cerca queda «sin confirmar» y no cuenta como alerta' );
+$sin_cotas = false; delete_transient( 'rau_cond_siata' );
+// Bandas por región
+$rg = rau_cond_regiones( 6.2, -75.6 );
+ok( 8 === count( $rg ) && isset( $rg[0]['bandas']['40 m'] ) && 'Caribe' === $rg[0]['n'], 'bandas por región: 8 regiones con el estado de cada banda' );
+// MUF en el punto aunque no haya ionosonda
+$limpiar(); $c8 = rau_condiciones( 6.24, -75.58 ); ok( array_key_exists( 'muf_punto', (array) $c8['iono'] ), 'la respuesta trae la MUF del mapa de KC2G en el punto' );
+// Archivo: se pone al día solo y abre en el último día con eventos
+update_option( 'rau_cond_archivo_t', 0, false ); update_option( 'rau_cond_archivo', array( '2030-01-02' => array( 'ev' => array(), 'kp' => 1, 'sfi' => null, 'fl' => '' ) ), false );
+$ra = rest_do_request( new WP_REST_Request( 'GET', '/rau/v1/condiciones/archivo' ) )->get_data();
+ok( (int) get_option( 'rau_cond_archivo_t' ) > time() - 60 && $ra['dia'] !== '2030-01-02' && ! empty( $ra['eventos'] ), 'archivo: se pone al día al consultarlo y abre en el último día con eventos' );
+
 $limpiar(); delete_option( 'rau_cond_avisos' );
 echo "\n$n comprobaciones, $fallos fallas\n"; exit( $fallos ? 1 : 0 );
