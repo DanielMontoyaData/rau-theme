@@ -264,6 +264,27 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.67.0 — Condiciones: barra de mando en una fila y solo lo que sirve para operar
+
+**Barra de mando nueva** (antes ocupaba dos filas y repetía cosas)
+- Una sola fila desde 1024 px: estado · lugar ▾ · relojes · fuentes · ⋯ · Sala. En el celular baja de ~230 a ~170 px.
+- El estado se puede tocar: lleva al semáforo y resalta las luces que lo explican.
+- Lugar y buscador en un solo control: «Medellín ▾» abre el buscador (ciudad o locator), «Usar mi ubicación», «Guardar este lugar» y Mis lugares.
+- Las fuentes son un solo indicador («● 11/12 fuentes · hace 2 min», verde, ámbar o rojo); al tocarlo, el detalle de cada fuente y la próxima actualización. Reemplaza los cuadritos y el «↻ 0:20». Un respaldo en uso cuenta como fuente funcionando.
+- Menú «⋯»: Actualizar, Compartir enlace, Imagen para WhatsApp, Franja para OBS, Imprimir o PDF (y Modo sala en el celular). Se cierra con Escape o tocando fuera; se recorre con las flechas.
+- Pestañas fijas de secciones (Ahora · Tiempo y seguridad · Radio · Sol y espacio · Historial y RAU) que marcan dónde vas.
+
+**Solo lo que tiene que ver con la radio**
+- Se quitó SIATA por completo (panel, franja, capa del mapa y consultas al servidor).
+- «Ahora» deja viento, ráfagas y riesgo de rayos (CAPE); salen humedad, presión, nubes, visibilidad, calidad del aire y UV. Ya no se consulta el servicio de calidad del aire.
+- «Resumen de la semana» sin milímetros de lluvia: días con tormenta eléctrica, ráfagas, Kp y llamaradas.
+- Panel RAU sin los botones de IDEAM, UNGRD y SGC.
+- Se mantienen la franja de sismo fuerte y su aviso (activación de la red de emergencias de RAU).
+
+**Pruebas**: PHP 91 comprobaciones; la prueba de navegador cubre la barra (una fila a 1280 px, paneles que se excluyen, Escape, estado que lleva a la causa) y que SIATA y los datos de aire ya no estén.
+
+---
+
 ## 19.66.0 — Condiciones: arreglos de la revisión en vivo y página reorganizada
 
 **Errores**

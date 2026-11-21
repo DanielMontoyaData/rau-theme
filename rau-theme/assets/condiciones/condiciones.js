@@ -106,7 +106,7 @@ function iniciarMapa(){
 	mapa=L.map('cnd-mapa',{zoomControl:true,worldCopyJump:true}).setView([punto.lat,punto.lon],7);
 	var tema=document.documentElement.getAttribute('data-theme')==='light'?'claro':'oscuro';
 	document.querySelector('input[name="cnd-fondo"][value="'+tema+'"]').checked=true; ponerFondo(tema);
-	['radar','noche','repetidoras','cobertura','sismos','iono','drap','radio','muf','wspr','pota','sats','balizas','siata','enlace'].forEach(function(k){ capas[k]=L.layerGroup(); });
+	['radar','noche','repetidoras','cobertura','sismos','iono','drap','radio','muf','wspr','pota','sats','balizas','enlace'].forEach(function(k){ capas[k]=L.layerGroup(); });
 	capas.enlace.addTo(mapa);
 	document.querySelectorAll('[data-capa-mapa]').forEach(function(c){ if(c.checked){ capas[c.dataset.capaMapa].addTo(mapa); capaPerezosa(c.dataset.capaMapa); }
 		c.addEventListener('change',function(){ if(c.checked){ capas[c.dataset.capaMapa].addTo(mapa); capaPerezosa(c.dataset.capaMapa); } else mapa.removeLayer(capas[c.dataset.capaMapa]); lineaRadar(); }); });
@@ -209,15 +209,18 @@ function estadoGeneral(){
 }
 function tic(){
 	var ahora=Date.now(); $('cnd-reloj-local').textContent=fh(ahora,true); $('cnd-reloj-utc').textContent=new Date(ahora).toISOString().slice(11,19);
-	if(proxima){ var s=Math.max(0,Math.round((proxima-ahora)/1000)); $('cnd-cuenta').textContent='↻ '+Math.floor(s/60)+':'+pad(s%60); }
+	if(proxima){ var s=Math.max(0,Math.round((proxima-ahora)/1000)); $('cnd-cuenta').textContent=Math.floor(s/60)+':'+pad(s%60); } if(ahora%15000<1000) textoFuentes();
 	var p=pasadasLista[0], el=$('cnd-sat-cuenta'); if(p&&el){ var d=Math.round((p.aos-ahora)/1000); el.textContent=d>0?'en '+(d>=3600?Math.floor(d/3600)+' h ':'')+Math.floor(d%3600/60)+' min '+pad(d%60)+' s':(ahora<p.los?'¡pasando ahora!':'ya pasó'); }
 }
 function pintarFuentes(){
-	var f=$('cnd-fuentes'), l=datos.salud||[], et={bien:'al día',viejo:'con datos viejos',falla:'sin responder',respaldo:'en uso como respaldo',sin_datos:'sin consultar aún'};
-	f.innerHTML=l.map(function(x){ return '<i data-e="'+x.estado+'"></i>'; }).join('');
-	var t=l.map(function(x){ return x.fuente+': '+(et[x.estado]||x.estado)+(x.hace!=null?' ('+haceTxt(x.hace*60)+')':''); }).join('\n');
-	f.title=t; f.setAttribute('aria-label','Fuentes de datos: '+t.replace(/\n/g,'; '));
+	var f=$('cnd-fuentes'), l=datos.salud||[], et={bien:'al día',viejo:'datos viejos',falla:'sin responder',respaldo:'respaldo en uso',sin_datos:'sin consultar aún'};
+	f.innerHTML=l.map(function(x){ return '<li data-e="'+x.estado+'"><i aria-hidden="true"></i><span>'+esc(x.fuente)+'</span><span class="der cnd-mini">'+(et[x.estado]||esc(x.estado))+(x.hace!=null?' · '+haceTxt(x.hace*60):'')+'</span></li>'; }).join('');
+	var bien=l.filter(function(x){ return x.estado==='bien'||x.estado==='respaldo'; }).length, mal=l.filter(function(x){ return x.estado==='falla'; }).length;
+	$('cnd-fuentes-btn').dataset.e=!l.length?'sin_datos':mal?'falla':bien<l.length?'viejo':'bien';
+	$('cnd-fuentes-btn').dataset.cuenta=bien+'/'+l.length; textoFuentes();
 }
+function textoFuentes(){ var b=$('cnd-fuentes-btn'); if(!datos||!b.dataset.cuenta) return; var s=Math.max(0,Math.round(Date.now()/1000-(datos.generado||0)));
+	$('cnd-fuentes-txt').innerHTML='<b>'+esc(b.dataset.cuenta)+'</b><span class="cnd-f-pal"> fuentes</span><span class="cnd-f-hace"> · '+(s<90?'recién':haceTxt(s))+'</span>'; b.setAttribute('aria-label','Fuentes de datos: '+b.dataset.cuenta+' al día, datos de '+(s<90?'ahora mismo':haceTxt(s))); }
 
 /* ── paneles ── */
 function pintarSemaforo(){
@@ -227,20 +230,14 @@ function pintarSemaforo(){
 var WMO={0:['Despejado','sol'],1:['Casi despejado','sol'],2:['Parcialmente nublado','nube'],3:['Nublado','nube'],45:['Niebla','nube'],48:['Niebla','nube'],51:['Llovizna','gota'],53:['Llovizna','gota'],55:['Llovizna fuerte','gota'],61:['Lluvia débil','gota'],63:['Lluvia','gota'],65:['Lluvia fuerte','gota'],66:['Lluvia helada','gota'],67:['Lluvia helada','gota'],71:['Nieve','nube'],73:['Nieve','nube'],75:['Nieve','nube'],80:['Chubascos','gota'],81:['Chubascos','gota'],82:['Chubascos fuertes','tormenta'],95:['Tormenta eléctrica','tormenta'],96:['Tormenta con granizo','tormenta'],99:['Tormenta con granizo','tormenta']};
 function wmo(c){ return WMO[c]||['—','nube']; }
 function pintarAhora(){
-	var c=datos.clima, a=datos.aire;
+	var c=datos.clima;
 	if(!c){ cuerpo('cnd-ahora','<p class="cnd-vacio">El servicio del tiempo no respondió. Vuelve a intentar en unos minutos.</p>'); edad('cnd-ahora','sin datos',true); return; }
-	var t=c.actual, w=wmo(t.cod), aqi=a&&a.aqi!=null?a.aqi:null, aqiTxt=aqi==null?'—':aqi<=50?'buena':aqi<=100?'moderada':aqi<=150?'dañina p/ sensibles':'dañina';
+	var t=c.actual, w=wmo(t.cod);
 	cuerpo('cnd-ahora','<div class="cnd-ahora">'+ic(w[1])+'<div><div class="grande">'+n(t.temp)+'°</div><div class="cnd-mut cnd-chico">'+esc(w[0])+(t.sensacion!=null?' · sensación '+n(t.sensacion)+'°':'')+'</div></div></div>'
 		+'<div class="cnd-kpis">'
 		+'<div class="cnd-kpi"><span>Viento</span><b>'+n(t.viento)+'</b><small>km/h'+(t.dir!=null?' del '+rumbo(t.dir):'')+'</small></div>'
 		+(t.rafaga!=null?'<div class="cnd-kpi"><span>Ráfagas</span><b>'+n(t.rafaga)+'</b><small>km/h</small></div>':'')
-		+'<div class="cnd-kpi"><span>Humedad</span><b>'+n(t.hr)+'%</b><small>relativa</small></div>'
-		+'<div class="cnd-kpi"><span>Presión</span><b>'+n(t.presion)+'</b><small>hPa</small></div>'
-		+'<div class="cnd-kpi"><span>Nubes</span><b>'+n(t.nubes)+'%</b><small>cobertura</small></div>'
-		+(t.cape!=null?'<div class="cnd-kpi"><span>CAPE</span><b>'+n(t.cape)+'</b><small>J/kg · '+(t.cape>=2500?'muy inestable':t.cape>=1000?'inestable':'estable')+'</small></div>':'')
-		+(t.vis!=null?'<div class="cnd-kpi"><span>Visibilidad</span><b>'+n(t.vis/1000,1)+'</b><small>km</small></div>':'')
-		+(a?'<div class="cnd-kpi"><span>Aire (ICA)</span><b>'+n(aqi)+'</b><small>'+aqiTxt+' · PM2,5 '+n(a.pm25,1)+'</small></div>':'')
-		+(a&&a.uv!=null?'<div class="cnd-kpi"><span>UV</span><b>'+n(a.uv,1)+'</b><small>'+(a.uv<3?'bajo':a.uv<6?'moderado':a.uv<8?'alto':'muy alto')+'</small></div>':'')
+		+(t.cape!=null?'<div class="cnd-kpi"><span>Riesgo de rayos</span><b>'+(t.cape>=2500?'alto':t.cape>=1000?'medio':'bajo')+'</b><small>CAPE '+n(t.cape)+' J/kg</small></div>':'')
 		+'</div>');
 	edad('cnd-ahora',(c.fuente||'Open-Meteo')+' · '+haceTxt(c.edad),c.fuente==='MET Norway'||c.edad>1800);
 }
@@ -502,12 +499,12 @@ function cargarSolar(){
 }
 
 /* ════════ 19.65.0: radio y local ════════ */
-var RANGO=(function(){ try{ return localStorage.getItem('rau_cond_rango')||'6h'; }catch(e){ return '6h'; } })(), eligiendoDestino=false, destinoAct=null, wsprDat=null, potaDat=null, siataDat=null, mufDat=null, satTimer=null, balTimer=null;
+var RANGO=(function(){ try{ return localStorage.getItem('rau_cond_rango')||'6h'; }catch(e){ return '6h'; } })(), eligiendoDestino=false, destinoAct=null, wsprDat=null, potaDat=null, mufDat=null, satTimer=null, balTimer=null;
 document.addEventListener('click',function(e){ var b=e.target.closest('[data-rango]'); if(!b) return; RANGO=b.dataset.rango; try{ localStorage.setItem('rau_cond_rango',RANGO); }catch(x){} pintarTendencias(); });
 var BCOL={'160 m':'#a78bfa','80 m':'#818cf8','60 m':'#60a5fa','40 m':'#38bdf8','30 m':'#22d3ee','20 m':'#34d399','17 m':'#a3e635','15 m':'#facc15','12 m':'#fb923c','10 m':'#f87171','6 m':'#f472b6','2 m':'#e879f9'};
 function capaPerezosa(k){
 	if(k==='muf') cargarMuf(); else if(k==='wspr'){ if(wsprDat) pintarCapaWspr(); else cargarAlcance(); } else if(k==='pota'){ if(potaDat) pintarCapaPota(); else cargarPota(); }
-	else if(k==='sats') satsEnVivo(); else if(k==='balizas') pintarCapaBalizas(); else if(k==='siata'&&siataDat) pintarCapaSiata();
+	else if(k==='sats') satsEnVivo(); else if(k==='balizas') pintarCapaBalizas();
 }
 /* 19.66.0: la leyenda del mapa muestra solo las capas encendidas */
 var leyDiv; // sin valor inicial: el mapa puede crearse antes de que se ejecute esta línea
@@ -522,7 +519,6 @@ function pintarLeyenda(){
 	if(on('pota')) h+=f('#15803d','Activación POTA');
 	if(on('sats')) h+=f('#a21caf','Satélite · traza de la ISS');
 	if(on('balizas')) h+=f('#f59e0b','Baliza NCDXF transmitiendo')+f('#64748b','Baliza en silencio');
-	if(on('siata')&&enAburra()) h+=f('#16a34a','Quebrada normal')+f('#f97316','Quebrada en precaución')+f('#e11d48','Quebrada en alerta')+f('#38bdf8','Lluvia (SIATA)');
 	if(on('enlace')&&capas.enlace.getLayers().length) h+=f('#38bdf8','Ruta del enlace',';border-radius:0;height:3px;border:0;width:1rem');
 	leyDiv.innerHTML=h;
 }
@@ -614,29 +610,6 @@ function pintarPota(){
 }
 function km2(a,b){ var R0=Math.PI/180, x=Math.sin((b[0]-a[0])*R0/2), y=Math.sin((b[1]-a[1])*R0/2); return Math.round(12742*Math.asin(Math.sqrt(x*x+Math.cos(a[0]*R0)*Math.cos(b[0]*R0)*y*y))); }
 function pintarCapaPota(){ if(!mapa||!potaDat) return; capas.pota.clearLayers(); potaDat.forEach(function(x){ L.marker([x.lat,x.lon],{icon:L.divIcon({className:'',html:'<div class="cnd-marca" style="width:22px;height:22px;background:#15803d">'+ic('arbol')+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).bindPopup('<b>'+esc(x.act)+'</b> · '+esc(x.f)+' kHz '+esc(x.modo)+'<br>'+esc(x.ref)+' · '+esc(x.parque)).addTo(capas.pota); }); }
-/* Valle de Aburrá (SIATA) */
-function enAburra(){ return km2([punto.lat,punto.lon],[6.25,-75.57])<=60; }
-function cargarSiata(){
-	var sec=$('cnd-siata'); if(!enAburra()){ if(sec) sec.hidden=true; if($('cnd-siata-al')) $('cnd-siata-al').hidden=true; if(capas.siata) capas.siata.clearLayers(); return; } if(sec) sec.hidden=false;
-	fetch(C.api+'/siata').then(function(r){ return r.json(); }).then(function(d){ siataDat=d; pintarSiata(); if(mapa&&mapa.hasLayer(capas.siata)) pintarCapaSiata(); }).catch(function(){ cuerpo('cnd-siata','<p class="cnd-vacio">SIATA no respondió.</p>'); });
-}
-var SNIV=['Normal','Vigilancia','Precaución','Alerta'], SCOL=['#16a34a','#eab308','#f97316','#e11d48'];
-function pintarSiata(){
-	var d=siataDat; if(!d||!d.ok){ cuerpo('cnd-siata','<p class="cnd-vacio">SIATA no respondió.</p>'); return; }
-	var fr=$('cnd-siata-al'), conf=(d.niveles||[]).filter(function(x){ return x.e>=2&&!x.dudoso&&!x.sin_confirmar; }).sort(function(a,b){ return b.e-a.e; });
-	if(fr){ fr.hidden=!conf.length; if(conf.length){ fr.className='cnd-sismo'+(conf[0].e>=3?' al':''); fr.innerHTML=ic('agua')+'<div><b>SIATA: '+conf.length+' quebrada'+(conf.length>1?'s':'')+' en '+(conf[0].e>=3?'alerta':'precaución')+'</b> · '+conf.slice(0,3).map(function(x){ return esc(x.n)+' ('+esc(x.mun)+')'; }).join(', ')+(conf.length>3?' y '+(conf.length-3)+' más':'')+'<br><span class="cnd-mini">Fuente: SIATA – Área Metropolitana del Valle de Aburrá. <a href="#cnd-siata">Ver el detalle</a> · sigue a SIATA y al DAGRD.</span></div>'; } }
-	var r=d.resumen, alto=(d.niveles||[]).filter(function(x){ return x.e>=1; }).sort(function(a,b){ var fa=a.dudoso||a.sin_confirmar?1:0, fb=b.dudoso||b.sin_confirmar?1:0; return fa-fb||b.e-a.e||(b.pct||0)-(a.pct||0); }), llueve=(d.lluvia||[]).filter(function(x){ return x.llueve; }).sort(function(a,b){ return b.mm-a.mm; });
-	cuerpo('cnd-siata','<div class="cnd-kpis"><div class="cnd-kpi"><span>Llueve ahora</span><b>'+r.llueve+'</b><small>de '+r.pluvios+' pluviómetros · máx. '+n(r.max_mm,1)+' mm/15 min</small></div><div class="cnd-kpi"><span>Quebradas en alerta</span><b style="color:'+(r.alerta?SCOL[Math.max(2,r.peor)]:'inherit')+'">'+r.alerta+'</b><small>de '+r.niveles+' sensores (precaución o más)</small></div></div>'
-		+'<div class="cnd-solar-rej" style="grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))"><div><div class="cnd-graf-tit"><span>Sensores de nivel por encima de lo normal</span></div>'+(alto.length?'<ul class="cnd-lista cnd-scroll" style="max-height:14rem">'+alto.map(function(x){ return '<li><span><span class="cnd-punto-b" style="background:'+SCOL[x.e]+'"></span><b>'+esc(x.n)+'</b><br><span class="cnd-mini cnd-mut">'+esc(x.mun)+' · '+n(x.cm)+' cm'+(x.pre?' · precaución '+n(x.pre)+' cm':'')+(x.dudoso?' · <b>dato dudoso</b> (sensor posiblemente en falla)':'')+(x.sin_confirmar?' · <b>sin confirmar</b>: sin lluvia fuerte cerca y sin cotas para compararlo':'')+'</span></span><span class="der cnd-chico" style="color:'+(x.dudoso||x.sin_confirmar?'hsl(var(--muted-foreground))':SCOL[x.e])+'">'+SNIV[x.e]+(x.dudoso||x.sin_confirmar?'?':'')+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Todas las quebradas en nivel normal.</p>')+'</div>'
-		+'<div><div class="cnd-graf-tit"><span>Dónde llueve ahora</span></div>'+(llueve.length?'<ul class="cnd-lista cnd-scroll" style="max-height:14rem">'+llueve.slice(0,12).map(function(x){ return '<li><span>'+esc(x.n)+' <span class="cnd-mini cnd-mut">'+esc(x.mun)+'</span></span><span class="der cnd-mono">'+n(x.mm,1)+' mm</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">No llueve en ningún pluviómetro.</p>')+'</div></div>'
-		+'<p class="cnd-mini cnd-mut" style="margin:0">Fuente: SIATA – Área Metropolitana del Valle de Aburrá. El estado de cada quebrada es el que publica SIATA. Para alertas oficiales sigue a SIATA y al DAGRD.</p>');
-	edad('cnd-siata','SIATA · cada 5 min');
-}
-function pintarCapaSiata(){
-	if(!mapa||!siataDat||!enAburra()) return; capas.siata.clearLayers();
-	(siataDat.lluvia||[]).forEach(function(x){ if(!x.llueve) return; L.circleMarker([x.lat,x.lon],{radius:4+Math.min(10,x.mm*3),color:'#0284c7',fillColor:'#38bdf8',fillOpacity:.6,weight:1}).bindTooltip(esc(x.n)+': '+n(x.mm,1)+' mm en 15 min').addTo(capas.siata); });
-	(siataDat.niveles||[]).forEach(function(x){ if(x.e<0) return; L.circleMarker([x.lat,x.lon],{radius:x.e?7:4,color:'#fff',weight:x.e?2:1,fillColor:SCOL[x.e],fillOpacity:x.e?1:.7}).bindPopup('<b>'+esc(x.n)+'</b><br>'+n(x.cm)+' cm · '+SNIV[x.e]+(x.dudoso?' (dato dudoso)':x.sin_confirmar?' (sin confirmar)':'')+'<br>Fuente: SIATA').addTo(capas.siata); });
-}
 /* Satélites en vivo y balizas NCDXF */
 function satsEnVivo(){
 	clearInterval(satTimer); if(!mapa) return;
@@ -664,8 +637,8 @@ function lugares(){ try{ return JSON.parse(localStorage.getItem('rau_cond_lugare
 function guardarLugares(l){ try{ localStorage.setItem('rau_cond_lugares',JSON.stringify(l.slice(0,8))); }catch(e){} }
 function esFav(){ return lugares().some(function(x){ return Math.abs(x.lat-punto.lat)<.05&&Math.abs(x.lon-punto.lon)<.05; }); }
 function pintarLugares(){
-	var l=lugares(), c=$('cnd-lugares'); $('cnd-fav').setAttribute('aria-pressed',String(esFav())); c.hidden=!l.length;
-	c.innerHTML=l.length?'<span class="cnd-mini cnd-mut">Mis lugares:</span>'+l.map(function(x,i){ var act=Math.abs(x.lat-punto.lat)<.05&&Math.abs(x.lon-punto.lon)<.05; return '<span class="cnd-chip'+(act?' ok':'')+'"><button type="button" data-ir-lugar="'+i+'">'+esc(x.n)+'</button><button type="button" data-quitar-lugar="'+i+'" aria-label="Quitar '+esc(x.n)+'">×</button></span>'; }).join(''):'';
+	var l=lugares(), c=$('cnd-lugares'), fv=esFav(); $('cnd-fav').setAttribute('aria-pressed',String(fv)); $('cnd-fav').querySelector('span').textContent=fv?'Guardado en Mis lugares':'Guardar este lugar'; c.hidden=!l.length;
+	c.innerHTML=l.length?'<p class="cnd-pop-t">Mis lugares</p>'+l.map(function(x,i){ var act=Math.abs(x.lat-punto.lat)<.05&&Math.abs(x.lon-punto.lon)<.05; return '<span class="cnd-chip'+(act?' ok':'')+'"><button type="button" data-ir-lugar="'+i+'">'+esc(x.n)+'</button><button type="button" data-quitar-lugar="'+i+'" aria-label="Quitar '+esc(x.n)+'">×</button></span>'; }).join(''):'';
 }
 $('cnd-fav').addEventListener('click',function(){ var l=lugares(); if(esFav()) l=l.filter(function(x){ return !(Math.abs(x.lat-punto.lat)<.05&&Math.abs(x.lon-punto.lon)<.05); });
 	else { var nm=prompt('Nombre para este lugar (p. ej. Casa, Repetidora, Finca):', punto.nombre||$('cnd-lugar-txt').textContent); if(nm===null) return; l.unshift({n:(nm||'Lugar').slice(0,30),lat:+punto.lat.toFixed(3),lon:+punto.lon.toFixed(3)}); }
@@ -675,8 +648,8 @@ $('cnd-lugares').addEventListener('click',function(e){ var b=e.target.closest('[
 	var x=l[+b.dataset.irLugar]; if(x) fijar({lat:x.lat,lon:x.lon,nombre:x.n}); });
 /* Resumen de la semana y archivo */
 function cargarSemana(){ fetch(C.api+'/semana?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ return r.json(); }).then(function(w){
-	cuerpo('cnd-semana','<p class="cnd-chico" style="margin:0">'+esc(w.texto)+'</p><div class="cnd-tabla-caja"><table class="cnd-tabla"><thead><tr><th>Día</th><th class="num">Lluvia</th><th class="num">Ráfagas</th><th>Tormenta</th><th class="num">Kp máx.</th><th class="num">Llamarada</th></tr></thead><tbody>'
-		+(w.dias||[]).slice().reverse().map(function(d){ return '<tr><td>'+new Date(d.dia+'T12:00:00Z').toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'})+'</td><td class="num">'+(d.mm!=null?n(d.mm,1)+' mm':'—')+'</td><td class="num">'+(d.rafaga!=null?n(d.rafaga)+' km/h':'—')+'</td><td>'+(d.tormenta?'<span class="cnd-chip al">sí</span>':'—')+'</td><td class="num">'+(d.kp!=null?'<span style="color:'+colKp(d.kp)+'">'+n(d.kp,1)+'</span>':'—')+'</td><td class="num">'+esc(d.fl||'—')+'</td></tr>'; }).join('')+'</tbody></table></div><p class="cnd-mini cnd-mut" style="margin:0">El tiempo es del punto consultado (Open-Meteo). El Kp y las llamaradas son de NOAA (7 días) y del archivo del sitio.</p>');
+	cuerpo('cnd-semana','<p class="cnd-chico" style="margin:0">'+esc(w.texto)+'</p><div class="cnd-tabla-caja"><table class="cnd-tabla"><thead><tr><th>Día</th><th class="num">Ráfagas</th><th>Tormenta</th><th class="num">Kp máx.</th><th class="num">Llamarada</th></tr></thead><tbody>'
+		+(w.dias||[]).slice().reverse().map(function(d){ return '<tr><td>'+new Date(d.dia+'T12:00:00Z').toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'})+'</td><td class="num">'+(d.rafaga!=null?n(d.rafaga)+' km/h':'—')+'</td><td>'+(d.tormenta?'<span class="cnd-chip al">sí</span>':'—')+'</td><td class="num">'+(d.kp!=null?'<span style="color:'+colKp(d.kp)+'">'+n(d.kp,1)+'</span>':'—')+'</td><td class="num">'+esc(d.fl||'—')+'</td></tr>'; }).join('')+'</tbody></table></div><p class="cnd-mini cnd-mut" style="margin:0">El tiempo es del punto consultado (Open-Meteo). El Kp y las llamaradas son de NOAA (7 días) y del archivo del sitio.</p>');
 	edad('cnd-semana','7 días · '+zona()); }).catch(function(){}); }
 var archDia=null;
 function cargarArchivo(dia){ fetch(C.api+'/archivo'+(dia?'?dia='+dia:'')).then(function(r){ return r.json(); }).then(function(a){ archDia=a.dia;
@@ -705,12 +678,13 @@ $('cnd-tarjeta').addEventListener('click',function(){ var b=this, u=location.ori
 })();
 
 /* ── ubicación y carga ── */
-function textoLugar(){ var fr=$('cnd-franja'); if(fr) fr.href=location.origin+'/condiciones/franja/?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1); $('cnd-lugar-txt').textContent=punto.nombre||(datos&&datos.punto&&datos.punto.cerca?'cerca de '+datos.punto.cerca.nombre:punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)); $('cnd-loc').textContent=locator(punto.lat,punto.lon); $('cnd-reloj-local-et').textContent='Hora local · '+zona(); }
+function textoLugar(){ var fq='/condiciones/franja/?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1); ['cnd-franja','cnd-franja-m'].forEach(function(id){ var fr=$(id); if(fr) fr.href=location.origin+fq; }); $('cnd-lugar-txt').textContent=punto.nombre||(datos&&datos.punto&&datos.punto.cerca?'cerca de '+datos.punto.cerca.nombre:punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)); $('cnd-loc').textContent=locator(punto.lat,punto.lon); $('cnd-reloj-local-et').textContent='Hora local · '+zona(); }
 function fijar(p,sinCargar){
 	punto={lat:+p.lat,lon:+p.lon,nombre:p.nombre||null}; guardar('rau_cond_punto',punto); textoLugar();
 	if(mapa){ mapa.setView([punto.lat,punto.lon],Math.max(mapa.getZoom(),7)); marcar(); }
 	if(vista==='windy'){ var a=document.querySelector('[data-capa][aria-pressed="true"]'); windy(a?a.dataset.capa:'wind'); }
 	var u=new URL(location.href); u.searchParams.set('lat',punto.lat.toFixed(2)); u.searchParams.set('lon',punto.lon.toFixed(2)); u.searchParams.delete('loc'); history.replaceState(null,'',u);
+	cerrarPops();
 	if(!sinCargar){ cargar(); if(destinoAct) destino(destinoAct); }
 	if($('cnd-lugares')) pintarLugares();
 }
@@ -725,7 +699,7 @@ function cargar(){
 	fetch(C.api+'?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ if(!r.ok) throw new Error(r.status); var off=r.headers.get('X-RAU-Sin-Conexion'); return r.json().then(function(j){ j._sinConexion=!!off; return j; }); }).then(function(j){
 		var ol=$('cnd-offline'); ol.hidden=!j._sinConexion; if(j._sinConexion) ol.textContent='Sin conexión: mostrando los últimos datos guardados ('+new Date(j.generado*1000).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'). Se actualizan solos cuando vuelva internet.';
 		datos=j; OFF=(j.clima&&j.clima.offset!=null)?j.clima.offset:Math.round(punto.lon/15)*3600; textoLugar();
-		[pintarFuentes,pintarSemaforo,pintarAhora,pintarClima,pintarHF,pintarEspacio,pintarTendencias,cargarSolar,pintarSismos,pintarRAU,pintarCielo,pintarVHF,pintarRegistro,pintarCapasDatos,estadoGeneral,cargarSiata,cargarAlcance,cargarPota,cargarSemana,cargarArchivo,pintarEnlace,pintarLugares].forEach(function(f){ try{ f(); }catch(e){ if(window.console) console.warn('condiciones',e); } });
+		[pintarFuentes,pintarSemaforo,pintarAhora,pintarClima,pintarHF,pintarEspacio,pintarTendencias,cargarSolar,pintarSismos,pintarRAU,pintarCielo,pintarVHF,pintarRegistro,pintarCapasDatos,estadoGeneral,cargarAlcance,cargarPota,cargarSemana,cargarArchivo,pintarEnlace,pintarLugares].forEach(function(f){ try{ f(); }catch(e){ if(window.console) console.warn('condiciones',e); } });
 		$('cnd-impresion').innerHTML='<b>Hoja de condiciones · RAU</b> · '+esc(punto.nombre||'')+' '+locator(punto.lat,punto.lon)+' ('+punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)+') · '+fhd(Date.now())+' '+zona()+' / '+new Date().toISOString().slice(11,16)+' UTC · '+esc(location.origin)+'/condiciones/';
 	}).catch(function(){ var e=$('cnd-estado'); e.dataset.n=-1; e.textContent='Sin conexión con el servidor · reintentando'; });
 	fetch(C.api+'/sitios').then(function(r){ return r.json(); }).then(function(s){ sitios=Array.isArray(s)?s:[]; pintarSitios(); }).catch(function(){ cuerpo('cnd-sitios','<p class="cnd-vacio">No se pudo consultar el tiempo de los sitios.</p>'); });
@@ -748,7 +722,26 @@ function inicio(){
 /* ── controles ── */
 function alturaMenu(){ var h=document.querySelector('header'), cs=h&&getComputedStyle(h); var top=(h&&cs.position==='sticky'&&cs.display!=='none'&&!document.body.classList.contains('cnd-sala'))?h.offsetHeight:0; $('cnd').style.setProperty('--cnd-top',top+'px'); }
 alturaMenu(); window.addEventListener('resize',alturaMenu);
-$('cnd-buscar-btn').addEventListener('click',function(){ var b=document.querySelector('.cnd-buscar'), on=!b.classList.contains('abierta'); b.classList.toggle('abierta',on); this.setAttribute('aria-expanded',String(on)); if(on) $('cnd-buscar').focus(); });
+/* 19.67.0: barra de mando en una fila — paneles desplegables (lugar, fuentes, más acciones) */
+function cerrarPops(salvo){ document.querySelectorAll('.cnd-pop').forEach(function(p){ if(p===salvo) return; p.hidden=true; var b=document.querySelector('[aria-controls="'+p.id+'"]'); if(b) b.setAttribute('aria-expanded','false'); }); }
+['cnd-lugar','cnd-fuentes-btn','cnd-mas'].forEach(function(id){ var b=$(id); b.addEventListener('click',function(e){ e.stopPropagation(); var p=$(b.getAttribute('aria-controls')), abrir=p.hidden; cerrarPops(p); p.hidden=!abrir; b.setAttribute('aria-expanded',String(abrir));
+	if(abrir&&id==='cnd-lugar') setTimeout(function(){ $('cnd-buscar').focus(); },30); if(abrir&&id==='cnd-mas'){ var f=p.querySelector('[role="menuitem"]'); if(f) f.focus(); } }); });
+document.addEventListener('click',function(e){ if(!e.target.closest('.cnd-pop')) cerrarPops(); });
+document.addEventListener('keydown',function(e){ if(e.key!=='Escape') return; var ab=document.querySelector('.cnd-pop:not([hidden])'); if(!ab) return; cerrarPops(); var b=document.querySelector('[aria-controls="'+ab.id+'"]'); if(b) b.focus(); });
+$('cnd-mas-menu').addEventListener('click',function(e){ if(e.target.closest('[role="menuitem"]')) setTimeout(cerrarPops,0); });
+$('cnd-mas-menu').addEventListener('keydown',function(e){ if(e.key!=='ArrowDown'&&e.key!=='ArrowUp') return; e.preventDefault(); var l=[].slice.call(this.querySelectorAll('[role="menuitem"]')).filter(function(x){ return x.offsetParent; }), i=l.indexOf(document.activeElement); l[(i+(e.key==='ArrowDown'?1:-1)+l.length)%l.length].focus(); });
+$('cnd-tarjeta-m').addEventListener('click',function(){ $('cnd-tarjeta').click(); });
+$('cnd-sala-m').addEventListener('click',function(){ $('cnd-sala').click(); });
+/* El estado general lleva a la causa: resalta las luces del semáforo que la explican */
+$('cnd-estado').addEventListener('click',function(){
+	var l=[].slice.call(document.querySelectorAll('.cnd-luz:not([data-op])')).filter(function(x){ return +x.dataset.n>=1; }).sort(function(a,b){ return b.dataset.n-a.dataset.n; });
+	var dest=l[0]||$('cnd-sem'); dest.scrollIntoView({behavior:'smooth',block:'center'});
+	l.forEach(function(x){ x.classList.remove('cnd-flash'); void x.offsetWidth; x.classList.add('cnd-flash'); });
+});
+/* Pestañas de secciones: marcan dónde vas */
+if('IntersectionObserver' in window){ var vis={}, tabs=document.querySelectorAll('.cnd-secnav a');
+	var io=new IntersectionObserver(function(en){ en.forEach(function(x){ vis[x.target.id]=x.isIntersecting; }); var act=null; tabs.forEach(function(a){ if(!act&&vis[a.dataset.sec]) act=a; }); tabs.forEach(function(a){ a.classList.toggle('act',a===act); if(a===act) a.setAttribute('aria-current','true'); else a.removeAttribute('aria-current'); }); },{rootMargin:'-30% 0px -60% 0px'});
+	tabs.forEach(function(a){ var el=$(a.dataset.sec); if(el) io.observe(el); }); }
 $('cnd-gps').addEventListener('click',usarGPS);
 var tBus=null, sug=$('cnd-sug');
 $('cnd-buscar').addEventListener('input',function(){
@@ -764,7 +757,7 @@ sug.addEventListener('click',function(e){ var b=e.target.closest('button'); if(!
 document.addEventListener('click',function(e){ if(!e.target.closest('.cnd-buscar')) sug.hidden=true; });
 $('cnd-recargar').addEventListener('click',cargar);
 $('cnd-compartir').addEventListener('click',function(){ var u=location.origin+location.pathname+'?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1);
-	(navigator.share?navigator.share({title:'Condiciones para operar',url:u}):navigator.clipboard.writeText(u).then(function(){ $('cnd-cuenta').textContent='✓ enlace copiado'; })).catch(function(){}); });
+	(navigator.share?navigator.share({title:'Condiciones para operar',url:u}):navigator.clipboard.writeText(u).then(function(){ var b=$('cnd-compartir'), t=b.innerHTML; b.textContent='✓ Enlace copiado'; setTimeout(function(){ b.innerHTML=t; },2500); })).catch(function(){}); });
 $('cnd-imprimir').addEventListener('click',function(){ window.print(); });
 document.querySelectorAll('[data-vista]').forEach(function(b){ b.addEventListener('click',function(){ cambiarVista(b.dataset.vista); }); });
 document.querySelectorAll('[data-capa]').forEach(function(b){ b.addEventListener('click',function(){ document.querySelectorAll('[data-capa]').forEach(function(x){ x.setAttribute('aria-pressed',String(x===b)); }); windy(b.dataset.capa); }); });

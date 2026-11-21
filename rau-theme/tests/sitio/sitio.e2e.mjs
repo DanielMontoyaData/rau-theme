@@ -178,7 +178,6 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	const horas = Array.from({ length: 48 }, (_, i) => ({ t: '2026-11-20T' + String((10 + i) % 24).padStart(2, '0') + ':00', temp: 20 + (i % 6), hr: 70, pp: i === 1 ? 90 : 20, mm: 0, cod: i === 1 ? 95 : 3, viento: 8, rafaga: 20, cape: 900, li: 1, vis: 20000, dia: 1 }));
 	const datos = { punto: { lat: 6.2, lon: -75.6, locator: 'FJ26ee', cerca: { nombre: 'Envigado', km: 3 } },
 		clima: { fuente: 'Open-Meteo', offset: -18000, elevacion: 1495, actual: { temp: 22.4, sensacion: 23, hr: 70, dia: 1, mm: 0, cod: 3, nubes: 80, presion: 850, viento: 8, dir: 90, rafaga: 20, vis: 20000, cape: 900 }, horas, dias: [{ fecha: '2026-11-20', cod: 95, max: 26, min: 16, mm: 5, pp: 80 }, { fecha: '2026-11-21', cod: 3, max: 27, min: 17, mm: 0, pp: 10 }, { fecha: '2026-11-22', cod: 61, max: 25, min: 16, mm: 2, pp: 60 }] },
-		aire: { pm25: 12, pm10: 20, aqi: 55, uv: 4 },
 		espacio: { kp: { valor: 1.3 }, kp_pron: 3.7, rayosx: { actual: 'B2.0', max: 'B5.0' }, escalas: { R: 0, S: 0, G: 0, prob_r: 10, prob_rx: 5 }, viento: { vel: 420, dens: 3.2, bz: -4.2, bt: 6 }, alertas: [], sfi: 140, ssn: 90, bandas: [{ name: '80m-40m', day: 'Good', night: 'Good' }, { name: '12m-10m', day: 'Poor', night: 'Poor' }] },
 		drap: { mhz: 0, mensaje: 'Normal' },
 		iono: { matriz: { completa: true, con_dato: 24, horas: Array.from({ length: 24 }, (_, i) => ({ h: (21 + i) % 24, fof2: 6 + (i % 4), mufd: 18 + (i % 6) })), serie: [] }, muf_punto: 19.1, iono: { nombre: 'Boa Vista, Brazil', km: 1694, fof2: 8.6, mufd: 27, hace: 20 }, nvis: { banda: '40 m', texto: 'foF2 8,6 MHz.' }, dx: ['40 m', '20 m'], estaciones: [{ n: 'Boa Vista, Brazil', lat: 2.8, lon: -60.7, mufd: 27, fof2: 8.6, hace: 20 }] },
@@ -201,11 +200,9 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	await p.route(/api\.rainviewer\.com/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ host: 'https://tilecache.rainviewer.com', radar: { past: [{ time: 1795200000, path: '/v2/radar/a' }, { time: 1795200600, path: '/v2/radar/b' }], nowcast: [] } }) }));
 	// 19.65: radio y local
 	const j = (re, o) => p.route(re, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(o) }));
-	await j(/condiciones\/siata/, { ok: true, niveles: [{ n: 'Q. La Iguaná', mun: 'Medellín', lat: 6.27, lon: -75.6, cm: 160, pre: 100, e: 2, dudoso: false, pct: 160 }, { n: 'Q. Rara', mun: 'Bello', lat: 6.33, lon: -75.55, cm: 900, pre: 100, e: 3, dudoso: true, pct: 900 }],
-		lluvia: [{ n: 'P1', mun: 'Itagüí', lat: 6.17, lon: -75.6, mm: 2.5, llueve: true }], meteo: [], resumen: { llueve: 1, pluvios: 185, max_mm: 2.5, alerta: 1, niveles: 168, peor: 2 } });
 	await j(/condiciones\/wspr/, { ok: true, sale: [{ b: '40 m', tx: 'HK4X', rx: 'EA4Y', a: [6.2, -75.6], z: [40.4, -3.7], km: 8032, snr: -18 }], entra: [], bandas: { '40 m': { sale: 1, entra: 0, max: 8032 } } });
 	await j(/condiciones\/pota/, [{ act: 'HK4P', f: '14280', modo: 'SSB', ref: 'CO-0001', parque: 'Parque Arví', lugar: 'CO-ANT', lat: 6.28, lon: -75.5, t: 0 }]);
-	await j(/condiciones\/semana/, { dias: [{ dia: '2026-11-20', mm: 5, rafaga: 40, tormenta: true, kp: 3.3, fl: 'M2.4' }], texto: 'En los últimos 7 días: 5 mm de lluvia, 1 día con tormenta eléctrica.' });
+	await j(/condiciones\/semana/, { dias: [{ dia: '2026-11-20', mm: 5, rafaga: 40, tormenta: true, kp: 3.3, fl: 'M2.4' }], texto: 'En los últimos 7 días: 1 día con tormenta eléctrica, ráfagas de hasta 40 km/h.' });
 	await j(/condiciones\/archivo/, { dia: '2026-11-20', dias: [{ dia: '2026-11-20', kp: 3.3, fl: 'M2.4', n: 1 }], eventos: [{ t: 1795200000, tipo: 'sol', n: 1, x: 'Llamarada M2.4' }] });
 	await j(/condiciones\/regiones/, [{ n: 'Caribe', lat: 18.5, lon: -66.1, km: 1712, sp: 36, muf: 22, bandas: { '80 m': 'buena', '40 m': 'buena', '30 m': 'buena', '20 m': 'marginal', '17 m': 'cerrada', '15 m': 'cerrada', '12 m': 'cerrada', '10 m': 'cerrada' } },
 		{ n: 'Europa', lat: 48.9, lon: 2.35, km: 8609, sp: 41, muf: 16, bandas: { '80 m': 'buena', '40 m': 'buena', '30 m': 'buena', '20 m': 'cerrada', '17 m': 'cerrada', '15 m': 'cerrada', '12 m': 'cerrada', '10 m': 'cerrada' } }]);
@@ -224,11 +221,10 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.doesNotMatch(await p.innerText('#cnd-sismo'), /Los Santos/, 'los sismos pequeños no se anuncian');
 	assert.equal(await p.$('#cnd-sis'), null, 'sin panel fijo de sismos');
 	assert.equal(await p.isChecked('[data-capa-mapa="sismos"]'), false, 'la capa de sismos arranca apagada');
-	// 19.65: SIATA, alcance WSPR, POTA, semana, archivo, balizas, enlace, rango, tablas accesibles, mis lugares
-	await p.waitForSelector('#cnd-siata .cnd-kpis');
-	assert.match(await p.innerText('#cnd-siata'), /Q\. La Iguaná[\s\S]*Precaución/i, 'quebradas con su estado de SIATA');
-	assert.match(await p.innerText('#cnd-siata'), /dato dudoso/i, 'lectura imposible marcada como dudosa');
-	assert.match(await p.innerText('#cnd-siata'), /Fuente: SIATA – Área Metropolitana del Valle de Aburrá/, 'atribución de SIATA');
+	// 19.65: alcance WSPR, POTA, semana, archivo, balizas, enlace, rango, tablas accesibles, mis lugares
+	assert.equal(await p.$('#cnd-siata'), null, 'sin SIATA (no sirve para operar radio)');
+	assert.doesNotMatch(await p.innerText('#cnd-ahora'), /Humedad|Presión|Aire|UV/, '«Ahora» solo con lo que importa para la estación');
+	assert.match(await p.innerText('#cnd-ahora'), /Riesgo de rayos/i);
 	await p.waitForSelector('#cnd-alcance table'); assert.match(await p.innerText('#cnd-alcance'), /40 m[\s\S]*8\.032 km/);
 	await p.waitForSelector('#cnd-pota li'); assert.match(await p.innerText('#cnd-pota'), /HK4P[\s\S]*Parque Arví/);
 	await p.waitForSelector('#cnd-semana table'); assert.match(await p.innerText('#cnd-semana'), /1 día con tormenta/);
@@ -242,9 +238,19 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.match(await p.innerText('#cnd-tend'), /Índice Kp · 7 días/i, 'selector de rango de las gráficas');
 	await p.click('[data-rango="6h"]');
 	p.once('dialog', d => d.accept('Casa'));
-	await p.click('#cnd-fav');
+	await p.click('#cnd-lugar'); await p.click('#cnd-fav');
 	assert.match(await p.innerText('#cnd-lugares'), /Casa/, 'mis lugares');
 	assert.equal(await p.getAttribute('#cnd-fav', 'aria-pressed'), 'true');
+	await p.keyboard.press('Escape'); assert.equal(await p.isVisible('#cnd-lugar-pan'), false, 'Escape cierra el panel del lugar');
+	// 19.67: barra de mando en una fila, fuentes en un indicador, menú «más», estado que lleva a la causa
+	assert.match(await p.innerText('#cnd-fuentes-btn'), /\d+\/\d+/, 'indicador de fuentes con conteo');
+	await p.click('#cnd-fuentes-btn'); assert.ok(await p.isVisible('#cnd-fuentes-pan'), 'detalle de las fuentes');
+	await p.click('#cnd-mas'); assert.ok(await p.isVisible('#cnd-mas-menu') && !(await p.isVisible('#cnd-fuentes-pan')), 'menú de acciones; abrir uno cierra el otro');
+	assert.equal(await p.$$eval('#cnd-mas-menu [role="menuitem"]', l => l.length), 6);
+	await p.keyboard.press('Escape');
+	const filas = await p.evaluate(() => { const r = [...document.querySelectorAll('.cnd-b1 > *')].filter(e => e.offsetParent).map(e => Math.round(e.getBoundingClientRect().top)); return new Set(r.map(t => Math.round(t / 20))).size; });
+	assert.equal(filas, 1, 'a 1280 px la barra cabe en una fila');
+	await p.click('#cnd-estado'); await p.waitForSelector('.cnd-luz.cnd-flash');
 	assert.match(await p.getAttribute('#cnd-franja', 'href'), /\/condiciones\/franja\/\?lat=6\.2&lon=-75\.6/, 'franja para OBS con el punto');
 	assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'sin desborde horizontal');
 	// 19.66: regiones × bandas, secciones, 6 m como oportunidad
@@ -252,7 +258,7 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.equal(await p.$$eval('.cnd-regtab tbody tr', l => l.length), 2, 'tabla de bandas por región');
 	assert.equal(await p.$$eval('.cnd-regtab tbody tr:first-child td.cnd-rc.ok', l => l.length), 3, 'Caribe: 80, 40 y 30 m abiertas');
 	assert.equal(await p.$$eval('details.cnd-sec', l => l.length), 4, 'cuatro secciones');
-	assert.equal(await p.$$eval('.cnd-secnav a', l => l.length), 4, 'navegación por secciones');
+	assert.equal(await p.$$eval('.cnd-secnav a', l => l.length), 5, 'pestañas: Ahora y las cuatro secciones');
 	await p.evaluate(() => { const l = document.getElementById('cnd-luz-seis'); l.dataset.op = '1'; });
 	assert.doesNotMatch(await p.innerText('#cnd-estado'), /6 m abierta.*ALERTA|ALERTA · 6 m/i, '6 m abierta no pone la página en alerta');
 	assert.ok(pedidos.every(u => /lat=6\.2&lon=-75\.6/.test(u)), 'al servidor solo va el punto redondeado: ' + pedidos[0]);
@@ -263,9 +269,9 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.match(await p.innerText('#cnd-reloj-local-et'), /UTC−5/i, 'hora local del punto');
 	assert.equal(await p.$$eval('#cnd-matriz .c', l => l.length), 240, 'matriz de 10 bandas × 24 horas');
 	datos.iono.matriz = { completa: false, con_dato: 3, horas: [] }; datos.iono.iono = null;
-	await p.click('#cnd-recargar'); await p.waitForFunction(() => !document.getElementById('cnd-matriz'));
+	await p.click('#cnd-mas'); await p.click('#cnd-recargar'); await p.waitForFunction(() => !document.getElementById('cnd-matriz'));
 	assert.match(await p.innerText('#cnd-hf'), /MUF 3000 km aquí[\s\S]*19,1[\s\S]*Bandas ahora en tu punto/i, 'sin ionosonda ni 12 h de datos: MUF de KC2G en el punto y bandas de ahora');
-	datos.iono = JSON.parse(JSON.stringify(ionoOrig)); await p.click('#cnd-recargar'); await p.waitForSelector('#cnd-matriz .c');
+	datos.iono = JSON.parse(JSON.stringify(ionoOrig)); await p.click('#cnd-mas'); await p.click('#cnd-recargar'); await p.waitForSelector('#cnd-matriz .c');
 	assert.ok(await p.$('#cnd-clima .cnd-graf svg'), 'gráfica de 48 horas');
 	await p.waitForSelector('#cnd-sitios table');
 	assert.match(await p.innerText('#cnd-sitios'), /Medellín[\s\S]*ALERTA/i, 'sitios RAU con su estado');
@@ -273,7 +279,7 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	assert.ok(await p.evaluate(() => document.body.classList.contains('cnd-sala') && getComputedStyle(document.querySelector('.cnd-pie')).display === 'none'), 'modo sala');
 	await p.click('#cnd-sala');
 	assert.ok(await p.evaluate(() => !document.body.classList.contains('cnd-sala')));
-	assert.ok(await p.$('#cnd-imprimir'), 'botón de imprimir o PDF');
+	assert.ok(await p.$('#cnd-mas-menu #cnd-imprimir'), 'imprimir o PDF en el menú «más»');
 	// 19.64: tormentas solares, registro en dos partes, barra debajo del menú y sala en una sola pantalla
 	await p.waitForSelector('#cnd-solar .cnd-kp3');
 	assert.equal(await p.$$eval('#cnd-solar .cnd-kp3 .c', l => l.length), 24, 'pronóstico de NOAA: 3 días × 8 bloques');
@@ -301,7 +307,7 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	await p.click('[data-capa="thunder"]');
 	assert.match(await p.getAttribute('#cnd-windy', 'src'), /overlay=thunder/);
 	assert.equal(await p.isVisible('#cnd-mapa'), false, 'en la vista de Windy no se ve el otro mapa');
-	await p.fill('#cnd-buscar', 'FJ35'); await p.click('#cnd-sug button');
+	await p.click('#cnd-lugar'); await p.fill('#cnd-buscar', 'FJ35'); await p.click('#cnd-sug button');
 	await p.waitForFunction(() => /lat=5\.5/.test(location.search));
 	assert.match(await p.innerText('#cnd-lugar'), /FJ35/);
 	assert.ok(await p.$('header a[href*="/condiciones"]'), 'Condiciones está en el menú');

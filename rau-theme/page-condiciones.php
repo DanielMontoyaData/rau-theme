@@ -37,6 +37,7 @@ $iconos = array(
 	'antena'   => '<path d="M4.9 19.1a10 10 0 0 1 0-14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="2"/>',
 	'tabla'    => '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
 	'buscar'   => '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+	'mas'      => '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
 	'estrella' => '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
 	'enlace'   => '<circle cx="5" cy="17" r="2"/><circle cx="19" cy="7" r="2"/><path d="M7 16c4-1 7-4 10-8"/>',
 	'arbol'    => '<path d="M12 22v-6M7 16h10L12 3z"/>',
@@ -55,38 +56,63 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><?php foreach ( $iconos as $k => $d ) echo '<symbol id="cnd-i-' . esc_attr( $k ) . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' . $d . '</symbol>'; // phpcs:ignore -- trazos fijos del tema ?></defs></svg>
 <main class="cnd" id="cnd">
 	<div class="cnd-barra" role="region" aria-label="Barra de mando">
-		<div class="cnd-marca-t"><small>Centro de condiciones RAU</small><h1>Condiciones</h1></div>
-		<span class="cnd-estado" id="cnd-estado" data-n="-1" role="status" aria-live="polite">Consultando…</span>
-		<div class="cnd-ubic">
-			<span class="cnd-lugar" id="cnd-lugar"><?php echo rau_cnd_ic( 'ubic' ); ?><span id="cnd-lugar-txt">Medellín</span> <span class="cnd-mono cnd-mut cnd-mini" id="cnd-loc"></span></span>
-			<button type="button" class="cnd-btn solo-ic cnd-sala-oculto" id="cnd-fav" title="Guardar en «Mis lugares»" aria-label="Guardar este lugar en Mis lugares" aria-pressed="false"><?php echo rau_cnd_ic( 'estrella' ); ?></button>
-			<button type="button" class="cnd-btn solo-ic" id="cnd-gps" title="Usar mi ubicación" aria-label="Usar mi ubicación"><?php echo rau_cnd_ic( 'gps' ); ?></button>
-			<button type="button" class="cnd-btn solo-ic cnd-solo-movil" id="cnd-buscar-btn" aria-expanded="false" aria-controls="cnd-buscar" title="Buscar un lugar" aria-label="Buscar un lugar"><?php echo rau_cnd_ic( 'buscar' ); ?></button>
-			<div class="cnd-buscar cnd-sala-oculto">
-				<input id="cnd-buscar" type="search" autocomplete="off" placeholder="Ciudad, municipio o locator (FJ26)" aria-label="Buscar ciudad, municipio o locator Maidenhead" aria-controls="cnd-sug" aria-autocomplete="list">
-				<div class="cnd-sug" id="cnd-sug" role="listbox" hidden></div>
+		<div class="cnd-b1">
+			<h1 class="cnd-tit">Condiciones</h1>
+			<button type="button" class="cnd-estado" id="cnd-estado" data-n="-1" aria-live="polite" title="Ir a la causa">Consultando…</button>
+			<div class="cnd-pop-caja cnd-lugar-caja">
+				<button type="button" class="cnd-lugar" id="cnd-lugar" aria-expanded="false" aria-controls="cnd-lugar-pan" title="Cambiar de lugar"><?php echo rau_cnd_ic( 'ubic' ); ?><span id="cnd-lugar-txt">Medellín</span> <span class="cnd-mono cnd-mut cnd-mini" id="cnd-loc"></span><i class="cnd-flecha" aria-hidden="true"></i></button>
+				<div class="cnd-pop cnd-lugar-pan" id="cnd-lugar-pan" hidden>
+					<div class="cnd-buscar">
+						<input id="cnd-buscar" type="search" autocomplete="off" placeholder="Ciudad, municipio o locator (FJ26)" aria-label="Buscar ciudad, municipio o locator Maidenhead" aria-controls="cnd-sug" aria-autocomplete="list">
+						<div class="cnd-sug" id="cnd-sug" role="listbox" hidden></div>
+					</div>
+					<div class="cnd-pop-acc">
+						<button type="button" class="cnd-btn" id="cnd-gps"><?php echo rau_cnd_ic( 'gps' ); ?>Usar mi ubicación</button>
+						<button type="button" class="cnd-btn" id="cnd-fav" aria-pressed="false"><?php echo rau_cnd_ic( 'estrella' ); ?><span>Guardar este lugar</span></button>
+					</div>
+					<div class="cnd-lugares" id="cnd-lugares" hidden aria-label="Mis lugares"></div>
+				</div>
+			</div>
+			<div class="cnd-relojes" aria-label="Relojes">
+				<div class="cnd-reloj"><b id="cnd-reloj-local">--:--:--</b><span id="cnd-reloj-local-et">Hora local</span></div>
+				<div class="cnd-reloj"><b id="cnd-reloj-utc">--:--:--</b><span>UTC</span></div>
+			</div>
+			<div class="cnd-b1-der">
+				<div class="cnd-pop-caja">
+					<button type="button" class="cnd-fuentes-btn" id="cnd-fuentes-btn" aria-expanded="false" aria-controls="cnd-fuentes-pan" data-e="sin_datos"><i class="cnd-punto" aria-hidden="true"></i><span id="cnd-fuentes-txt">Fuentes</span></button>
+					<div class="cnd-pop cnd-fuentes-pan" id="cnd-fuentes-pan" hidden>
+						<p class="cnd-pop-t">Fuentes de datos</p>
+						<ul class="cnd-fuentes" id="cnd-fuentes"></ul>
+						<p class="cnd-mini cnd-mut" style="margin:.5rem 0 0">Próxima actualización automática: <span id="cnd-cuenta"></span></p>
+					</div>
+				</div>
+				<div class="cnd-pop-caja">
+					<button type="button" class="cnd-btn solo-ic" id="cnd-mas" aria-haspopup="menu" aria-expanded="false" aria-controls="cnd-mas-menu" title="Más acciones" aria-label="Más acciones"><?php echo rau_cnd_ic( 'mas' ); ?></button>
+					<div class="cnd-pop cnd-menu" id="cnd-mas-menu" role="menu" hidden>
+						<button type="button" role="menuitem" id="cnd-recargar"><?php echo rau_cnd_ic( 'recargar' ); ?>Actualizar ahora</button>
+						<button type="button" role="menuitem" id="cnd-compartir"><?php echo rau_cnd_ic( 'compartir' ); ?>Compartir enlace</button>
+						<button type="button" role="menuitem" id="cnd-tarjeta-m"><?php echo rau_cnd_ic( 'compartir' ); ?>Imagen para WhatsApp</button>
+						<a role="menuitem" id="cnd-franja-m" href="<?php echo esc_url( home_url( '/condiciones/franja/' ) ); ?>" target="_blank" rel="noopener"><?php echo rau_cnd_ic( 'sala' ); ?>Franja para OBS</a>
+						<button type="button" role="menuitem" id="cnd-imprimir"><?php echo rau_cnd_ic( 'imprimir' ); ?>Imprimir o PDF</button>
+						<button type="button" role="menuitem" class="cnd-solo-movil" id="cnd-sala-m"><?php echo rau_cnd_ic( 'sala' ); ?>Modo sala</button>
+					</div>
+				</div>
+				<button type="button" class="cnd-btn cnd-sala-btn" id="cnd-sala" aria-pressed="false" title="Modo sala: pantalla completa para la sala de radio"><?php echo rau_cnd_ic( 'sala' ); ?><span>Sala</span></button>
 			</div>
 		</div>
-		<div class="cnd-relojes" aria-label="Relojes">
-			<div class="cnd-reloj"><b id="cnd-reloj-local">--:--:--</b><span id="cnd-reloj-local-et">Hora local</span></div>
-			<div class="cnd-reloj"><b id="cnd-reloj-utc">--:--:--</b><span>UTC</span></div>
-		</div>
-		<div class="cnd-acciones">
-			<span class="cnd-fuentes" id="cnd-fuentes" role="img" aria-label="Estado de las fuentes de datos" title="Fuentes de datos"></span>
-			<span class="cnd-cuenta" id="cnd-cuenta" aria-live="off"></span>
-			<button type="button" class="cnd-btn solo-ic" id="cnd-recargar" title="Actualizar ahora" aria-label="Actualizar ahora"><?php echo rau_cnd_ic( 'recargar' ); ?></button>
-			<button type="button" class="cnd-btn solo-ic cnd-sala-oculto" id="cnd-compartir" title="Compartir estas condiciones" aria-label="Compartir"><?php echo rau_cnd_ic( 'compartir' ); ?></button>
-			<button type="button" class="cnd-btn solo-ic cnd-sala-oculto" id="cnd-imprimir" title="Imprimir o guardar en PDF la hoja de condiciones" aria-label="Imprimir o guardar en PDF"><?php echo rau_cnd_ic( 'imprimir' ); ?></button>
-			<button type="button" class="cnd-btn" id="cnd-sala" aria-pressed="false" title="Modo sala: pantalla completa para la sala de radio"><?php echo rau_cnd_ic( 'sala' ); ?><span>Modo sala</span></button>
-		</div>
+		<nav class="cnd-secnav cnd-sala-oculto" aria-label="Secciones de la página">
+			<a href="#cnd-sem" data-sec="cnd-sem">Ahora</a>
+			<a href="#cnd-s-tiempo" data-sec="cnd-s-tiempo">Tiempo y seguridad</a>
+			<a href="#cnd-s-radio" data-sec="cnd-s-radio">Radio</a>
+			<a href="#cnd-s-sol" data-sec="cnd-s-sol">Sol y espacio</a>
+			<a href="#cnd-s-rau" data-sec="cnd-s-rau">Historial y RAU</a>
+		</nav>
 	</div>
 
 	<p class="cnd-solo-impresion" id="cnd-impresion"></p>
-	<div class="cnd-lugares cnd-sala-oculto" id="cnd-lugares" hidden aria-label="Mis lugares"></div>
 	<p class="cnd-offline" id="cnd-offline" role="status" hidden></p>
 
 	<div class="cnd-sismo" id="cnd-sismo" role="alert" hidden></div>
-	<div class="cnd-sismo" id="cnd-siata-al" role="status" hidden></div>
 	<section aria-label="Resumen para operar ahora" class="cnd-sem" id="cnd-sem">
 		<?php foreach ( array( 'tormenta' => 'Tormenta', 'viento' => 'Viento', 'hf' => 'HF', 'sol' => 'Sol', 'geomag' => 'Campo magnético', 'seis' => '6 m / VHF', 'sat' => 'Satélites' ) as $id => $t ) : ?>
 		<div class="cnd-luz" id="cnd-luz-<?php echo esc_attr( $id ); ?>" data-n="-1">
@@ -135,7 +161,6 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 				<label><input type="checkbox" data-capa-mapa="pota"> Activaciones POTA</label>
 				<label><input type="checkbox" data-capa-mapa="sats"> Satélites en vivo</label>
 				<label><input type="checkbox" data-capa-mapa="balizas"> Balizas NCDXF</label>
-				<label><input type="checkbox" data-capa-mapa="siata" checked> Quebradas y lluvia (SIATA)</label>
 			</div>
 			<div class="cnd-linea" id="cnd-linea" hidden>
 				<button type="button" id="cnd-play" aria-label="Animar el radar">▶</button>
@@ -151,16 +176,9 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 		</div>
 	</div>
 
-	<nav class="cnd-secnav cnd-sala-oculto" aria-label="Secciones de la página">
-		<a href="#cnd-s-tiempo"><?php echo rau_cnd_ic( 'nube' ); ?>Tiempo y seguridad</a>
-		<a href="#cnd-s-radio"><?php echo rau_cnd_ic( 'hf' ); ?>Radio</a>
-		<a href="#cnd-s-sol"><?php echo rau_cnd_ic( 'sol' ); ?>Sol y espacio</a>
-		<a href="#cnd-s-rau"><?php echo rau_cnd_ic( 'radio' ); ?>Historial y RAU</a>
-	</nav>
 	<div class="cnd-rej">
 		<details class="cnd-sec" id="cnd-s-tiempo" open>
 			<summary class="cnd-sec-t"><?php echo rau_cnd_ic( 'nube' ); ?>Tiempo y seguridad</summary>
-			<?php $caja( 'cnd-siata', 'agua', 'Valle de Aburrá · SIATA' ); ?>
 			<div class="cnd-sec-cols">
 				<div class="cnd-col"><?php $caja( 'cnd-clima', 'nube', 'Pronóstico 48 horas' ); ?></div>
 				<div class="cnd-col"><?php $caja( 'cnd-sitios', 'tabla', 'Sitios RAU' ); ?></div>
@@ -197,13 +215,6 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 							<button type="button" class="cnd-btn" id="cnd-tarjeta"><?php echo rau_cnd_ic( 'compartir' ); ?>Imagen para WhatsApp</button>
 							<a class="cnd-btn" id="cnd-franja" href="<?php echo esc_url( home_url( '/condiciones/franja/' ) ); ?>" target="_blank" rel="noopener" title="Para OBS: fuente de navegador de 1280×90, con ?transparente para fondo transparente"><?php echo rau_cnd_ic( 'sala' ); ?>Franja para la transmisión</a>
 						</div>
-						<p class="cnd-mini cnd-mut" style="margin:.2rem 0 .35rem">Fuentes oficiales para alertas y emergencias:</p>
-						<div class="cnd-oficial">
-							<a class="cnd-btn" href="http://www.pronosticosyalertas.gov.co/" target="_blank" rel="noopener">IDEAM alertas</a>
-							<a class="cnd-btn" href="https://fews.ideam.gov.co/visorfews/nacional" target="_blank" rel="noopener">IDEAM ríos</a>
-							<a class="cnd-btn" href="https://portal.gestiondelriesgo.gov.co/" target="_blank" rel="noopener">UNGRD</a>
-							<a class="cnd-btn" href="https://www.sgc.gov.co/sismos" target="_blank" rel="noopener">SGC sismos</a>
-						</div>
 					</div>
 				</section>
 				</div>
@@ -239,7 +250,7 @@ $caja = function( $id, $icono, $titulo, $clases = '' ) { ?>
 	</div>
 
 	<p class="cnd-pie">
-		Fuentes: tiempo de <a href="https://open-meteo.com/" rel="noopener" target="_blank">Open-Meteo</a> (respaldo: <a href="https://api.met.no/" rel="noopener" target="_blank">MET Norway</a>) · radar de <a href="https://www.rainviewer.com/" rel="noopener" target="_blank">RainViewer</a> · mapa animado de <a href="https://www.windy.com/" rel="noopener" target="_blank">Windy</a> · clima espacial, absorción D-RAP y pronósticos de <a href="https://www.swpc.noaa.gov/" rel="noopener" target="_blank">NOAA SWPC</a> · eyecciones de masa coronal de <a href="https://kauai.ccmc.gsfc.nasa.gov/DONKI/" rel="noopener" target="_blank">NASA DONKI</a> · imágenes del sol de <a href="https://sdo.gsfc.nasa.gov/" rel="noopener" target="_blank">NASA SDO</a> y de la corona de SOHO LASCO · ionosondas de la red GIRO vía <a href="https://prop.kc2g.com/" rel="noopener" target="_blank">KC2G</a> · bandas de <a href="https://www.hamqsl.com/" rel="noopener" target="_blank">HamQSL</a> · alcance de <a href="https://wspr.live/" rel="noopener" target="_blank">WSPR</a> · activaciones de <a href="https://pota.app/" rel="noopener" target="_blank">POTA</a> · quebradas, lluvia y estaciones del Valle de Aburrá: Fuente: <a href="https://siata.gov.co/" rel="noopener" target="_blank">SIATA – Área Metropolitana del Valle de Aburrá</a> · enlaces de <a href="https://pskreporter.info/" rel="noopener" target="_blank">PSK Reporter</a> · sismos del <a href="https://earthquake.usgs.gov/" rel="noopener" target="_blank">USGS</a> · satélites de <a href="https://celestrak.org/" rel="noopener" target="_blank">CelesTrak</a> · mapas © colaboradores de OpenStreetMap, Esri y OpenTopoMap.
+		Fuentes: tiempo de <a href="https://open-meteo.com/" rel="noopener" target="_blank">Open-Meteo</a> (respaldo: <a href="https://api.met.no/" rel="noopener" target="_blank">MET Norway</a>) · radar de <a href="https://www.rainviewer.com/" rel="noopener" target="_blank">RainViewer</a> · mapa animado de <a href="https://www.windy.com/" rel="noopener" target="_blank">Windy</a> · clima espacial, absorción D-RAP y pronósticos de <a href="https://www.swpc.noaa.gov/" rel="noopener" target="_blank">NOAA SWPC</a> · eyecciones de masa coronal de <a href="https://kauai.ccmc.gsfc.nasa.gov/DONKI/" rel="noopener" target="_blank">NASA DONKI</a> · imágenes del sol de <a href="https://sdo.gsfc.nasa.gov/" rel="noopener" target="_blank">NASA SDO</a> y de la corona de SOHO LASCO · ionosondas de la red GIRO vía <a href="https://prop.kc2g.com/" rel="noopener" target="_blank">KC2G</a> · bandas de <a href="https://www.hamqsl.com/" rel="noopener" target="_blank">HamQSL</a> · alcance de <a href="https://wspr.live/" rel="noopener" target="_blank">WSPR</a> · activaciones de <a href="https://pota.app/" rel="noopener" target="_blank">POTA</a> · enlaces de <a href="https://pskreporter.info/" rel="noopener" target="_blank">PSK Reporter</a> · sismos del <a href="https://earthquake.usgs.gov/" rel="noopener" target="_blank">USGS</a> · satélites de <a href="https://celestrak.org/" rel="noopener" target="_blank">CelesTrak</a> · mapas © colaboradores de OpenStreetMap, Esri y OpenTopoMap.
 		Tu ubicación se redondea a unos 11 km antes de consultar y no se guarda. No hay rayos en tiempo real: las redes que los publican no permiten usarlos en otros sitios; el radar y la capa «Rayos» de Windy (pronóstico) son la mejor guía. Para alertas oficiales sigue al IDEAM, la UNGRD y tu sistema local de alerta temprana.
 	</p>
 </main>

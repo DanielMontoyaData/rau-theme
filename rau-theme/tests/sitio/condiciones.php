@@ -85,7 +85,7 @@ ok( 'Boa Vista, Brazil' === $c['iono']['iono']['nombre'] && '40 m' === $c['iono'
 ok( 1 === count( $c['sismos'] ) && 'Antioquia' === $c['sismos'][0]['lugar'], 'solo los sismos a menos de 500 km' );
 ok( 3.7 === $c['espacio']['kp_pron'] && 420 == $c['espacio']['viento']['vel'] && 'ALERT' === $c['espacio']['alertas'][0]['tipo'], 'clima espacial: pronóstico de Kp, viento solar y avisos de NOAA' );
 ok( 140 === $c['espacio']['sfi'] && 2 === count( $c['espacio']['bandas'] ), 'bandas y flujo solar de HamQSL' );
-ok( 55 === $c['aire']['aqi'], 'calidad del aire' );
+ok( ! isset( $c['aire'] ), 'sin calidad del aire: no sirve para operar radio (19.67)' );
 $antes = count( $pedidas ); rau_condiciones( 6.21, -75.61 );
 ok( count( $pedidas ) === $antes, 'otro punto de la misma celda no vuelve a consultar nada' );
 ok( ! preg_grep( '/latitude=6\.24|lat=6\.24|6\.2442/', $pedidas ), 'nunca se manda la ubicación sin redondear' );
@@ -221,7 +221,7 @@ add_filter( 'pre_http_request', function( $pre, $args, $url ) use ( $t_hss ) {
 	if ( false !== strpos( $url, 'api.nasa.gov/DONKI/HSS' ) ) return $r( array( array( 'hssID' => 'HSS-1', 'eventTime' => gmdate( 'Y-m-d\TH:i\Z', $t_hss ), 'link' => 'https://ccmc/hss' ) ) );
 	return $pre;
 }, 20, 3 );
-$limpiar(); foreach ( array( 'rau_cond_mufgeo', 'rau_cond_wspr', 'rau_cond_siata', 'rau_cond_hss', 'rau_cond_pota' ) as $tr ) delete_transient( $tr ); delete_option( 'rau_cond_hss_ult' );
+$limpiar(); foreach ( array( 'rau_cond_mufgeo', 'rau_cond_wspr', 'rau_cond_hss', 'rau_cond_pota' ) as $tr ) delete_transient( $tr ); delete_option( 'rau_cond_hss_ult' );
 $geo = rau_cond_muf_geo();
 ok( 2 === count( $geo ) && 20.0 === $geo[0]['v'] && '#00ff00' === $geo[0]['c'], 'MUF de KC2G: isolíneas con su valor y color' );
 ok( 20.0 === rau_cond_muf_en( 0, -75, $geo ) && 10.0 === rau_cond_muf_en( 40, -75, $geo ), 'MUF sobre la isolínea: su valor' );
@@ -236,10 +236,6 @@ $w = rau_cond_wspr();
 ok( $w['ok'] && 2 === count( $w['sale'] ) && 2 === count( $w['entra'] ) && 1 === $w['bandas']['40 m']['sale'] && 1 === $w['bandas']['40 m']['entra'] && 8032 === $w['bandas']['40 m']['max'], 'WSPR: quién oye a la región y a quién oye, por banda' );
 $po = rau_cond_pota();
 ok( 1 === count( $po ) && 'HK4P' === $po[0]['act'] && 'Parque Arví' === $po[0]['parque'], 'POTA: solo activaciones válidas y con posición' );
-$si = rau_cond_siata(); $por = array(); foreach ( $si['niveles'] as $x ) $por[ $x['n'] ] = $x;
-ok( 0 === $por['Q. La Normal']['e'] && 2 === $por['Q. Crecida']['e'] && -1 === $por['Q. Sin dato']['e'], 'SIATA: el estado de cada quebrada sale del color oficial' );
-ok( $por['Q. Sensor malo']['dudoso'] && 1 === $si['resumen']['alerta'] && 2 === $si['resumen']['peor'], 'SIATA: una lectura imposible queda como dudosa y no cuenta como alerta' );
-ok( 1 === $si['resumen']['llueve'] && 2.5 == $si['resumen']['max_mm'] && 1 === count( $si['meteo'] ) && 7.2 == $si['meteo'][0]['viento'], 'SIATA: lluvia en 15 min y estaciones (viento a km/h)' );
 $hs = rau_cond_hss();
 ok( 1 === count( $hs ) && 'HSS-1' === $hs[0]['id'] && abs( $hs[0]['regreso'] - $t_hss - 27.27 * DAY_IN_SECONDS ) < 60, 'corriente rápida y su posible regreso a los 27 días' );
 delete_transient( 'rau_cond_solar' ); $so2 = rau_cond_solar();
@@ -254,10 +250,10 @@ delete_option( 'rau_cond_archivo' ); rau_cond_archivar(); rau_cond_archivar(); $
 ok( isset( $ar[ $hoy ] ) && count( $ar[ $hoy ]['ev'] ) === count( array_unique( array_map( 'serialize', $ar[ $hoy ]['ev'] ) ) ) && preg_grep( '/Corriente rápida/', wp_list_pluck( $ar[ rau_cond_dia( $t_hss ) ]['ev'], 'x' ) ), 'archivo diario: sin duplicados y con la corriente rápida' );
 ok( '3' . sprintf( '%05.1f', 2.4 ) === rau_cond_clase_num( 'M2.4' ) && strcmp( rau_cond_clase_num( 'X1.0' ), rau_cond_clase_num( 'M9.9' ) ) > 0, 'llamaradas comparables por clase (X1 > M9,9)' );
 $se = rau_cond_semana( 6.24, -75.58 );
-ok( 3 === count( $se['dias'] ) && 7.0 == $se['lluvia'] && 1 === $se['tormentas'] && false !== strpos( $se['texto'], '1 día con tormenta' ), 'resumen de la semana del punto' );
+ok( 3 === count( $se['dias'] ) && 1 === $se['tormentas'] && false !== strpos( $se['texto'], '1 día con tormenta' ) && false !== strpos( $se['texto'], 'ráfagas de hasta 65 km/h' ) && false === strpos( $se['texto'], 'mm de lluvia' ), 'resumen de la semana del punto' );
 $q = new WP_REST_Request( 'GET', '/rau/v1/condiciones/enlace' ); $q->set_query_params( array( 'lat' => 6.2, 'lon' => -75.6, 'dlat' => 40.4, 'dlon' => -3.7 ) );
 $re = rest_do_request( $q ); ok( 200 === $re->get_status() && abs( $re->get_data()['km'] - 8030 ) < 60, 'REST: /condiciones/enlace' );
-foreach ( array( 'muf', 'wspr', 'pota', 'siata', 'archivo' ) as $ru ) { $re = rest_do_request( new WP_REST_Request( 'GET', '/rau/v1/condiciones/' . $ru ) ); ok( 200 === $re->get_status(), 'REST: /condiciones/' . $ru ); }
+foreach ( array( 'muf', 'wspr', 'pota', 'archivo' ) as $ru ) { $re = rest_do_request( new WP_REST_Request( 'GET', '/rau/v1/condiciones/' . $ru ) ); ok( 200 === $re->get_status(), 'REST: /condiciones/' . $ru ); }
 // Tarjeta para compartir
 $tj = rau_cond_tarjeta_archivo( 6.2, -75.6 );
 ok( ! $tj || ( file_exists( $tj[0] ) && "\x89PNG" === substr( file_get_contents( $tj[0] ), 0, 4 ) && array( 1200, 630 ) === array_slice( getimagesize( $tj[0] ), 0, 2 ) ), 'tarjeta PNG de 1200×630 con el semáforo del punto' );
@@ -273,19 +269,7 @@ ok( 1 === count( preg_grep( '/Corriente rápida/', $enviados ) ) && ! preg_grep(
 // 6 m abierta es oportunidad, no alerta
 $s66 = rau_cond_semaforo( null, rau_cond_espacio(), null );
 ok( ! isset( $s66['seis'] ) || ! empty( $s66['seis']['op'] ), 'el semáforo de 6 m va marcado como oportunidad' );
-// SIATA: recuerda las cotas y no confirma un nivel alto sin cotas ni lluvia de verdad cerca
-delete_option( 'rau_cond_siata_cotas' ); delete_transient( 'rau_cond_siata' ); rau_cond_siata();
-$cot = get_option( 'rau_cond_siata_cotas' ); ok( is_array( $cot ) && 4 === count( $cot ) && array( 100.0, 150.0, 200.0 ) === reset( $cot ), 'SIATA: guarda las cotas de cada estación cuando llegan' );
-$sin_cotas = true;
-add_filter( 'pre_http_request', function( $pre, $args, $url ) use ( &$sin_cotas ) {
-	if ( ! $sin_cotas || false === strpos( $url, 'geodataJson/2/niveles' ) ) return $pre;
-	$f = function( $cod, $n, $act, $col, $lon ) { return array( 'geometry' => array( 'coordinates' => array( $lon, 6.25 ) ), 'properties' => array( 'codigo' => $cod, 'nombreEstacion' => $n, 'municipio' => 'Medellín', 'nivelActual' => $act, 'color' => $col ) ); };
-	return array( 'headers' => array(), 'response' => array( 'code' => 200, 'message' => '' ), 'cookies' => array(), 'body' => wp_json_encode( array( 'features' => array( $f( 'X1', 'Q. Crecida', 160, '#F29436', -75.57 ), $f( 'X9', 'Av. Sin cotas', 1764, '#FC3A3A', -75.0 ) ) ) ) );
-}, 30, 3 );
-delete_transient( 'rau_cond_siata' ); delete_transient( 'rau_cond_' . md5( 'https://geoportal.siata.gov.co/fastgeoapi/geodata/geodataJson/2/niveles' ) ); $limpiar();
-$si2 = rau_cond_siata(); $p2 = array(); foreach ( $si2['niveles'] as $x ) $p2[ $x['n'] ] = $x;
-ok( isset( $p2['Av. Sin cotas'] ) && $p2['Av. Sin cotas']['sin_confirmar'] && 0 === $si2['resumen']['alerta'], 'SIATA: nivel rojo sin cotas y sin lluvia fuerte cerca queda «sin confirmar» y no cuenta como alerta' );
-$sin_cotas = false; delete_transient( 'rau_cond_siata' );
+ok( 404 === rest_do_request( new WP_REST_Request( 'GET', '/rau/v1/condiciones/siata' ) )->get_status(), 'SIATA ya no está en Condiciones (19.67)' );
 // Bandas por región
 $rg = rau_cond_regiones( 6.2, -75.6 );
 ok( 8 === count( $rg ) && isset( $rg[0]['bandas']['40 m'] ) && 'Caribe' === $rg[0]['n'], 'bandas por región: 8 regiones con el estado de cada banda' );

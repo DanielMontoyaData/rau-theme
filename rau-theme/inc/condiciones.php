@@ -59,7 +59,7 @@ function rau_cond_traer( $url, $ttl, $formato = 'json', $timeout = 12 ) {
 /* Salud de las fuentes: último acierto y último fallo por servicio, para el tablero y el monitoreo */
 function rau_cond_fuente_de( $url ) {
 	$h = (string) wp_parse_url( $url, PHP_URL_HOST );
-	$m = array( 'geoportal.siata.gov.co' => 'SIATA', 'db1.wspr.live' => 'WSPR', 'prop.kc2g.com' => 'Ionosondas (KC2G)', 'api.pota.app' => 'POTA', 'api.nasa.gov' => 'NASA DONKI', 'api.open-meteo.com' => 'Open-Meteo', 'air-quality-api.open-meteo.com' => 'Calidad del aire', 'geocoding-api.open-meteo.com' => 'Buscador', 'api.met.no' => 'MET Norway',
+	$m = array( 'db1.wspr.live' => 'WSPR', 'prop.kc2g.com' => 'Ionosondas (KC2G)', 'api.pota.app' => 'POTA', 'api.nasa.gov' => 'NASA DONKI', 'api.open-meteo.com' => 'Open-Meteo', 'air-quality-api.open-meteo.com' => 'Calidad del aire', 'geocoding-api.open-meteo.com' => 'Buscador', 'api.met.no' => 'MET Norway',
 		'services.swpc.noaa.gov' => 'NOAA SWPC', 'prop.kc2g.com' => 'Ionosondas (KC2G)', 'earthquake.usgs.gov' => 'USGS', 'www.hamqsl.com' => 'HamQSL' );
 	return $m[ $h ] ?? $h;
 }
@@ -73,7 +73,7 @@ function rau_cond_salud_anotar( $url, $ok ) {
 /* Estado de cada fuente: verde si respondió hace poco, ámbar si el último dato es viejo, rojo si falla */
 function rau_cond_salud() {
 	$s = get_option( 'rau_cond_salud', array() ); $out = array();
-	$esperado = array( 'Open-Meteo' => 30, 'NOAA SWPC' => 30, 'Ionosondas (KC2G)' => 60, 'USGS' => 60, 'HamQSL' => 120, 'Calidad del aire' => 120, 'NASA DONKI' => 400, 'SIATA' => 0, 'WSPR' => 0, 'POTA' => 0, 'MET Norway' => 0, 'Buscador' => 0 );
+	$esperado = array( 'Open-Meteo' => 30, 'NOAA SWPC' => 30, 'Ionosondas (KC2G)' => 60, 'USGS' => 60, 'HamQSL' => 120, 'NASA DONKI' => 400, 'WSPR' => 0, 'POTA' => 0, 'MET Norway' => 0, 'Buscador' => 0 );
 	foreach ( $esperado as $f => $min ) {
 		$x = $s[ $f ] ?? null; if ( ! $x ) { if ( $min ) $out[] = array( 'fuente' => $f, 'estado' => 'sin_datos', 'hace' => null ); continue; }
 		$hace = $x['ok'] ? (int) round( ( time() - $x['ok'] ) / 60 ) : null;
@@ -396,7 +396,7 @@ function rau_condiciones( $lat, $lon ) {
 	$hora  = $clima ? (int) gmdate( 'G', time() + $clima['offset'] ) : (int) gmdate( 'G', time() - 5 * HOUR_IN_SECONDS );
 	$out = array(
 		'punto' => array( 'lat' => $lat, 'lon' => $lon, 'locator' => rau_cond_locator( $lat, $lon ), 'cerca' => rau_cond_cerca_de( $lat, $lon ) ),
-		'clima' => $clima, 'aire' => rau_cond_aire( $lat, $lon ), 'espacio' => $esp, 'drap' => $drap,
+		'clima' => $clima, 'espacio' => $esp, 'drap' => $drap,
 		'iono' => rau_cond_ionosfera( $lat, $lon, $hora ), 'sismos' => rau_cond_sismos( $lat, $lon ),
 		'repetidoras' => array_slice( rau_cond_repetidoras( $lat, $lon ), 0, 3 ),
 		'semaforo' => rau_cond_semaforo( $clima, $esp, $drap ), 'generado' => time(),

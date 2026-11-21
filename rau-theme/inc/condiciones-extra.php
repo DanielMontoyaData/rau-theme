@@ -6,7 +6,8 @@
  *  · «¿Llego a…?»: enlace punto a punto con distancia, rumbos, puntos de control, MUF y bandas.
  *  · Alcance real: WSPR (wspr.live, base pública) de la región FJ/FK/FI en la última hora.
  *  · Activaciones POTA (api.pota.app).
- *  · Valle de Aburrá: niveles de quebradas, pluviómetros y estaciones del SIATA (geoportal público, sin
+ *  · (19.67.0: se quitó lo que no sirve para operar radio: SIATA, calidad del aire, humedad, presión.)
+ *  ·
  *    documentación oficial: se cita la fuente y se guarda 5 minutos para no cargarlo).
  *  · Corrientes rápidas de agujeros coronales (NASA DONKI HSS) y su posible regreso a los 27 días.
  *  · Archivo diario de eventos, resumen de la semana, tarjeta PNG para compartir y franja para OBS.
@@ -122,63 +123,6 @@ function rau_cond_pota() {
 	return $out;
 }
 
-/* ── Valle de Aburrá: SIATA ─────────────────────────────────────────────── */
-/* Cota de una estación de SIATA: acepta el nombre en camelCase o con guion bajo, y números como texto */
-function rau_cond_siata_cota( $p, $clave ) {
-	$alt = strtolower( preg_replace( '/([a-z])([A-Z])/', '$1_$2', $clave ) );
-	foreach ( array( $clave, $alt, strtolower( $clave ) ) as $k ) if ( isset( $p[ $k ] ) && is_numeric( $p[ $k ] ) ) return (float) $p[ $k ];
-	return 0.0;
-}
-function rau_cond_siata() {
-	$c = get_transient( 'rau_cond_siata' ); if ( is_array( $c ) ) return $c;
-	$b = 'https://geoportal.siata.gov.co/fastgeoapi/geodata/geodataJson/';
-	list( $niv ) = rau_cond_traer( $b . '2/niveles', 5 * MINUTE_IN_SECONDS, 'json', 20 );
-	list( $plu ) = rau_cond_traer( $b . '3/pluvios_v2', 5 * MINUTE_IN_SECONDS, 'json', 20 );
-	list( $met ) = rau_cond_traer( $b . '3/tempVient', 10 * MINUTE_IN_SECONDS, 'json', 20 );
-	$out = array( 'niveles' => array(), 'lluvia' => array(), 'meteo' => array(), 'ok' => is_array( $niv ) || is_array( $plu ) );
-	$cotas = get_option( 'rau_cond_siata_cotas', array() ); if ( ! is_array( $cotas ) ) $cotas = array(); $cotas_cambio = false;
-	foreach ( (array) ( $niv['features'] ?? array() ) as $f ) {
-		$p = $f['properties']; $c2 = $f['geometry']['coordinates'] ?? null; if ( ! $c2 || ! isset( $p['nivelActual'] ) ) continue;
-		$n = (float) $p['nivelActual']; $pre = rau_cond_siata_cota( $p, 'nivelPrecaucion' ); $men = rau_cond_siata_cota( $p, 'inundacionMenor' ); $may = rau_cond_siata_cota( $p, 'inundacionMayor' );
-		// SIATA a veces publica las cotas y a veces no: se recuerdan por estación para usarlas cuando falten
-		$cod = (string) ( $p['codigo'] ?? $p['nombreEstacion'] );
-		if ( $may > 0 ) { if ( ( $cotas[ $cod ] ?? null ) !== array( $pre, $men, $may ) ) { $cotas[ $cod ] = array( $pre, $men, $may ); $cotas_cambio = true; } }
-		elseif ( isset( $cotas[ $cod ] ) ) list( $pre, $men, $may ) = $cotas[ $cod ];
-		// El estado es el que publica SIATA (color de la estación): verde, amarillo, naranja, rojo; negro = sin dato
-		$colores = array( '#79c454' => 0, '#f9da41' => 1, '#f29436' => 2, '#fc3a3a' => 3 ); $col = strtolower( (string) ( $p['color'] ?? '' ) );
-		$e = $colores[ $col ] ?? ( '#0e0e0e' === $col ? -1 : ( $may && $n >= $may ? 3 : ( $men && $n >= $men ? 2 : ( $pre && $n >= $pre ? 1 : 0 ) ) ) );
-		$dudoso = $may > 0 && $n > 2.5 * $may; // lecturas imposibles (sensor en falla): se muestran, pero no cuentan como alerta
-		$t = strtotime( ( $p['fechaUltimoDato'] ?? '' ) . ' America/Bogota' );
-		$out['niveles'][] = array( 'n' => trim( (string) $p['nombreEstacion'] ), 'mun' => (string) ( $p['municipio'] ?? '' ), 'lat' => (float) $c2[1], 'lon' => (float) $c2[0], 'cm' => round( $n ), 'pre' => $pre, 'men' => $men, 'may' => $may, 'e' => $e, 'dudoso' => $dudoso, 'pct' => $pre ? round( 100 * $n / $pre ) : null, 't' => $t ?: null );
-	}
-	foreach ( (array) ( $plu['features'] ?? array() ) as $f ) {
-		$p = $f['properties']; $c2 = $f['geometry']['coordinates'] ?? null; if ( ! $c2 ) continue;
-		$out['lluvia'][] = array( 'n' => trim( (string) $p['nombre'] ), 'mun' => (string) ( $p['ubicacion'] ?? '' ), 'lat' => (float) $c2[1], 'lon' => (float) $c2[0], 'mm' => (float) ( $p['acumulado_15min'] ?? 0 ), 'llueve' => 'si' === strtolower( (string) ( $p['flag_precipitacion'] ?? '' ) ) || (float) ( $p['acumulado_15min'] ?? 0 ) > 0 );
-	}
-	foreach ( (array) ( $met['features'] ?? array() ) as $f ) {
-		$p = $f['properties']; $c2 = $f['geometry']['coordinates'] ?? null; if ( ! $c2 ) continue;
-		$out['meteo'][] = array( 'n' => trim( (string) $p['NombreEstacion'] ), 'lat' => (float) $c2[1], 'lon' => (float) $c2[0], 'temp' => isset( $p['Temperatura'] ) ? round( (float) $p['Temperatura'], 1 ) : null, 'viento' => isset( $p['Magnitud_viento'] ) ? round( (float) $p['Magnitud_viento'] * 3.6, 1 ) : null, 'dir' => $p['Direccion_viento'] ?? null, 'hr' => isset( $p['Humedad_relativa'] ) ? round( (float) $p['Humedad_relativa'] ) : null );
-	}
-	$ll = array_filter( $out['lluvia'], function( $x ) { return $x['llueve']; } );
-	// 19.66.0: un nivel alto sin cotas para compararlo y sin lluvia a menos de 5 km no se puede confirmar (suele ser un sensor en falla)
-	foreach ( $out['niveles'] as &$x ) {
-		$x['sin_confirmar'] = false;
-		if ( $x['e'] >= 2 && ! $x['dudoso'] && ! $x['may'] && ! $x['men'] ) {
-			$cerca = false; foreach ( $ll as $q ) if ( $q['mm'] >= 1 && rau_cond_km( array( $x['lat'], $x['lon'] ), array( $q['lat'], $q['lon'] ) ) <= 5 ) { $cerca = true; break; }
-			$x['sin_confirmar'] = ! $cerca;
-		}
-	}
-	unset( $x );
-	if ( $cotas_cambio ) update_option( 'rau_cond_siata_cotas', $cotas, false );
-	$out['diag'] = array( 'con_cotas' => count( array_filter( $out['niveles'], function( $x ) { return $x['may'] > 0; } ) ), 'claves' => array_slice( array_keys( (array) ( $niv['features'][0]['properties'] ?? array() ) ), 0, 20 ) );
-	$al = array_filter( $out['niveles'], function( $x ) { return $x['e'] >= 2 && ! $x['dudoso'] && ! $x['sin_confirmar']; } );
-	$out['resumen'] = array( 'llueve' => count( $ll ), 'pluvios' => count( $out['lluvia'] ), 'max_mm' => $ll ? max( array_map( function( $x ) { return $x['mm']; }, $ll ) ) : 0, 'alerta' => count( $al ), 'niveles' => count( $out['niveles'] ),
-		'peor' => $al ? max( array_map( function( $x ) { return $x['e']; }, $al ) ) : 0 );
-	rau_cond_salud_anotar( 'https://geoportal.siata.gov.co/', $out['ok'] );
-	set_transient( 'rau_cond_siata', $out, 5 * MINUTE_IN_SECONDS );
-	return $out;
-}
-
 /* ── Corrientes rápidas de agujeros coronales (NASA DONKI HSS) ───────────── */
 function rau_cond_hss() {
 	$c = get_transient( 'rau_cond_hss' ); if ( is_array( $c ) ) return $c;
@@ -236,7 +180,8 @@ function rau_cond_semana( $lat, $lon ) {
 	unset( $x );
 	$lluvia = array_sum( array_map( function( $x ) { return (float) $x['mm']; }, $dias ) ); $torm = count( array_filter( $dias, function( $x ) { return $x['tormenta']; } ) );
 	$kps = array_filter( array_map( function( $x ) { return $x['kp']; }, $dias ), 'is_numeric' ); $kpmax = $kps ? max( $kps ) : null;
-	$txt = 'En los últimos 7 días: ' . number_format( $lluvia, 0, ',', '.' ) . ' mm de lluvia' . ( $torm ? ', ' . $torm . ' día' . ( 1 === $torm ? '' : 's' ) . ' con tormenta eléctrica' : ', sin días de tormenta eléctrica' ) . '. '
+	$rafm = max( array_map( function( $x ) { return (float) $x['rafaga']; }, $dias ) ?: array( 0 ) );
+	$txt = 'En los últimos 7 días: ' . ( $torm ? $torm . ' día' . ( 1 === $torm ? '' : 's' ) . ' con tormenta eléctrica' : 'sin tormentas eléctricas' ) . ( $rafm ? ', ráfagas de hasta ' . round( $rafm ) . ' km/h' : '' ) . '. '
 		. ( null !== $kpmax ? 'Kp máximo ' . number_format( $kpmax, 1, ',', '' ) . ( $kpmax >= 5 ? ' (hubo tormenta geomagnética)' : '' ) . '. ' : '' ) . ( $fl ? 'Llamarada más fuerte: ' . $fl . '.' : '' );
 	return array( 'dias' => array_values( $dias ), 'lluvia' => round( $lluvia, 1 ), 'tormentas' => $torm, 'kp_max' => $kpmax, 'llamarada' => $fl, 'eventos' => $ev, 'texto' => $txt );
 }
@@ -254,7 +199,6 @@ add_action( 'rest_api_init', function() {
 		'callback' => function( WP_REST_Request $r ) use ( $cache ) { $a = rau_cond_redondear( $r['lat'], $r['lon'] ); return $cache( rau_cond_regiones( $a[0], $a[1] ), 300 ); } ) );
 	register_rest_route( 'rau/v1', '/condiciones/wspr', array( 'methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function() use ( $cache ) { return $cache( rau_cond_wspr(), 300 ); } ) );
 	register_rest_route( 'rau/v1', '/condiciones/pota', array( 'methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function() use ( $cache ) { return $cache( rau_cond_pota(), 120 ); } ) );
-	register_rest_route( 'rau/v1', '/condiciones/siata', array( 'methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function() use ( $cache ) { return $cache( rau_cond_siata(), 180 ); } ) );
 	register_rest_route( 'rau/v1', '/condiciones/archivo', array( 'methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function( WP_REST_Request $r ) use ( $cache ) {
 		$a = rau_cond_archivo_al_dia(); if ( ! is_array( $a ) ) $a = array();
 		$dias = array(); foreach ( $a as $d => $x ) $dias[] = array( 'dia' => $d, 'kp' => $x['kp'], 'sfi' => $x['sfi'], 'fl' => $x['fl'], 'n' => count( $x['ev'] ) );
