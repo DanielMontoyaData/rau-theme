@@ -264,6 +264,13 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.67.1 — Arreglos de la revisión en vivo de la 19.67.0
+
+- Semáforo: la etiqueta de cada luz («ATENCIÓN», «NORMAL»…) se salía de la tarjeta cuando el título era largo («Campo magnético», «Satélites»); ahora baja de línea.
+- La luz de 6 m repetía «… y 2 reportes en el cluster y 2 reportes en 6 m en el cluster ahora»: si el texto del servidor ya trae el cluster, no se agrega otra vez.
+
+---
+
 ## 19.67.0 — Condiciones: barra de mando en una fila y solo lo que sirve para operar
 
 **Barra de mando nueva** (antes ocupaba dos filas y repetía cosas)

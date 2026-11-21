@@ -389,3 +389,7 @@ button.cnd-estado svg{vertical-align:-3px;margin-right:.35rem}
 }
 @media (max-width:1399px){.cnd-tit{display:none}}
 @media (max-width:1100px){.cnd-sala-btn span{display:none}.cnd-relojes{gap:.6rem}.cnd-reloj b{font-size:1rem}}
+/* 19.67.1: la etiqueta de cada luz baja de línea si el título es largo, en vez de salirse de la tarjeta */
+.cnd-luz-cab{flex-wrap:wrap;row-gap:.3rem;min-width:0}
+.cnd-luz-cab>span:first-child{min-width:0}
+.cnd-palabra{white-space:nowrap}

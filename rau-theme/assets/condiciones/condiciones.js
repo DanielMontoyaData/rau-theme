@@ -376,7 +376,7 @@ function pintarVHF(){
 	fetch(C.ajax+'?action=rau_dx_spots').then(function(r){ return r.json(); }).then(function(j){
 		var sp=(j&&j.success&&j.data)||[], v=sp.filter(function(s){ var f=parseFloat(s.freq); return (f>=50&&f<=54)||(f>=144&&f<=148); }), el=$('cnd-seis');
 		var n6=sp.filter(function(s){ var f=parseFloat(s.freq); return f>=50&&f<=54; }).length, psk=s6&&s6.texto&&/PSK/.test(s6.texto)?(s6.texto.match(/^(\d+)/)||[0,0])[1]*1:0, tot=n6+psk;
-		if(n6){ var tx=(psk?s6.texto.replace(/\.$/,'')+' y ':'')+n6+' reporte'+(n6>1?'s':'')+' en 6 m en el cluster ahora.'; luz('seis',tot>=3?2:1,tx); var p0=$('cnd-vhf')&&$('cnd-vhf').querySelector('.cnd-cuerpo p'); if(p0) p0.textContent=tx; }
+		if(n6){ var tx=s6&&/cluster/.test(s6.texto||'')?s6.texto:(psk?s6.texto.replace(/\.$/,'')+' y ':'')+n6+' reporte'+(n6>1?'s':'')+' en 6 m en el cluster ahora.'; luz('seis',tot>=3?2:1,tx); var p0=$('cnd-vhf')&&$('cnd-vhf').querySelector('.cnd-cuerpo p'); if(p0) p0.textContent=tx; }
 		if(!el) return;
 		el.innerHTML=v.length?'<ul class="cnd-lista">'+v.slice(0,6).map(function(s){ return '<li><span><b class="cnd-mono">'+esc(s.dx)+'</b> <span class="cnd-mut cnd-mini">por '+esc(s.sp)+' · '+esc(s.info||'')+'</span></span><span class="der cnd-mono">'+esc(s.freq)+'</span></li>'; }).join('')+'</ul>'
 			:'<p class="cnd-mini cnd-mut" style="margin:0">Ni 6 m ni 2 m tienen reportes en los últimos spots del cluster. Las aperturas de esporádica E duran minutos: llama CQ de todos modos.</p>';
