@@ -6,7 +6,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'RAU_THEME_VERSION', '19.64.0' );
+define( 'RAU_THEME_VERSION', '19.65.0' );
 
 require get_template_directory() . '/inc/nav-walker.php';
 require get_template_directory() . '/inc/default-logo.php';
@@ -27,6 +27,7 @@ require get_template_directory() . '/inc/libro-adif.php';
 require get_template_directory() . '/inc/uso-herramientas.php';
 require get_template_directory() . '/inc/portada.php';
 require get_template_directory() . '/inc/condiciones.php';
+require get_template_directory() . '/inc/condiciones-extra.php';
 
 /**
  * Configuración básica del tema
@@ -1243,6 +1244,9 @@ function rau_seo_meta_tags() {
 		$og = rau_og_imagen_url( is_front_page() ? 'Radioaficionados Unidos' : $title, $seccion );
 		if ( $og ) { $logo = $og; $logo_w = 1200; $logo_h = 630; }
 	}
+	// Páginas que arman su propia vista previa (Condiciones: la tarjeta con el semáforo del punto)
+	$o = apply_filters( 'rau_og_extra', null );
+	if ( is_array( $o ) ) { $title = $o['title']; $desc = $o['desc']; $logo = $o['img']; $logo_w = 1200; $logo_h = 630; $img_alt = $o['title']; }
 	?>
 	<meta name="description" content="<?php echo esc_attr( $desc ); ?>">
 	<meta property="og:type" content="<?php echo is_singular() ? 'article' : 'website'; ?>">

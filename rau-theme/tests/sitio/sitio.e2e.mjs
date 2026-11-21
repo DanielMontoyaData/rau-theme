@@ -172,7 +172,9 @@ test('19.61: portada nueva — qué es RAU, bandas, receptor lleno, actividades 
 });
 test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con radar y capas, Windy, matriz, sitios, sala, buscar y menú', async () => {
 	nav = nav || await chromium.launch({ args: ['--no-proxy-server'] });
-	const p = await nav.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errores.push(e.message));
+	// Sin service worker: lo que él pide no pasa por las rutas simuladas de la prueba
+	const ctxC = await nav.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+	const p = await ctxC.newPage(); p.on('pageerror', e => errores.push(e.message));
 	const horas = Array.from({ length: 48 }, (_, i) => ({ t: '2026-11-20T' + String((10 + i) % 24).padStart(2, '0') + ':00', temp: 20 + (i % 6), hr: 70, pp: i === 1 ? 90 : 20, mm: 0, cod: i === 1 ? 95 : 3, viento: 8, rafaga: 20, cape: 900, li: 1, vis: 20000, dia: 1 }));
 	const datos = { punto: { lat: 6.2, lon: -75.6, locator: 'FJ26ee', cerca: { nombre: 'Envigado', km: 3 } },
 		clima: { fuente: 'Open-Meteo', offset: -18000, elevacion: 1495, actual: { temp: 22.4, sensacion: 23, hr: 70, dia: 1, mm: 0, cod: 3, nubes: 80, presion: 850, viento: 8, dir: 90, rafaga: 20, vis: 20000, cape: 900 }, horas, dias: [{ fecha: '2026-11-20', cod: 95, max: 26, min: 16, mm: 5, pp: 80 }, { fecha: '2026-11-21', cod: 3, max: 27, min: 17, mm: 0, pp: 10 }, { fecha: '2026-11-22', cod: 61, max: 25, min: 16, mm: 2, pp: 60 }] },
@@ -180,7 +182,8 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 		espacio: { kp: { valor: 1.3 }, kp_pron: 3.7, rayosx: { actual: 'B2.0', max: 'B5.0' }, escalas: { R: 0, S: 0, G: 0, prob_r: 10, prob_rx: 5 }, viento: { vel: 420, dens: 3.2, bz: -4.2, bt: 6 }, alertas: [], sfi: 140, ssn: 90, bandas: [{ name: '80m-40m', day: 'Good', night: 'Good' }, { name: '12m-10m', day: 'Poor', night: 'Poor' }] },
 		drap: { mhz: 0, mensaje: 'Normal' },
 		iono: { iono: { nombre: 'Boa Vista, Brazil', km: 1694, fof2: 8.6, mufd: 27, hace: 20 }, nvis: { banda: '40 m', texto: 'foF2 8,6 MHz.' }, dx: ['40 m', '20 m'], estaciones: [{ n: 'Boa Vista, Brazil', lat: 2.8, lon: -60.7, mufd: 27, fof2: 8.6, hace: 20 }] },
-		sismos: [{ mag: 4.1, lugar: 'Antioquia', t: 1795200000, km: 80, prof: 30, lat: 6.9, lon: -75.9, url: '' }],
+		sismos: [{ mag: 4.8, lugar: 'Antioquia', t: Math.floor(Date.now() / 1000) - 3600, km: 80, prof: 30, lat: 6.9, lon: -75.9, url: '' }, { mag: 3.1, lugar: 'Los Santos', t: Math.floor(Date.now() / 1000) - 7200, km: 300, prof: 150, lat: 6.8, lon: -73.1, url: '' }],
+		tend: { kp: [[Math.floor(Date.now() / 1000) - 3 * 3600, 2]], kp7: [[Math.floor(Date.now() / 1000) - 3 * 86400, 3], [Math.floor(Date.now() / 1000) - 3 * 3600, 2]], kp_pron: [], rayosx: [], rayosx7: [], viento: [], viento24: [], llamaradas: [] },
 		repetidoras: [{ name: 'Repetidora Medellín', freq: '146.675', offset: '-600 kHz', tone: '100.0', km: 11 }],
 		semaforo: { tormenta: { nivel: 2, texto: 'Tormenta eléctrica prevista hacia las 11:00. Desconecta las antenas.' }, viento: { nivel: 0, texto: 'Viento tranquilo.' }, hf: { nivel: 0, texto: 'Abiertas: 80–40m.' }, sol: { nivel: 0, texto: 'Sol tranquilo.' }, geomag: { nivel: 0, texto: 'Campo tranquilo.' } },
 		generado: 1795200000 };
@@ -195,13 +198,52 @@ test('19.62–19.63: Condiciones — centro de mando: semáforo, barra, mapa con
 	await p.route(/wp-json\/rau\/v1\/condiciones\/solar/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(solarMock) }));
 	await p.route(/wp-json\/rau\/v1\/condiciones\/sitios/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify([{ n: 'Repetidora Medellín — Monte Alvernia', f: '146.675', lat: 6.25, lon: -75.6, url: '/x', temp: 18, cod: 95, lluvia: 90, tormenta: { nivel: 2, texto: 'Tormenta' }, viento: { nivel: 0, kmh: 12 } }]) }));
 	await p.route(/api\.rainviewer\.com/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ host: 'https://tilecache.rainviewer.com', radar: { past: [{ time: 1795200000, path: '/v2/radar/a' }, { time: 1795200600, path: '/v2/radar/b' }], nowcast: [] } }) }));
+	// 19.65: radio y local
+	const j = (re, o) => p.route(re, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(o) }));
+	await j(/condiciones\/siata/, { ok: true, niveles: [{ n: 'Q. La Iguaná', mun: 'Medellín', lat: 6.27, lon: -75.6, cm: 160, pre: 100, e: 2, dudoso: false, pct: 160 }, { n: 'Q. Rara', mun: 'Bello', lat: 6.33, lon: -75.55, cm: 900, pre: 100, e: 3, dudoso: true, pct: 900 }],
+		lluvia: [{ n: 'P1', mun: 'Itagüí', lat: 6.17, lon: -75.6, mm: 2.5, llueve: true }], meteo: [], resumen: { llueve: 1, pluvios: 185, max_mm: 2.5, alerta: 1, niveles: 168, peor: 2 } });
+	await j(/condiciones\/wspr/, { ok: true, sale: [{ b: '40 m', tx: 'HK4X', rx: 'EA4Y', a: [6.2, -75.6], z: [40.4, -3.7], km: 8032, snr: -18 }], entra: [], bandas: { '40 m': { sale: 1, entra: 0, max: 8032 } } });
+	await j(/condiciones\/pota/, [{ act: 'HK4P', f: '14280', modo: 'SSB', ref: 'CO-0001', parque: 'Parque Arví', lugar: 'CO-ANT', lat: 6.28, lon: -75.5, t: 0 }]);
+	await j(/condiciones\/semana/, { dias: [{ dia: '2026-11-20', mm: 5, rafaga: 40, tormenta: true, kp: 3.3, fl: 'M2.4' }], texto: 'En los últimos 7 días: 5 mm de lluvia, 1 día con tormenta eléctrica.' });
+	await j(/condiciones\/archivo/, { dia: '2026-11-20', dias: [{ dia: '2026-11-20', kp: 3.3, fl: 'M2.4', n: 1 }], eventos: [{ t: 1795200000, tipo: 'sol', n: 1, x: 'Llamarada M2.4' }] });
+	await j(/condiciones\/muf/, [{ v: 20, c: '#00ff00', p: [[-80, 0], [-70, 0]] }]);
+	await j(/condiciones\/enlace/, { km: 8032, sp: 49, lp: 229, saltos: 3, puntos: [{ lat: 20, lon: -60, muf: 18, sol: -10, drap: null }, { lat: 35, lon: -20, muf: 15, sol: -20, drap: null }], muf: 16.5, fot: 14, luf: 3, dia: false,
+		bandas: [{ b: '40 m', f: 7.1, e: 'buena' }, { b: '20 m', f: 14.2, e: 'marginal' }, { b: '10 m', f: 28.5, e: 'cerrada' }] });
+	await p.addInitScript(() => { try { localStorage.removeItem('rau_cond_lugares'); localStorage.removeItem('rau_cond_rango'); } catch (e) {} });
 	await p.goto(BASE + '/condiciones/?lat=6.24&lon=-75.58');
 	await p.waitForSelector('#cnd-luz-tormenta[data-n="2"]');
 	assert.match(await p.innerText('#cnd-luz-tormenta'), /Desconecta las antenas/);
 	assert.match(await p.innerText('#cnd-ahora'), /22°[\s\S]*CAPE/i);
 	assert.match(await p.innerText('#cnd-hf'), /Boa Vista[\s\S]*NVIS/i);
 	assert.match(await p.innerText('#cnd-esp'), /R0[\s\S]*Kp estimado ahora/i);
-	assert.match(await p.innerText('#cnd-sis'), /M4,1 Antioquia/);
+	await p.waitForSelector('#cnd-sismo:not([hidden])');
+	assert.match(await p.innerText('#cnd-sismo'), /Sismo M4,8 a 80 km[\s\S]*Antioquia/, 'sismo fuerte cercano: franja de alerta');
+	assert.doesNotMatch(await p.innerText('#cnd-sismo'), /Los Santos/, 'los sismos pequeños no se anuncian');
+	assert.equal(await p.$('#cnd-sis'), null, 'sin panel fijo de sismos');
+	assert.equal(await p.isChecked('[data-capa-mapa="sismos"]'), false, 'la capa de sismos arranca apagada');
+	// 19.65: SIATA, alcance WSPR, POTA, semana, archivo, balizas, enlace, rango, tablas accesibles, mis lugares
+	await p.waitForSelector('#cnd-siata .cnd-kpis');
+	assert.match(await p.innerText('#cnd-siata'), /Q\. La Iguaná[\s\S]*Precaución/i, 'quebradas con su estado de SIATA');
+	assert.match(await p.innerText('#cnd-siata'), /dato dudoso/i, 'lectura imposible marcada como dudosa');
+	assert.match(await p.innerText('#cnd-siata'), /Fuente: SIATA – Área Metropolitana del Valle de Aburrá/, 'atribución de SIATA');
+	await p.waitForSelector('#cnd-alcance table'); assert.match(await p.innerText('#cnd-alcance'), /40 m[\s\S]*8\.032 km/);
+	await p.waitForSelector('#cnd-pota li'); assert.match(await p.innerText('#cnd-pota'), /HK4P[\s\S]*Parque Arví/);
+	await p.waitForSelector('#cnd-semana table'); assert.match(await p.innerText('#cnd-semana'), /1 día con tormenta/);
+	await p.waitForSelector('#cnd-archivo li'); assert.match(await p.innerText('#cnd-archivo'), /Llamarada M2\.4/);
+	assert.equal(await p.$$eval('#cnd-balizas tbody tr', l => l.length), 5, 'balizas NCDXF: una por banda');
+	await p.click('.cnd-enl-rap[data-n="Madrid"]');
+	await p.waitForSelector('#cnd-enl-res .cnd-kpis');
+	assert.match(await p.innerText('#cnd-enl-res'), /8\.032[\s\S]*49°[\s\S]*prueba 40 m/i, 'enlace: distancia, rumbo y bandas');
+	assert.ok(await p.$('#cnd-clima .cnd-sr table caption'), 'las gráficas traen su tabla de datos para lectores de pantalla');
+	await p.click('[data-rango="7d"]');
+	assert.match(await p.innerText('#cnd-tend'), /Índice Kp · 7 días/i, 'selector de rango de las gráficas');
+	await p.click('[data-rango="6h"]');
+	p.once('dialog', d => d.accept('Casa'));
+	await p.click('#cnd-fav');
+	assert.match(await p.innerText('#cnd-lugares'), /Casa/, 'mis lugares');
+	assert.equal(await p.getAttribute('#cnd-fav', 'aria-pressed'), 'true');
+	assert.match(await p.getAttribute('#cnd-franja', 'href'), /\/condiciones\/franja\/\?lat=6\.2&lon=-75\.6/, 'franja para OBS con el punto');
+	assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'sin desborde horizontal');
 	assert.ok(pedidos.every(u => /lat=6\.2&lon=-75\.6/.test(u)), 'al servidor solo va el punto redondeado: ' + pedidos[0]);
 	// 19.63: barra de mando, estados con texto, relojes, matriz de bandas, gráficas y sitios
 	assert.match(await p.innerText('#cnd-estado'), /ALERTA · Tormenta/i, 'estado general en la barra');

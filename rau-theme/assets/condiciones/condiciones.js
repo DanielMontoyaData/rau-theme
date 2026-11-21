@@ -75,7 +75,9 @@ function grafica(cont,cfg){
 	});
 	var ah=Date.now(); if(cfg.ahora!==false&&ah>=x0&&ah<=x1) s+='<line class="ahora" x1="'+X(ah)+'" x2="'+X(ah)+'" y1="'+pt+'" y2="'+(pt+h)+'"/><text x="'+(X(ah)+3)+'" y="'+(pt+8)+'" style="fill:hsl(var(--primary))">ahora</text>';
 	s+='<line class="eje" x1="'+pl+'" x2="'+(pl+w)+'" y1="'+(pt+h)+'" y2="'+(pt+h)+'"/><line class="cursor" x1="0" x2="0" y1="'+pt+'" y2="'+(pt+h)+'" style="display:none"/>';
-	cont.innerHTML='<div class="cnd-graf"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(cfg.titulo||'Gráfica')+'">'+s+'</svg><div class="cnd-tip" hidden></div></div>'+(cfg.leyenda?'<div class="cnd-leyenda-g">'+cfg.leyenda.map(function(l){ return '<span><i style="background:'+l[1]+'"></i>'+esc(l[0])+'</span>'; }).join('')+'</div>':'');
+	var tabla='<div class="cnd-sr"><table><caption>'+esc(cfg.titulo||'Datos')+'</caption><thead><tr><th>Hora</th>'+cfg.series.filter(function(se){ return !se.sinTip; }).map(function(se){ return '<th>'+esc(se.nombre)+'</th>'; }).join('')+'</tr></thead><tbody>'
+		+(function(){ var base=cfg.series[0].datos, paso=Math.max(1,Math.ceil(base.length/40)), f=''; for(var i=0;i<base.length;i+=paso){ var t=base[i][0]; f+='<tr><td>'+esc(cfg.etTip?cfg.etTip(t):fhd(t))+'</td>'+cfg.series.filter(function(se){ return !se.sinTip; }).map(function(se){ var q=se.datos[i]; return '<td>'+(q&&q[1]!=null?(se.fmt?se.fmt(q[1]):n(q[1],1)):'—')+'</td>'; }).join('')+'</tr>'; } return f; })()+'</tbody></table></div>';
+	cont.innerHTML='<div class="cnd-graf"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(cfg.titulo||'Gráfica')+' (los datos están en la tabla que sigue)">'+s+'</svg><div class="cnd-tip" hidden></div></div>'+tabla+(cfg.leyenda?'<div class="cnd-leyenda-g">'+cfg.leyenda.map(function(l){ return '<span><i style="background:'+l[1]+'"></i>'+esc(l[0])+'</span>'; }).join('')+'</div>':'');
 	var g=cont.querySelector('.cnd-graf'), svg=g.querySelector('svg'), tip=g.querySelector('.cnd-tip'), cur=svg.querySelector('.cursor');
 	function ocultar(){ tip.hidden=true; cur.style.display='none'; }
 	function mover(ev){
@@ -102,11 +104,13 @@ function iniciarMapa(){
 	mapa=L.map('cnd-mapa',{zoomControl:true,worldCopyJump:true}).setView([punto.lat,punto.lon],7);
 	var tema=document.documentElement.getAttribute('data-theme')==='light'?'claro':'oscuro';
 	document.querySelector('input[name="cnd-fondo"][value="'+tema+'"]').checked=true; ponerFondo(tema);
-	['radar','noche','repetidoras','cobertura','sismos','iono','drap','radio'].forEach(function(k){ capas[k]=L.layerGroup(); });
-	document.querySelectorAll('[data-capa-mapa]').forEach(function(c){ if(c.checked) capas[c.dataset.capaMapa].addTo(mapa);
-		c.addEventListener('change',function(){ if(c.checked) capas[c.dataset.capaMapa].addTo(mapa); else mapa.removeLayer(capas[c.dataset.capaMapa]); lineaRadar(); }); });
+	['radar','noche','repetidoras','cobertura','sismos','iono','drap','radio','muf','wspr','pota','sats','balizas','siata','enlace'].forEach(function(k){ capas[k]=L.layerGroup(); });
+	capas.enlace.addTo(mapa);
+	document.querySelectorAll('[data-capa-mapa]').forEach(function(c){ if(c.checked){ capas[c.dataset.capaMapa].addTo(mapa); capaPerezosa(c.dataset.capaMapa); }
+		c.addEventListener('change',function(){ if(c.checked){ capas[c.dataset.capaMapa].addTo(mapa); capaPerezosa(c.dataset.capaMapa); } else mapa.removeLayer(capas[c.dataset.capaMapa]); lineaRadar(); }); });
 	document.querySelectorAll('input[name="cnd-fondo"]').forEach(function(r){ r.addEventListener('change',function(){ ponerFondo(r.value); }); });
 	mapa.on('click',function(e){
+		if(eligiendoDestino){ eligiendoDestino=false; $('cnd-mapa').style.cursor=''; destino({lat:e.latlng.lat,lon:e.latlng.lng,nombre:locator(e.latlng.lat,e.latlng.lng)}); return; }
 		var p=L.popup().setLatLng(e.latlng).setContent('<div class="cnd-mono">'+e.latlng.lat.toFixed(2)+', '+e.latlng.lng.toFixed(2)+' · '+locator(e.latlng.lat,e.latlng.lng)+'</div><button type="button" class="cnd-btn pri" style="margin-top:.4rem" id="cnd-aqui">Ver condiciones aquí</button>').openOn(mapa);
 		setTimeout(function(){ var b=$('cnd-aqui'); if(b) b.onclick=function(){ mapa.closePopup(p); fijar({lat:e.latlng.lat,lon:e.latlng.lng,nombre:null}); }; },0);
 	});
@@ -279,8 +283,8 @@ function pintarHF(){
 	if(io&&io.medido&&io.medido.texto) h+='<p class="cnd-chico" style="margin:0">'+ic('antena')+' '+esc(io.medido.texto)+'</p>';
 	var sp=salidaPuesta(punto.lat,punto.lon,-.833), cv=salidaPuesta(punto.lat,punto.lon,-6);
 	if(sp&&cv) h+='<p class="cnd-chico" style="margin:0"><b>Línea gris hoy ('+zona()+'):</b> '+fh(cv[0])+'–'+fh(sp[0]+18e5)+' y '+fh(sp[1]-18e5)+'–'+fh(cv[1])+'. En esos ratos las bandas bajas llegan más lejos.</p>';
-	h+='<div id="cnd-muf-g"></div><p class="cnd-chico" style="margin:0"><a href="'+esc(C.herramientas)+'prop/">Condiciones HF completas →</a> · <a href="'+esc(C.receptor)+'">Escuchar en el receptor del club →</a></p>';
-	cuerpo('cnd-hf',h);
+	h+='<div id="cnd-balizas"></div><div id="cnd-muf-g"></div><p class="cnd-chico" style="margin:0"><a href="'+esc(C.herramientas)+'prop/">Condiciones HF completas →</a> · <a href="'+esc(C.receptor)+'">Escuchar en el receptor del club →</a></p>';
+	cuerpo('cnd-hf',h); pintarBalizas(); clearInterval(balTimer); balTimer=setInterval(pintarBalizas,2000);
 	var mz=$('cnd-matriz'), horas=((m&&m.horas)||[]).slice(), s='<div></div>';
 	if(!horas.length){ var hh=enPunto(Date.now()).getUTCHours(); for(var k=0;k<24;k++) horas.push({h:(hh+k)%24,fof2:null,mufd:null}); }
 	if(io&&io.iono) horas[0]={h:horas[0].h,fof2:io.iono.fof2,mufd:io.iono.mufd};
@@ -315,30 +319,36 @@ function pintarEspacio(){
 }
 function pintarTendencias(){
 	var t=datos.tend; if(!t){ cuerpo('cnd-tend','<p class="cnd-vacio">Sin series de NOAA.</p>'); return; }
-	cuerpo('cnd-tend','<div class="cnd-graf-tit"><span>Índice Kp · 24 h y pronóstico de 3 días</span></div><div id="cnd-g-kp"></div><div class="cnd-graf-tit"><span>Rayos X del sol (GOES) · 6 h</span><span>escala logarítmica</span></div><div id="cnd-g-rx"></div><div class="cnd-graf-tit"><span>Viento solar y Bz · 6 h</span></div><div id="cnd-g-vs"></div><div id="cnd-g-bz"></div>'
+	var R7=RANGO;
+	cuerpo('cnd-tend','<div class="cnd-rango" role="group" aria-label="Período de las gráficas">'+[['6h','6 h'],['24h','24 h'],['7d','7 días']].map(function(x){ return '<button type="button" class="cnd-btn" data-rango="'+x[0]+'" aria-pressed="'+(R7===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
+		+'<div class="cnd-graf-tit"><span>Índice Kp · '+(R7==='7d'?'7 días':'24 h')+' y pronóstico de 3 días</span></div><div id="cnd-g-kp"></div><div class="cnd-graf-tit"><span>Rayos X del sol (GOES) · '+(R7==='7d'?'7 días':R7==='24h'?'24 h':'6 h')+'</span><span>escala logarítmica</span></div><div id="cnd-g-rx"></div><div class="cnd-graf-tit"><span>Viento solar y Bz · '+(R7==='6h'?'6 h':'24 h')+'</span></div><div id="cnd-g-vs"></div><div id="cnd-g-bz"></div>'
 		+(t.llamaradas&&t.llamaradas.length?'<div class="cnd-graf-tit"><span>Llamaradas de los últimos 7 días</span></div><div class="cnd-chips">'+t.llamaradas.map(function(f){ return '<span class="cnd-chip '+(f.clase[0]==='X'?'al':f.clase[0]==='M'?'at':'')+'">'+esc(f.clase)+' · '+fhd(f.t*1000)+'</span>'; }).join('')+'</div>':''));
-	var kp=(t.kp||[]).map(function(x){ return [x[0]*1000,x[1]]; }), kpp=(t.kp_pron||[]).map(function(x){ return [x[0]*1000,x[1]]; }), todos=kp.concat(kpp);
+	var kp=((R7==='7d'?t.kp7:t.kp)||t.kp||[]).map(function(x){ return [x[0]*1000,x[1]]; }), kpp=(t.kp_pron||[]).map(function(x){ return [x[0]*1000,x[1]]; }), todos=kp.concat(kpp);
 	if(todos.length){ var col=function(p){ return p[1]>=5?'hsl(var(--al))':p[1]>=4?'hsl(var(--at))':'hsl(var(--ok))'; };
 		grafica($('cnd-g-kp'),{titulo:'Índice Kp',W:900,H:130,x0:todos[0][0],x1:todos[todos.length-1][0]+3*36e5,pasoX:864e5,izq:{min:0,max:9,ticks:[0,3,5,7,9]},hlineas:[{v:5,color:'hsl(var(--al) / .7)',et:'tormenta (G1)'}],tolerancia:2*36e5,
 			series:[{tipo:'barras',datos:kp,color:col,nombre:'Kp medido',centro:15e5,base:0},{tipo:'barras',datos:kpp,color:col,opacidad:.4,nombre:'Kp pronosticado',centro:15e5,base:0}],
 			leyenda:[['Medido','hsl(var(--ok))'],['Pronóstico (más claro)','hsl(var(--ok) / .4)']]}); }
-	var rx=(t.rayosx||[]).map(function(x){ return [x[0]*1000,x[1]]; });
-	if(rx.length) grafica($('cnd-g-rx'),{titulo:'Flujo de rayos X',W:900,H:130,x0:Date.now()-6*36e5,x1:Date.now(),izq:{min:1e-8,max:1e-3,log:true,ticks:[1e-8,1e-7,1e-6,1e-5,1e-4],fmt:function(v){ return ['A','B','C','M','X'][Math.round(Math.log10(v))+8]||''; }},
+	var dur=R7==='7d'?7*864e5:R7==='24h'?864e5:6*36e5, rx=((R7==='6h'?t.rayosx:t.rayosx7)||t.rayosx||[]).map(function(x){ return [x[0]*1000,x[1]]; }).filter(function(x){ return x[0]>=Date.now()-dur; });
+	if(rx.length) grafica($('cnd-g-rx'),{titulo:'Flujo de rayos X',W:900,H:130,x0:Date.now()-dur,x1:Date.now(),pasoX:R7==='7d'?864e5:null,izq:{min:1e-8,max:1e-3,log:true,ticks:[1e-8,1e-7,1e-6,1e-5,1e-4],fmt:function(v){ return ['A','B','C','M','X'][Math.round(Math.log10(v))+8]||''; }},
 		hlineas:[{v:1e-5,color:'hsl(var(--at) / .8)',et:'M'},{v:1e-4,color:'hsl(var(--al) / .8)',et:'X'}],tolerancia:6e5,
 		series:[{tipo:'area',datos:rx,color:'hsl(var(--at))',nombre:'Rayos X',fmt:function(v){ var e=Math.floor(Math.log10(v)); return e<-8?'<A':(['A','B','C','M','X'][Math.min(4,e+8)])+(v/Math.pow(10,Math.min(e,-4))).toFixed(1); }}]});
-	var vs=(t.viento||[]).filter(function(x){ return x[1]!=null; }).map(function(x){ return [x[0]*1000,x[1]]; }), bz=(t.viento||[]).filter(function(x){ return x[2]!=null; }).map(function(x){ return [x[0]*1000,x[2]]; });
-	if(vs.length) grafica($('cnd-g-vs'),{titulo:'Velocidad del viento solar',W:900,H:110,x0:Date.now()-6*36e5,x1:Date.now(),izq:{min:250,max:Math.max(700,Math.ceil(Math.max.apply(null,vs.map(function(x){ return x[1]; }))/100)*100),ticks:[300,500,700]},hlineas:[{v:500,color:'hsl(var(--at) / .6)',et:'rápido'}],tolerancia:9e5,
+	var vdur=R7==='6h'?6*36e5:864e5, vfu=(R7==='6h'?t.viento:t.viento24)||t.viento||[];
+	var vs=vfu.filter(function(x){ return x[1]!=null; }).map(function(x){ return [x[0]*1000,x[1]]; }), bz=vfu.filter(function(x){ return x[2]!=null; }).map(function(x){ return [x[0]*1000,x[2]]; });
+	if(vs.length) grafica($('cnd-g-vs'),{titulo:'Velocidad del viento solar',W:900,H:110,x0:Date.now()-vdur,x1:Date.now(),izq:{min:250,max:Math.max(700,Math.ceil(Math.max.apply(null,vs.map(function(x){ return x[1]; }))/100)*100),ticks:[300,500,700]},hlineas:[{v:500,color:'hsl(var(--at) / .6)',et:'rápido'}],tolerancia:9e5,
 		series:[{tipo:'linea',datos:vs,color:'hsl(var(--primary))',nombre:'Viento solar',unidad:'km/s'}]});
-	if(bz.length) grafica($('cnd-g-bz'),{titulo:'Bz del campo magnético interplanetario',W:900,H:110,x0:Date.now()-6*36e5,x1:Date.now(),izq:{min:-20,max:20,ticks:[-20,-10,0,10,20]},hlineas:[{v:0,color:'hsl(var(--muted-foreground) / .7)'},{v:-10,color:'hsl(var(--al) / .7)',et:'Bz muy al sur'}],tolerancia:9e5,
+	if(bz.length) grafica($('cnd-g-bz'),{titulo:'Bz del campo magnético interplanetario',W:900,H:110,x0:Date.now()-vdur,x1:Date.now(),izq:{min:-20,max:20,ticks:[-20,-10,0,10,20]},hlineas:[{v:0,color:'hsl(var(--muted-foreground) / .7)'},{v:-10,color:'hsl(var(--al) / .7)',et:'Bz muy al sur'}],tolerancia:9e5,
 		series:[{tipo:'linea',datos:bz,color:'hsl(var(--al))',nombre:'Bz',unidad:'nT'}],leyenda:[['Viento solar (km/s)','hsl(var(--primary))'],['Bz (nT): negativo sostenido = tormenta probable','hsl(var(--al))']]});
 	edad('cnd-tend','NOAA SWPC · '+zona());
 }
+/* 19.65.0: los sismos solo se muestran cuando pudieron sentirse (franja de alerta); la lista completa queda en la capa del mapa */
+function sismoFuerte(x){ return x.t*1000>=Date.now()-864e5&&((x.mag>=4.5&&x.km<=200)||(x.mag>=6&&x.km<=500)); }
 function pintarSismos(){
-	var s=datos.sismos;
-	if(s==null){ cuerpo('cnd-sis','<p class="cnd-vacio">El USGS no respondió.</p>'); return; }
-	cuerpo('cnd-sis',(s.length?'<ul class="cnd-lista cnd-scroll">'+s.map(function(x){ return '<li><span><b>M'+n(x.mag,1)+'</b> '+esc(x.lugar)+'<br><span class="cnd-mut cnd-mini">a '+n(x.km)+' km · profundidad '+n(x.prof)+' km</span></span><span class="der cnd-mini cnd-mut">'+fhd(x.t*1000)+'</span></li>'; }).join('')+'</ul>'
-		:'<p class="cnd-vacio">Ningún sismo de magnitud 2,5 o más a menos de 500 km en los últimos 7 días.</p>')+'<p class="cnd-mini cnd-mut" style="margin:0">USGS, magnitud 2,5+ y 7 días. El Servicio Geológico Colombiano (botón «SGC sismos») publica también los menores; su servicio de datos no se puede leer desde otros sitios.</p>');
-	edad('cnd-sis','USGS · '+zona());
+	var el=$('cnd-sismo'), f=(datos.sismos||[]).filter(sismoFuerte);
+	if(!f.length){ el.hidden=true; el.innerHTML=''; return; }
+	var x=f[0];
+	el.hidden=false; el.className='cnd-sismo'+(x.mag>=6||x.km<=80?' al':'');
+	el.innerHTML=ic('sismo')+'<div><b>Sismo M'+n(x.mag,1)+' a '+n(x.km)+' km</b> · '+esc(x.lugar)+' · '+fhd(x.t*1000)+' ('+zona()+') · profundidad '+n(x.prof)+' km'+(f.length>1?' · y '+(f.length-1)+' más en 24 h':'')
+		+'<br><span class="cnd-mini">Si lo sentiste: escucha la red de RAU antes de transmitir y reporta solo lo necesario. <a href="https://www.sgc.gov.co/sismos" target="_blank" rel="noopener">SGC</a>'+(x.url?' · <a href="'+esc(x.url)+'" target="_blank" rel="noopener">USGS</a>':'')+' · <a href="'+esc(location.origin)+'/emergencias/">Centro de mando</a></span></div>';
 }
 function pintarRAU(){
 	var r=datos.repetidoras||[], h='';
@@ -481,14 +491,172 @@ function cargarSolar(){
 	fetch(C.api+'/solar').then(function(r){ return r.json(); }).then(function(j){ solDat=j; solarT=Date.now(); try{ pintarSolar(); }catch(e){ if(window.console) console.warn('solar',e); } }).catch(function(){ cuerpo('cnd-solar','<p class="cnd-vacio">No se pudo consultar el clima espacial.</p>'); });
 }
 
+/* ════════ 19.65.0: radio y local ════════ */
+var RANGO=(function(){ try{ return localStorage.getItem('rau_cond_rango')||'6h'; }catch(e){ return '6h'; } })(), eligiendoDestino=false, destinoAct=null, wsprDat=null, potaDat=null, siataDat=null, mufDat=null, satTimer=null, balTimer=null;
+document.addEventListener('click',function(e){ var b=e.target.closest('[data-rango]'); if(!b) return; RANGO=b.dataset.rango; try{ localStorage.setItem('rau_cond_rango',RANGO); }catch(x){} pintarTendencias(); });
+var BCOL={'160 m':'#a78bfa','80 m':'#818cf8','60 m':'#60a5fa','40 m':'#38bdf8','30 m':'#22d3ee','20 m':'#34d399','17 m':'#a3e635','15 m':'#facc15','12 m':'#fb923c','10 m':'#f87171','6 m':'#f472b6','2 m':'#e879f9'};
+function capaPerezosa(k){
+	if(k==='muf') cargarMuf(); else if(k==='wspr'){ if(wsprDat) pintarCapaWspr(); else cargarAlcance(); } else if(k==='pota'){ if(potaDat) pintarCapaPota(); else cargarPota(); }
+	else if(k==='sats') satsEnVivo(); else if(k==='balizas') pintarCapaBalizas(); else if(k==='siata'&&siataDat) pintarCapaSiata();
+}
+/* MUF en vivo: isolíneas de KC2G */
+function cargarMuf(){
+	if(mufDat){ pintarCapaMuf(); return; }
+	fetch(C.api+'/muf').then(function(r){ return r.json(); }).then(function(g){ mufDat=Array.isArray(g)?g:[]; pintarCapaMuf(); }).catch(function(){});
+}
+function pintarCapaMuf(){
+	if(!mapa||!mufDat) return; capas.muf.clearLayers();
+	mufDat.forEach(function(l){ var pts=l.p.map(function(q){ return [q[1],q[0]]; }); var pl=L.polyline(pts,{color:l.c,weight:2.2,opacity:.9}).addTo(capas.muf);
+		pl.bindTooltip('MUF(3000) '+n(l.v,1)+' MHz',{sticky:true});
+		if(pts.length>10){ var m=pts[Math.floor(pts.length/2)]; L.marker(m,{interactive:false,icon:L.divIcon({className:'',html:'<span class="cnd-muf-et" style="border-color:'+esc(l.c)+'">'+n(l.v,0)+'</span>',iconSize:[26,16],iconAnchor:[13,8]})}).addTo(capas.muf); } });
+}
+/* «¿Llego a…?» */
+var DESTINOS=[['Madrid',40.42,-3.7],['Miami',25.77,-80.19],['Nueva York',40.71,-74.0],['Buenos Aires',-34.6,-58.38],['Tokio',35.68,139.69],['Sídney',-33.87,151.21],['Johannesburgo',-26.2,28.05],['Alaska',61.22,-149.9]];
+function pintarEnlace(){
+	if($('cnd-enl-dest')) return; // ya está armado
+	cuerpo('cnd-enlace','<div class="cnd-enl-form"><div class="cnd-buscar" style="max-width:none;flex:1 1 14rem;display:block"><input id="cnd-enl-dest" type="search" autocomplete="off" placeholder="Destino: ciudad, país o locator (IO91)" aria-label="Destino del enlace"><div class="cnd-sug" id="cnd-enl-sug" hidden></div></div><button type="button" class="cnd-btn" id="cnd-enl-mapa">'+ic('mapa')+'Elegir en el mapa</button></div>'
+		+'<div class="cnd-chips">'+DESTINOS.map(function(d){ return '<button type="button" class="cnd-chip cnd-enl-rap" data-lat="'+d[1]+'" data-lon="'+d[2]+'" data-n="'+esc(d[0])+'">'+esc(d[0])+'</button>'; }).join('')+'</div><div id="cnd-enl-res"><p class="cnd-mini cnd-mut" style="margin:0">Elige un destino para ver la distancia, el rumbo de la antena y qué bandas sirven ahora para llegar.</p></div>');
+	var inp=$('cnd-enl-dest'), sg=$('cnd-enl-sug'), tt=null;
+	inp.addEventListener('input',function(){ var q=this.value.trim(); clearTimeout(tt); var l=deLocator(q);
+		if(l){ sg.hidden=false; sg.innerHTML='<button type="button" data-lat="'+l[0]+'" data-lon="'+l[1]+'" data-n="'+esc(q.toUpperCase())+'">Locator '+esc(q.toUpperCase())+'</button>'; return; }
+		if(q.length<2){ sg.hidden=true; return; }
+		tt=setTimeout(function(){ fetch(C.api+'/buscar?q='+encodeURIComponent(q)).then(function(r){ return r.json(); }).then(function(l){ sg.hidden=false; sg.innerHTML=(l||[]).map(function(x){ return '<button type="button" data-lat="'+x.lat+'" data-lon="'+x.lon+'" data-n="'+esc(x.nombre)+'">'+esc(x.nombre)+' <span class="cnd-mut cnd-chico">'+esc(x.zona)+'</span></button>'; }).join('')||'<p class="cnd-mut cnd-chico" style="padding:.6rem .8rem;margin:0">No encontré ese lugar.</p>'; }); },300); });
+	sg.addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return; sg.hidden=true; inp.value=b.dataset.n; destino({lat:+b.dataset.lat,lon:+b.dataset.lon,nombre:b.dataset.n}); });
+	$('cnd-enlace').addEventListener('click',function(e){ var b=e.target.closest('.cnd-enl-rap'); if(b) destino({lat:+b.dataset.lat,lon:+b.dataset.lon,nombre:b.dataset.n}); });
+	$('cnd-enl-mapa').addEventListener('click',function(){ eligiendoDestino=true; cambiarVista('radar'); $('cnd-mapa').style.cursor='crosshair'; $('cnd-mapa').scrollIntoView({behavior:'smooth',block:'center'}); });
+	edad('cnd-enlace','MUF de KC2G · ahora');
+}
+function gc(a,b,nPts){ var R0=Math.PI/180, f1=a[0]*R0, l1=a[1]*R0, f2=b[0]*R0, l2=b[1]*R0, d=2*Math.asin(Math.sqrt(Math.pow(Math.sin((f2-f1)/2),2)+Math.cos(f1)*Math.cos(f2)*Math.pow(Math.sin((l2-l1)/2),2))), o=[];
+	for(var i=0;i<=nPts;i++){ var fr=i/nPts, A=Math.sin((1-fr)*d)/Math.sin(d), B=Math.sin(fr*d)/Math.sin(d), x=A*Math.cos(f1)*Math.cos(l1)+B*Math.cos(f2)*Math.cos(l2), y=A*Math.cos(f1)*Math.sin(l1)+B*Math.cos(f2)*Math.sin(l2), z=A*Math.sin(f1)+B*Math.sin(f2); o.push([Math.atan2(z,Math.sqrt(x*x+y*y))/R0, Math.atan2(y,x)/R0]); }
+	for(var j=1;j<o.length;j++){ while(o[j][1]-o[j-1][1]>180) o[j][1]-=360; while(o[j][1]-o[j-1][1]<-180) o[j][1]+=360; } return o; }
+function destino(d){
+	destinoAct=d; var res=$('cnd-enl-res'); if(res) res.innerHTML='<p class="cnd-vacio">Calculando el enlace…</p>';
+	fetch(C.api+'/enlace?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)+'&dlat='+(+d.lat).toFixed(2)+'&dlon='+(+d.lon).toFixed(2)).then(function(r){ return r.json(); }).then(function(e){
+		if(!res) return; if(e.error){ res.innerHTML='<p class="cnd-vacio">'+esc(e.error)+'</p>'; return; }
+		var cls={buena:'ok',marginal:'at',absorbida:'at',cerrada:'al'}, txt={buena:'buena',marginal:'al límite',absorbida:'absorbida',cerrada:'cerrada'};
+		var buenas=e.bandas.filter(function(b){ return b.e==='buena'; }).map(function(b){ return b.b; });
+		res.innerHTML='<div class="cnd-kpis"><div class="cnd-kpi"><span>Distancia</span><b>'+n(e.km)+'</b><small>km · '+e.saltos+' salto'+(e.saltos>1?'s':'')+'</small></div><div class="cnd-kpi"><span>Rumbo corto</span><b>'+e.sp+'°</b><small>'+rumbo(e.sp)+' · largo '+e.lp+'°</small></div>'
+			+'<div class="cnd-kpi"><span>MUF del enlace</span><b>'+(e.muf!=null?n(e.muf,1):'—')+'</b><small>MHz · óptima '+(e.fot!=null?n(e.fot,1):'—')+'</small></div><div class="cnd-kpi"><span>Mínima útil</span><b>'+n(e.luf,1)+'</b><small>MHz · '+(e.dia?'ruta con sol':'ruta de noche')+'</small></div></div>'
+			+'<div class="cnd-chips">'+e.bandas.map(function(b){ return '<span class="cnd-chip '+cls[b.e]+'">'+b.b+' '+txt[b.e]+'</span>'; }).join('')+'</div>'
+			+'<p class="cnd-chico" style="margin:0"><b>A '+esc(d.nombre||'ese punto')+' ahora:</b> '+(buenas.length?'prueba '+buenas.join(', ')+'.':'ninguna banda de HF tiene buena probabilidad en este momento.')+' Antena a '+e.sp+'° ('+rumbo(e.sp)+') por la ruta corta.</p>'
+			+'<p class="cnd-mini cnd-mut" style="margin:0">Estimación con la MUF real del mapa de KC2G en '+e.puntos.length+' punto'+(e.puntos.length>1?'s':'')+' de control del camino (no incluye relieve, potencia ni antenas). Para un pronóstico hora a hora: <a href="https://www.voacap.com/hf/" target="_blank" rel="noopener">VOACAP</a>.</p>';
+		if(mapa){ capas.enlace.clearLayers(); L.polyline(gc([punto.lat,punto.lon],[d.lat,d.lon],64),{color:'#38bdf8',weight:2.5,dashArray:'6 6'}).addTo(capas.enlace);
+			L.circleMarker([d.lat,d.lon],{radius:7,color:'#fff',weight:2,fillColor:'#38bdf8',fillOpacity:1}).bindTooltip(esc(d.nombre||'Destino')).addTo(capas.enlace);
+			e.puntos.forEach(function(p){ L.circleMarker([p.lat,p.lon],{radius:5,color:'#a78bfa',fillColor:'#a78bfa',fillOpacity:.8}).bindTooltip('Punto de control · MUF '+(p.muf!=null?n(p.muf,1):'—')+' MHz · '+(p.sol>0?'de día':'de noche')).addTo(capas.enlace); }); }
+	}).catch(function(){ if(res) res.innerHTML='<p class="cnd-vacio">No se pudo calcular el enlace ahora.</p>'; });
+}
+/* Alcance real (WSPR) */
+function cargarAlcance(){
+	fetch(C.api+'/wspr').then(function(r){ return r.json(); }).then(function(w){ wsprDat=w; pintarAlcance(); if(mapa&&mapa.hasLayer(capas.wspr)) pintarCapaWspr(); }).catch(function(){ cuerpo('cnd-alcance','<p class="cnd-vacio">WSPR no respondió.</p>'); });
+}
+function pintarAlcance(){
+	var w=wsprDat; if(!w) return; if(!w.ok){ cuerpo('cnd-alcance','<p class="cnd-vacio">WSPR no respondió.</p>'); return; }
+	var orden=['160 m','80 m','60 m','40 m','30 m','20 m','17 m','15 m','12 m','10 m','6 m','2 m'], bs=orden.filter(function(b){ return w.bandas[b]; });
+	var largos=(w.sale||[]).slice().sort(function(a,b){ return b.km-a.km; }).slice(0,5);
+	cuerpo('cnd-alcance',(bs.length?'<div class="cnd-tabla-caja"><table class="cnd-tabla"><thead><tr><th>Banda</th><th class="num">Oyen a Colombia</th><th class="num">Colombia oye</th><th class="num">Máx.</th></tr></thead><tbody>'
+		+bs.map(function(b){ var x=w.bandas[b]; return '<tr><td><span class="cnd-punto-b" style="background:'+BCOL[b]+'"></span>'+b+'</td><td class="num">'+x.sale+'</td><td class="num">'+x.entra+'</td><td class="num">'+n(x.max)+' km</td></tr>'; }).join('')+'</tbody></table></div>':'<p class="cnd-vacio">Sin reportes de WSPR desde o hacia la región en la última hora.</p>')
+		+(largos.length?'<div class="cnd-graf-tit"><span>Los más lejos que oyeron a la región</span></div><ul class="cnd-lista">'+largos.map(function(x){ return '<li><span><b class="cnd-mono">'+esc(x.tx)+'</b> → <b class="cnd-mono">'+esc(x.rx)+'</b> <span class="cnd-mini cnd-mut">'+x.b+' · '+x.snr+' dB</span></span><span class="der cnd-mono">'+n(x.km)+' km</span></li>'; }).join('')+'</ul>':'')
+		+'<p class="cnd-mini cnd-mut" style="margin:0">Balizas WSPR reales de los cuadros FJ, FK y FI (Colombia y vecinos). Actívalo en el mapa en «Capas» para ver las líneas.</p>');
+	edad('cnd-alcance','wspr.live · 1 h');
+}
+function pintarCapaWspr(){
+	if(!mapa||!wsprDat) return; capas.wspr.clearLayers();
+	(wsprDat.sale||[]).concat(wsprDat.entra||[]).slice(0,350).forEach(function(x){ var c=BCOL[x.b]||'#94a3b8';
+		L.polyline(gc(x.a,x.z,24),{color:c,weight:1.2,opacity:.55,interactive:false}).addTo(capas.wspr);
+		L.circleMarker(x.z,{radius:3,color:c,fillColor:c,fillOpacity:.9,weight:1}).bindTooltip(esc(x.tx)+' → '+esc(x.rx)+' · '+x.b+' · '+n(x.km)+' km · '+x.snr+' dB').addTo(capas.wspr); });
+}
+/* POTA */
+function cargarPota(){ fetch(C.api+'/pota').then(function(r){ return r.json(); }).then(function(p){ potaDat=Array.isArray(p)?p:[]; pintarPota(); if(mapa&&mapa.hasLayer(capas.pota)) pintarCapaPota(); }).catch(function(){ cuerpo('cnd-pota','<p class="cnd-vacio">POTA no respondió.</p>'); }); }
+function pintarPota(){
+	if(!potaDat) return; var l=potaDat.map(function(x){ x.km=km2([punto.lat,punto.lon],[x.lat,x.lon]); return x; }).sort(function(a,b){ return a.km-b.km; });
+	cuerpo('cnd-pota',l.length?'<ul class="cnd-lista cnd-scroll">'+l.slice(0,12).map(function(x){ return '<li><span><b class="cnd-mono">'+esc(x.act)+'</b> <span class="cnd-mini cnd-mut">'+esc(x.ref)+' · '+esc(x.parque)+'</span><br><span class="cnd-mini cnd-mut">'+esc(x.lugar)+' · a '+n(x.km)+' km</span></span><span class="der cnd-mono">'+esc(x.f)+'<br><span class="cnd-mini">'+esc(x.modo)+'</span></span></li>'; }).join('')+'</ul><p class="cnd-mini" style="margin:0"><a href="https://pota.app/#/" target="_blank" rel="noopener">Todas en POTA →</a></p>':'<p class="cnd-vacio">Nadie está activando un parque en este momento.</p>');
+	edad('cnd-pota','pota.app · en vivo');
+}
+function km2(a,b){ var R0=Math.PI/180, x=Math.sin((b[0]-a[0])*R0/2), y=Math.sin((b[1]-a[1])*R0/2); return Math.round(12742*Math.asin(Math.sqrt(x*x+Math.cos(a[0]*R0)*Math.cos(b[0]*R0)*y*y))); }
+function pintarCapaPota(){ if(!mapa||!potaDat) return; capas.pota.clearLayers(); potaDat.forEach(function(x){ L.marker([x.lat,x.lon],{icon:L.divIcon({className:'',html:'<div class="cnd-marca" style="width:22px;height:22px;background:#15803d">'+ic('arbol')+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).bindPopup('<b>'+esc(x.act)+'</b> · '+esc(x.f)+' kHz '+esc(x.modo)+'<br>'+esc(x.ref)+' · '+esc(x.parque)).addTo(capas.pota); }); }
+/* Valle de Aburrá (SIATA) */
+function enAburra(){ return km2([punto.lat,punto.lon],[6.25,-75.57])<=60; }
+function cargarSiata(){
+	var sec=$('cnd-siata'); if(!enAburra()){ if(sec) sec.hidden=true; if(capas.siata) capas.siata.clearLayers(); return; } if(sec) sec.hidden=false;
+	fetch(C.api+'/siata').then(function(r){ return r.json(); }).then(function(d){ siataDat=d; pintarSiata(); if(mapa&&mapa.hasLayer(capas.siata)) pintarCapaSiata(); }).catch(function(){ cuerpo('cnd-siata','<p class="cnd-vacio">SIATA no respondió.</p>'); });
+}
+var SNIV=['Normal','Vigilancia','Precaución','Alerta'], SCOL=['#16a34a','#eab308','#f97316','#e11d48'];
+function pintarSiata(){
+	var d=siataDat; if(!d||!d.ok){ cuerpo('cnd-siata','<p class="cnd-vacio">SIATA no respondió.</p>'); return; }
+	var r=d.resumen, alto=(d.niveles||[]).filter(function(x){ return x.e>=1; }).sort(function(a,b){ return b.e-a.e||(b.pct||0)-(a.pct||0); }), llueve=(d.lluvia||[]).filter(function(x){ return x.llueve; }).sort(function(a,b){ return b.mm-a.mm; });
+	cuerpo('cnd-siata','<div class="cnd-kpis"><div class="cnd-kpi"><span>Llueve ahora</span><b>'+r.llueve+'</b><small>de '+r.pluvios+' pluviómetros · máx. '+n(r.max_mm,1)+' mm/15 min</small></div><div class="cnd-kpi"><span>Quebradas en alerta</span><b style="color:'+(r.alerta?SCOL[Math.max(2,r.peor)]:'inherit')+'">'+r.alerta+'</b><small>de '+r.niveles+' sensores (precaución o más)</small></div></div>'
+		+'<div class="cnd-solar-rej" style="grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))"><div><div class="cnd-graf-tit"><span>Sensores de nivel por encima de lo normal</span></div>'+(alto.length?'<ul class="cnd-lista cnd-scroll" style="max-height:14rem">'+alto.map(function(x){ return '<li><span><span class="cnd-punto-b" style="background:'+SCOL[x.e]+'"></span><b>'+esc(x.n)+'</b><br><span class="cnd-mini cnd-mut">'+esc(x.mun)+' · '+n(x.cm)+' cm'+(x.pre?' · precaución '+n(x.pre)+' cm':'')+(x.dudoso?' · <b>dato dudoso</b> (sensor posiblemente en falla)':'')+'</span></span><span class="der cnd-chico" style="color:'+SCOL[x.e]+'">'+SNIV[x.e]+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Todas las quebradas en nivel normal.</p>')+'</div>'
+		+'<div><div class="cnd-graf-tit"><span>Dónde llueve ahora</span></div>'+(llueve.length?'<ul class="cnd-lista cnd-scroll" style="max-height:14rem">'+llueve.slice(0,12).map(function(x){ return '<li><span>'+esc(x.n)+' <span class="cnd-mini cnd-mut">'+esc(x.mun)+'</span></span><span class="der cnd-mono">'+n(x.mm,1)+' mm</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">No llueve en ningún pluviómetro.</p>')+'</div></div>'
+		+'<p class="cnd-mini cnd-mut" style="margin:0">Fuente: SIATA – Área Metropolitana del Valle de Aburrá. El estado de cada quebrada es el que publica SIATA. Para alertas oficiales sigue a SIATA y al DAGRD.</p>');
+	edad('cnd-siata','SIATA · cada 5 min');
+}
+function pintarCapaSiata(){
+	if(!mapa||!siataDat||!enAburra()) return; capas.siata.clearLayers();
+	(siataDat.lluvia||[]).forEach(function(x){ if(!x.llueve) return; L.circleMarker([x.lat,x.lon],{radius:4+Math.min(10,x.mm*3),color:'#0284c7',fillColor:'#38bdf8',fillOpacity:.6,weight:1}).bindTooltip(esc(x.n)+': '+n(x.mm,1)+' mm en 15 min').addTo(capas.siata); });
+	(siataDat.niveles||[]).forEach(function(x){ if(x.e<0) return; L.circleMarker([x.lat,x.lon],{radius:x.e?7:4,color:'#fff',weight:x.e?2:1,fillColor:SCOL[x.e],fillOpacity:x.e?1:.7}).bindPopup('<b>'+esc(x.n)+'</b><br>'+n(x.cm)+' cm · '+SNIV[x.e]+(x.dudoso?' (dato dudoso)':'')+'<br>Fuente: SIATA').addTo(capas.siata); });
+}
+/* Satélites en vivo y balizas NCDXF */
+function satsEnVivo(){
+	clearInterval(satTimer); if(!mapa) return;
+	var paso=function(){ if(!mapa.hasLayer(capas.sats)||!window.satellite||!satCache){ return; } capas.sats.clearLayers(); var ahora=new Date(), sat=window.satellite;
+		satCache.filter(function(x){ return SATS.test(x.name); }).forEach(function(x){ var rec; try{ rec=sat.twoline2satrec(x.line1,x.line2); }catch(e){ return; }
+			var pos=function(d){ var pv=sat.propagate(rec,d); if(!pv||!pv.position) return null; var g=sat.eciToGeodetic(pv.position,sat.gstime(d)); return [sat.degreesLat(g.latitude),sat.degreesLong(g.longitude)]; };
+			var p=pos(ahora); if(!p) return; var nm=nombreSat(x.name);
+			if(nm==='ISS'){ var tr=[]; for(var m=-45;m<=45;m+=3){ var q=pos(new Date(ahora.getTime()+m*60000)); if(q) tr.push(q); } for(var j=1;j<tr.length;j++){ while(tr[j][1]-tr[j-1][1]>180) tr[j][1]-=360; while(tr[j][1]-tr[j-1][1]<-180) tr[j][1]+=360; } L.polyline(tr,{color:'#e879f9',weight:1.5,dashArray:'4 4',interactive:false}).addTo(capas.sats); }
+			L.marker(p,{icon:L.divIcon({className:'',html:'<div class="cnd-marca" style="width:22px;height:22px;background:#a21caf">'+ic('sat')+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).bindTooltip(esc(nm)+(SATF[nm]?' · '+esc(SATF[nm]):'')).addTo(capas.sats); }); };
+	var listo=function(){ paso(); satTimer=setInterval(paso,10000); };
+	if(window.satellite&&satCache) listo(); else (satCache?Promise.resolve():fetch(C.ajax+'?action=rau_tle').then(function(r){ return r.json(); }).then(function(j){ satCache=(j&&j.success&&j.data)||[]; })).then(function(){ cargarSatJs(listo); });
+}
+var BALIZAS=[['4U1UN','Nueva York',40.75,-73.97],['VE8AT','Inuvik',68.32,-133.52],['W6WX','California',37.16,-121.9],['KH6RS','Maui',20.77,-156.24],['ZL6B','Nueva Zelanda',-41.06,175.6],['VK6RBP','Australia',-32.11,116.05],['JA2IGY','Japón',34.46,136.78],['RR9O','Novosibirsk',54.98,82.9],['VR2B','Hong Kong',22.27,114.15],['4S7B','Sri Lanka',6.9,79.87],['ZS6DN','Sudáfrica',-25.9,28.27],['5Z4B','Kenia',-1.17,36.83],['4X6TU','Israel',32.06,34.77],['OH2B','Finlandia',60.32,24.83],['CS3B','Madeira',32.82,-16.95],['LU4AA','Buenos Aires',-34.62,-58.36],['OA4B','Lima',-12.07,-76.97],['YV5B','Caracas',9.08,-67.83]];
+var BFREC=[['20 m','14.100'],['17 m','18.110'],['15 m','21.150'],['12 m','24.930'],['10 m','28.200']];
+function balizasAhora(){ var s=Math.floor(Date.now()/1000)%180, slot=Math.floor(s/10); return BFREC.map(function(b,k){ var i=(slot-k+18)%18; return {banda:b[0],f:b[1],b:BALIZAS[i],resta:10-s%10}; }); }
+function pintarBalizas(){
+	var el=$('cnd-balizas'); if(!el) return; var l=balizasAhora();
+	el.innerHTML='<div class="cnd-graf-tit"><span>Balizas NCDXF transmitiendo ahora</span><span>cambian cada 10 s</span></div><div class="cnd-tabla-caja"><table class="cnd-tabla"><tbody>'+l.map(function(x){ return '<tr><td>'+x.banda+'</td><td class="cnd-mono">'+x.f+'</td><td><b class="cnd-mono">'+x.b[0]+'</b> <span class="cnd-mini cnd-mut">'+x.b[1]+' · '+n(km2([punto.lat,punto.lon],[x.b[2],x.b[3]]))+' km</span></td><td class="num cnd-mini">'+x.resta+' s</td></tr>'; }).join('')+'</tbody></table></div><p class="cnd-mini cnd-mut" style="margin:0">Si oyes la baliza en CW (100 W y bajando a 0,1 W), la banda está abierta hacia ese lugar.</p>';
+	if(mapa&&mapa.hasLayer(capas.balizas)) pintarCapaBalizas();
+}
+function pintarCapaBalizas(){ if(!mapa) return; capas.balizas.clearLayers(); var on={}; balizasAhora().forEach(function(x){ on[x.b[0]]=x.banda; });
+	BALIZAS.forEach(function(b){ var act=on[b[0]]; L.circleMarker([b[2],b[3]],{radius:act?8:4,color:'#fff',weight:act?2:1,fillColor:act?(BCOL[act]||'#f59e0b'):'#64748b',fillOpacity:1}).bindTooltip(b[0]+' · '+b[1]+(act?' · transmitiendo en '+act:''),{permanent:!!act,direction:'top'}).addTo(capas.balizas); }); }
+/* Mis lugares */
+function lugares(){ try{ return JSON.parse(localStorage.getItem('rau_cond_lugares')||'[]'); }catch(e){ return []; } }
+function guardarLugares(l){ try{ localStorage.setItem('rau_cond_lugares',JSON.stringify(l.slice(0,8))); }catch(e){} }
+function esFav(){ return lugares().some(function(x){ return Math.abs(x.lat-punto.lat)<.05&&Math.abs(x.lon-punto.lon)<.05; }); }
+function pintarLugares(){
+	var l=lugares(), c=$('cnd-lugares'); $('cnd-fav').setAttribute('aria-pressed',String(esFav())); c.hidden=!l.length;
+	c.innerHTML=l.length?'<span class="cnd-mini cnd-mut">Mis lugares:</span>'+l.map(function(x,i){ var act=Math.abs(x.lat-punto.lat)<.05&&Math.abs(x.lon-punto.lon)<.05; return '<span class="cnd-chip'+(act?' ok':'')+'"><button type="button" data-ir-lugar="'+i+'">'+esc(x.n)+'</button><button type="button" data-quitar-lugar="'+i+'" aria-label="Quitar '+esc(x.n)+'">×</button></span>'; }).join(''):'';
+}
+$('cnd-fav').addEventListener('click',function(){ var l=lugares(); if(esFav()) l=l.filter(function(x){ return !(Math.abs(x.lat-punto.lat)<.05&&Math.abs(x.lon-punto.lon)<.05); });
+	else { var nm=prompt('Nombre para este lugar (p. ej. Casa, Repetidora, Finca):', punto.nombre||$('cnd-lugar-txt').textContent); if(nm===null) return; l.unshift({n:(nm||'Lugar').slice(0,30),lat:+punto.lat.toFixed(3),lon:+punto.lon.toFixed(3)}); }
+	guardarLugares(l); pintarLugares(); });
+$('cnd-lugares').addEventListener('click',function(e){ var b=e.target.closest('[data-ir-lugar],[data-quitar-lugar]'); if(!b) return; var l=lugares();
+	if(b.dataset.quitarLugar!=null){ l.splice(+b.dataset.quitarLugar,1); guardarLugares(l); pintarLugares(); return; }
+	var x=l[+b.dataset.irLugar]; if(x) fijar({lat:x.lat,lon:x.lon,nombre:x.n}); });
+/* Resumen de la semana y archivo */
+function cargarSemana(){ fetch(C.api+'/semana?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ return r.json(); }).then(function(w){
+	cuerpo('cnd-semana','<p class="cnd-chico" style="margin:0">'+esc(w.texto)+'</p><div class="cnd-tabla-caja"><table class="cnd-tabla"><thead><tr><th>Día</th><th class="num">Lluvia</th><th class="num">Ráfagas</th><th>Tormenta</th><th class="num">Kp máx.</th><th class="num">Llamarada</th></tr></thead><tbody>'
+		+(w.dias||[]).slice().reverse().map(function(d){ return '<tr><td>'+new Date(d.dia+'T12:00:00Z').toLocaleDateString('es-CO',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'})+'</td><td class="num">'+(d.mm!=null?n(d.mm,1)+' mm':'—')+'</td><td class="num">'+(d.rafaga!=null?n(d.rafaga)+' km/h':'—')+'</td><td>'+(d.tormenta?'<span class="cnd-chip al">sí</span>':'—')+'</td><td class="num">'+(d.kp!=null?'<span style="color:'+colKp(d.kp)+'">'+n(d.kp,1)+'</span>':'—')+'</td><td class="num">'+esc(d.fl||'—')+'</td></tr>'; }).join('')+'</tbody></table></div><p class="cnd-mini cnd-mut" style="margin:0">El tiempo es del punto consultado (Open-Meteo). El Kp y las llamaradas salen del archivo del sitio, que se llena desde la versión 19.65.</p>');
+	edad('cnd-semana','7 días · '+zona()); }).catch(function(){}); }
+var archDia=null;
+function cargarArchivo(dia){ fetch(C.api+'/archivo'+(dia?'?dia='+dia:'')).then(function(r){ return r.json(); }).then(function(a){ archDia=a.dia;
+	var sel='<label class="cnd-chico">Día: <select id="cnd-arch-dia" aria-label="Día del archivo">'+(a.dias||[]).map(function(d){ return '<option value="'+d.dia+'"'+(d.dia===a.dia?' selected':'')+'>'+d.dia+' · Kp '+(d.kp!=null?n(d.kp,1):'—')+(d.fl?' · '+esc(d.fl):'')+' ('+d.n+')</option>'; }).join('')+'</select></label>';
+	cuerpo('cnd-archivo',((a.dias||[]).length?sel:'')+((a.eventos||[]).length?'<ul class="cnd-lista cnd-reg cnd-scroll">'+a.eventos.map(function(x){ return '<li data-n="'+x.n+'"><time>'+fh(x.t*1000)+'</time><span>'+esc(x.x)+'</span></li>'; }).join('')+'</ul>':'<p class="cnd-vacio">Sin eventos guardados para ese día. El archivo se llena cada 10 minutos desde la versión 19.65.</p>'));
+	var s2=$('cnd-arch-dia'); if(s2) s2.addEventListener('change',function(){ cargarArchivo(this.value); });
+	edad('cnd-archivo','90 días'); }).catch(function(){}); }
+/* Tarjeta para WhatsApp */
+$('cnd-tarjeta').addEventListener('click',function(){ var b=this, u=location.origin+'/condiciones/tarjeta.png?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)+'&v='+Math.floor(Date.now()/6e5), pag=location.origin+location.pathname+'?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1);
+	b.disabled=true; fetch(u).then(function(r){ if(!r.ok) throw new Error(); return r.blob(); }).then(function(bl){ var f=new File([bl],'condiciones-rau.png',{type:'image/png'});
+		if(navigator.canShare&&navigator.canShare({files:[f]})) return navigator.share({files:[f],title:'Condiciones para operar',text:pag});
+		window.open(u,'_blank'); }).catch(function(){ window.open('https://wa.me/?text='+encodeURIComponent('Condiciones para operar: '+pag),'_blank'); }).then(function(){ b.disabled=false; }); });
+
 /* ── ubicación y carga ── */
-function textoLugar(){ $('cnd-lugar-txt').textContent=punto.nombre||(datos&&datos.punto&&datos.punto.cerca?'cerca de '+datos.punto.cerca.nombre:punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)); $('cnd-loc').textContent=locator(punto.lat,punto.lon); $('cnd-reloj-local-et').textContent='Hora local · '+zona(); }
+function textoLugar(){ var fr=$('cnd-franja'); if(fr) fr.href=location.origin+'/condiciones/franja/?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1); $('cnd-lugar-txt').textContent=punto.nombre||(datos&&datos.punto&&datos.punto.cerca?'cerca de '+datos.punto.cerca.nombre:punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)); $('cnd-loc').textContent=locator(punto.lat,punto.lon); $('cnd-reloj-local-et').textContent='Hora local · '+zona(); }
 function fijar(p,sinCargar){
 	punto={lat:+p.lat,lon:+p.lon,nombre:p.nombre||null}; guardar('rau_cond_punto',punto); textoLugar();
 	if(mapa){ mapa.setView([punto.lat,punto.lon],Math.max(mapa.getZoom(),7)); marcar(); }
 	if(vista==='windy'){ var a=document.querySelector('[data-capa][aria-pressed="true"]'); windy(a?a.dataset.capa:'wind'); }
 	var u=new URL(location.href); u.searchParams.set('lat',punto.lat.toFixed(2)); u.searchParams.set('lon',punto.lon.toFixed(2)); u.searchParams.delete('loc'); history.replaceState(null,'',u);
-	if(!sinCargar) cargar();
+	if(!sinCargar){ cargar(); if(destinoAct) destino(destinoAct); }
+	if($('cnd-lugares')) pintarLugares();
 }
 function usarGPS(){
 	var b=$('cnd-gps'); if(!navigator.geolocation){ alert('Tu navegador no da la ubicación. Busca tu ciudad o escribe tu locator.'); return; }
@@ -498,9 +666,10 @@ function usarGPS(){
 }
 function cargar(){
 	proxima=Date.now()+REFRESCO;
-	fetch(C.api+'?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(j){
+	fetch(C.api+'?lat='+punto.lat.toFixed(1)+'&lon='+punto.lon.toFixed(1)).then(function(r){ if(!r.ok) throw new Error(r.status); var off=r.headers.get('X-RAU-Sin-Conexion'); return r.json().then(function(j){ j._sinConexion=!!off; return j; }); }).then(function(j){
+		var ol=$('cnd-offline'); ol.hidden=!j._sinConexion; if(j._sinConexion) ol.textContent='Sin conexión: mostrando los últimos datos guardados ('+new Date(j.generado*1000).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'). Se actualizan solos cuando vuelva internet.';
 		datos=j; OFF=(j.clima&&j.clima.offset!=null)?j.clima.offset:Math.round(punto.lon/15)*3600; textoLugar();
-		[pintarFuentes,pintarSemaforo,pintarAhora,pintarClima,pintarHF,pintarEspacio,pintarTendencias,cargarSolar,pintarSismos,pintarRAU,pintarCielo,pintarVHF,pintarRegistro,pintarCapasDatos,estadoGeneral].forEach(function(f){ try{ f(); }catch(e){ if(window.console) console.warn('condiciones',e); } });
+		[pintarFuentes,pintarSemaforo,pintarAhora,pintarClima,pintarHF,pintarEspacio,pintarTendencias,cargarSolar,pintarSismos,pintarRAU,pintarCielo,pintarVHF,pintarRegistro,pintarCapasDatos,estadoGeneral,cargarSiata,cargarAlcance,cargarPota,cargarSemana,cargarArchivo,pintarEnlace,pintarLugares].forEach(function(f){ try{ f(); }catch(e){ if(window.console) console.warn('condiciones',e); } });
 		$('cnd-impresion').innerHTML='<b>Hoja de condiciones · RAU</b> · '+esc(punto.nombre||'')+' '+locator(punto.lat,punto.lon)+' ('+punto.lat.toFixed(2)+', '+punto.lon.toFixed(2)+') · '+fhd(Date.now())+' '+zona()+' / '+new Date().toISOString().slice(11,16)+' UTC · '+esc(location.origin)+'/condiciones/';
 	}).catch(function(){ var e=$('cnd-estado'); e.dataset.n=-1; e.textContent='Sin conexión con el servidor · reintentando'; });
 	fetch(C.api+'/sitios').then(function(r){ return r.json(); }).then(function(s){ sitios=Array.isArray(s)?s:[]; pintarSitios(); }).catch(function(){ cuerpo('cnd-sitios','<p class="cnd-vacio">No se pudo consultar el tiempo de los sitios.</p>'); });
@@ -550,7 +719,7 @@ document.addEventListener('fullscreenchange',function(){ var full=document.fulls
 $('cnd-play').addEventListener('click',animar);
 $('cnd-cuadro').addEventListener('input',function(){ if(radarTimer) animar(); radarI=+this.value; mostrarCuadro(radarI); });
 /* Modo sala: pantalla completa sin el resto del sitio; el mapa alterna radar y Windy cada minuto */
-var ROTA=['cnd-sitios','cnd-solar','cnd-hf','cnd-tend','cnd-clima'], rotaI=0, rotaTimer=null, marcas={};
+var ROTA=['cnd-sitios','cnd-solar','cnd-hf','cnd-tend','cnd-alcance','cnd-clima'], rotaI=0, rotaTimer=null, marcas={};
 var PINTA={'cnd-solar':function(){ pintarSolar(); },'cnd-hf':function(){ pintarHF(); },'cnd-tend':function(){ pintarTendencias(); },'cnd-clima':function(){ pintarClima(); },'cnd-sitios':function(){ pintarSitios(); }};
 function rotar(){
 	var slot=$('cnd-rota'); ROTA.forEach(function(id){ var el=$(id); if(el&&el.parentNode===slot&&marcas[id]) marcas[id].parentNode.insertBefore(el,marcas[id]); });
@@ -582,7 +751,7 @@ function listarAvisos(){
 	if(!miSub) return;
 	fetch(C.api+'/avisos/mios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:miSub.endpoint})}).then(function(r){ return r.json(); }).then(function(l){
 		var ul=$('cnd-av-lista'); l=Array.isArray(l)?l:[]; $('cnd-av-prueba').hidden=!l.length;
-		ul.innerHTML=l.map(function(a){ return '<li><span><b>'+esc(a.nombre||(a.lat+', '+a.lon))+'</b><br><span class="cnd-mini cnd-mut">'+esc(a.temas.join(', '))+' · viento desde '+a.umbral+' km/h</span></span><span class="der"><button type="button" class="cnd-btn" data-quitar="'+esc(a.id)+'">Quitar</button></span></li>'; }).join('');
+		ul.innerHTML=l.map(function(a){ return '<li><span><b>'+esc(a.nombre||(a.lat+', '+a.lon))+'</b><br><span class="cnd-mini cnd-mut">'+esc(a.temas.join(', '))+' · viento desde '+a.umbral+' km/h'+(a.temas.indexOf('llamarada')>=0?' · llamaradas '+esc(a.clase||'M')+'+':'')+'</span></span><span class="der"><button type="button" class="cnd-btn" data-quitar="'+esc(a.id)+'">Quitar</button></span></li>'; }).join('');
 	}).catch(function(){});
 }
 $('cnd-av-lista').addEventListener('click',function(e){ var b=e.target.closest('[data-quitar]'); if(!b||!miSub) return; b.disabled=true;
@@ -597,7 +766,7 @@ $('cnd-av-on').addEventListener('click',function(){
 	Notification.requestPermission().then(function(p){ if(p!=='granted') throw new Error('permiso');
 		return navigator.serviceWorker.register('/service-worker.js').then(function(){ return navigator.serviceWorker.ready; }); })
 	.then(function(reg){ return reg.pushManager.getSubscription().then(function(s){ return s||fetch(C.ajax+'?action=rau_vapid_public_key').then(function(r){ return r.json(); }).then(function(j){ if(!j.success||!j.data.key) throw new Error('vapid'); return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(j.data.key)}); }); }); })
-	.then(function(sub){ miSub=sub; return fetch(C.api+'/avisos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON(),lat:punto.lat,lon:punto.lon,temas:temas,nombre:$('cnd-av-nombre').value.trim()||punto.nombre||'',umbral:+$('cnd-av-umbral').value})}).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'error'); return j; }); }); })
+	.then(function(sub){ miSub=sub; return fetch(C.api+'/avisos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON(),lat:punto.lat,lon:punto.lon,temas:temas,nombre:$('cnd-av-nombre').value.trim()||punto.nombre||'',umbral:+$('cnd-av-umbral').value,clase:$('cnd-av-clase').value})}).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'error'); return j; }); }); })
 	.then(function(){ b.disabled=false; est.textContent='Listo: avisos activos para este punto.'; $('cnd-av-nombre').value=''; listarAvisos(); })
 	.catch(function(e){ b.disabled=false; est.textContent=e.message==='permiso'?'No diste permiso para notificaciones. Puedes darlo en la configuración del navegador.':'No se pudo activar: '+e.message; });
 });

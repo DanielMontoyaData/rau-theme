@@ -264,6 +264,53 @@ los detecta todos. Ver `bin/README.md`.
 
 ---
 
+## 19.65.0 — Condiciones: radio, Valle de Aburrá y lo que traen los sitios de referencia
+
+Comparado con HamClock, SpaceWeatherLive, KC2G, SIATA y Windy. Todo verificado con datos reales antes de publicarlo.
+
+**Mapa (capas nuevas, se cargan solo al encenderlas)**
+- MUF en vivo: las isolíneas de MUF(3000) de KC2G, con su valor en MHz.
+- Quién oye a Colombia: enlaces WSPR de la última hora desde y hacia los cuadros FJ, FK y FI (wspr.live), por color de banda.
+- Activaciones POTA en curso (api.pota.app).
+- Satélites en vivo (se mueven cada 10 s) y la traza de la ISS ±45 min.
+- Balizas NCDXF: cuál transmite ahora en cada banda (se calcula del reloj, ciclo de 3 min); también como tabla en «HF desde aquí».
+- Quebradas y lluvia del Valle de Aburrá (SIATA), encendida por defecto.
+
+**Paneles nuevos**
+- «Valle de Aburrá · SIATA» (solo a menos de 60 km de Medellín): pluviómetros con lluvia, quebradas por encima de lo normal con el estado oficial de SIATA. Las lecturas imposibles (más de 2,5 veces la cota de inundación mayor) se marcan como «dato dudoso» y no cuentan como alerta. Atribución: «Fuente: SIATA – Área Metropolitana del Valle de Aburrá».
+- «¿Llego a…?»: destino por buscador, locator, destinos rápidos o clic en el mapa. Distancia, rumbo corto y largo, saltos, MUF y frecuencia óptima del camino con la MUF real de KC2G en los puntos de control, absorción D-RAP y estado de cada banda. Dibuja el círculo máximo en el mapa. Enlace a VOACAP para el pronóstico hora a hora.
+- «Alcance real · WSPR»: por banda, cuántos oyen a la región y cuántos oye la región, y los enlaces más largos.
+- «Activaciones POTA», ordenadas por distancia.
+- «Resumen de la semana» del punto: lluvia, ráfagas y tormentas (Open-Meteo, 7 días) con Kp y llamaradas del archivo.
+- «Archivo de eventos»: el sitio guarda cada día (90 días) las llamaradas, Kp, alertas de NOAA, eyecciones y corrientes rápidas.
+
+**Clima espacial**
+- Corrientes rápidas de agujeros coronales (NASA DONKI HSS) y su posible regreso a los 27 días, en el panel solar, el registro y el nivel de tormenta solar.
+- Tendencias con selector de rango: 6 h, 24 h o 7 días (Kp 7 días, rayos X 7 días, viento solar 24 h).
+
+**Sismos (rediseño)**
+- Se quitó el panel fijo «Sismos cercanos»: casi siempre mostraba sismos pequeños y profundos (nido de Bucaramanga) que nadie siente y que no cambian las condiciones para operar.
+- Ahora aparece una franja de alerta arriba solo si hubo un sismo que pudo sentirse: M4,5+ a menos de 200 km o M6+ a menos de 500 km, en las últimas 24 h. Trae enlaces al SGC, al USGS y al centro de mando. Solo esos entran al registro.
+- La capa de sismos del mapa sigue disponible, apagada por defecto.
+
+**Avisos push nuevos**: cada llamarada desde la clase elegida (M o X), tormenta de protones S1+, corriente rápida de viento solar, sismo fuerte cerca. Cada uno se envía una sola vez por evento.
+
+**Compartir y transmitir**
+- «Imagen para WhatsApp»: tarjeta PNG de 1200×630 con el semáforo del punto (`/condiciones/tarjeta.png?lat&lon`). También es la vista previa al compartir el enlace.
+- «Franja para la transmisión»: `/condiciones/franja/` para OBS (1280×90; `?transparente` y `?claro`).
+
+**Uso**
+- Mis lugares: guarda hasta 8 puntos con la estrella (en el navegador, no se envían al servidor).
+- Sin conexión: la página y los últimos datos quedan guardados; si no hay internet se muestran con un aviso y la hora de los datos.
+- Accesibilidad: cada gráfica lleva su tabla de datos para lectores de pantalla.
+- Se arregló un desborde horizontal en el celular.
+
+**No se pudo (verificado)**: rayos en tiempo real (la política de Blitzortung no permite usar sus datos), alertas del IDEAM (no tiene API documentada), sismos del SGC (su servicio rechaza otros sitios), SOTA (API en desuso, con términos nuevos), y el pronóstico inmediato de RainViewer (hoy vacío).
+
+**Pruebas**: 29 comprobaciones nuevas en `tests/sitio/condiciones.php` (90 en total), con todas las fuentes simuladas; la prueba de navegador cubre los paneles nuevos, la franja de sismos y el desborde.
+
+---
+
 ## 19.64.0 — Tormentas solares y arreglos de la revisión en vivo
 
 **Tormentas solares** (panel nuevo en Condiciones, todo de fuentes oficiales y gratuitas)

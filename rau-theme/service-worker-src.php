@@ -24,6 +24,9 @@ const EM_ASSETS = <?php echo wp_json_encode( $em_assets ); ?>;
 const MODEM_URL = '<?php echo esc_js( $modem_url ); ?>';
 // Directorio de frecuencias: la página ya no lo trae adentro; red primero y la última copia si no hay internet
 const EM_DIRECTORIO = '<?php echo esc_js( rest_url( 'rau-em/v1/directorio' ) ); ?>';
+// Condiciones (19.65.0): red primero; sin internet, la última página y el último dato que se vieron
+const COND_URL = '<?php echo esc_js( home_url( '/condiciones/' ) ); ?>';
+const COND_API = '<?php echo esc_js( rest_url( 'rau/v1/condiciones' ) ); ?>';
 /* Mosaicos de OpenStreetMap: solo los que la persona ya vio (nada se descarga por adelantado, como pide
    la política de uso de OSM), hasta 1500, para que el mapa siga sirviendo sin internet en esa zona. */
 const CACHE_MOSAICOS = 'rau-mosaicos';
@@ -78,6 +81,12 @@ self.addEventListener('fetch', function(event){
 	if(event.request.url.split('?')[0] === EM_DIRECTORIO){
 		event.respondWith(fetch(event.request).then(function(r){ if(r.ok){ var copia=r.clone(); caches.open(CACHE_NAME).then(function(c){ c.put(EM_DIRECTORIO, copia); }); } return r; })
 			.catch(function(){ return caches.match(EM_DIRECTORIO).then(function(m){ return m || new Response('{}', {status:503, headers:{'Content-Type':'application/json'}}); }); }));
+		return;
+	}
+	if(event.request.url.indexOf(COND_API) === 0 || event.request.url.split('?')[0] === COND_URL){
+		var clave = event.request.url.indexOf(COND_API) === 0 ? event.request.url.split('&_')[0] : COND_URL;
+		event.respondWith(fetch(event.request).then(function(r){ if(r.ok){ var copia=r.clone(); caches.open(CACHE_NAME).then(function(c){ c.put(clave, copia); }); } return r; })
+			.catch(function(){ return caches.match(clave).then(function(m){ if(m){ var h=new Headers(m.headers); h.set('X-RAU-Sin-Conexion','1'); return m.blob().then(function(b){ return new Response(b,{status:200,headers:h}); }); } return new Response(JSON.stringify({error:'sin conexión'}), {status:503, headers:{'Content-Type':'application/json'}}); }); }));
 		return;
 	}
 	var sinQ = event.request.url.split('?')[0], esEm = sinQ === EM_URL, esModem = sinQ === MODEM_URL || sinQ === MODEM_URL.replace(/\/$/, '');
